@@ -1,6 +1,6 @@
 #include <cstdint>
-/* #include <cudnn.h> */
-/* #include <cudnn_frontend.h> */
+#include <cudnn.h>
+#include <cudnn_frontend.h>
 #include <iostream>
 #include <cstring>
 
@@ -10,30 +10,30 @@ using ftype = f8;
 /*
  * C[m, k] = A[m, n] * B[n, k]
  */
-/* void matmul(ftype *A, ftype *B, size_t n, size_t m, size_t k, ftype *C) { */
-/*   namespace fe = cudnn_frontend; */
+void matmul(ftype *A, ftype *B, size_t n, size_t m, size_t k, ftype *C) {
+  namespace fe = cudnn_frontend;
 
-/*   f8 *A_gpu = nullptr, *B_gpu = nullptr, *C_gpu = nullptr; */
+  f8 *A_gpu = nullptr, *B_gpu = nullptr, *C_gpu = nullptr;
 
-/*   cudaMalloc((void **)(&A_gpu), m * n * sizeof(*A_gpu)); */
-/*   cudaMalloc((void **)(&B_gpu), n * k * sizeof(*B_gpu)); */
-/*   cudaMalloc((void **)(&C_gpu), m * k * sizeof(*B_gpu)); */
+  cudaMalloc((void **)(&A_gpu), m * n * sizeof(*A_gpu));
+  cudaMalloc((void **)(&B_gpu), n * k * sizeof(*B_gpu));
+  cudaMalloc((void **)(&C_gpu), m * k * sizeof(*B_gpu));
 
-/*   cudaMemcpy(A_gpu, A, m * n * sizeof(*A_gpu), cudaMemcpyHostToDevice); */
-/*   cudaMemcpy(B_gpu, B, m * n * sizeof(*B_gpu), cudaMemcpyHostToDevice); */
-/*   cudaDeviceSynchronize(); */
+  cudaMemcpy(A_gpu, A, m * n * sizeof(*A_gpu), cudaMemcpyHostToDevice);
+  cudaMemcpy(B_gpu, B, m * n * sizeof(*B_gpu), cudaMemcpyHostToDevice);
+  cudaDeviceSynchronize();
 
-/*   fe::graph::Graph graph; */
+  fe::graph::Graph graph;
 
-/*   // TODO */
+  // TODO
 
-/*   cudaMemcpy(C, C_gpu, m * k * sizeof(*C_gpu), cudaMemcpyDeviceToHost); */
-/*   cudaDeviceSynchronize(); */
+  cudaMemcpy(C, C_gpu, m * k * sizeof(*C_gpu), cudaMemcpyDeviceToHost);
+  cudaDeviceSynchronize();
 
-/*   cudaFree(A_gpu); */
-/*   cudaFree(B_gpu); */
-/*   cudaFree(C_gpu); */
-/* } */
+  cudaFree(A_gpu);
+  cudaFree(B_gpu);
+  cudaFree(C_gpu);
+}
 
 void init(ftype *A, ftype *B, ftype *C, size_t m, size_t n, size_t k) {
   // init A
