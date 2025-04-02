@@ -12,8 +12,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
-# add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g -O3)
-add_compile_options(-Wall -Wextra -Wuninitialized -pedantic)
+add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
 
 add_executable(test-cudnn
     src/main.cpp
