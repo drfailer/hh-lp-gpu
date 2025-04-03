@@ -4,8 +4,6 @@ project(test-cudnn)
 
 set(CMAKE_CXX_STANDARD 20)
 
-enable_language(CUDA)
-
 find_package(CUDAToolkit)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
