@@ -21,20 +21,23 @@ using ftype = float;
  */
 void hadamard(ftype *A_host, ftype *B_host, int64_t m, int64_t n, ftype *C_host) {
   namespace fe = cudnn_frontend;
-
+  // gpu pointers
   ftype *A_gpu = nullptr, *B_gpu = nullptr;
   ftype *C_gpu = nullptr;
 
+  // allocate gpu memory
   cudaMalloc((void **)(&A_gpu), m * n * sizeof(*A_gpu));
   cudaMalloc((void **)(&B_gpu), m * n * sizeof(*B_gpu));
   cudaMalloc((void **)(&C_gpu), m * n * sizeof(*C_gpu));
 
-  assert(cudaSuccess == cudaMemcpy(A_gpu, A_host, m * n * sizeof(*A_gpu), cudaMemcpyHostToDevice));
-  assert(cudaSuccess == cudaMemcpy(B_gpu, B_host, m * n * sizeof(*B_gpu), cudaMemcpyHostToDevice));
+  // copy cpu memory to gpu
+  cudaMemcpy(A_gpu, A_host, m * n * sizeof(*A_gpu), cudaMemcpyHostToDevice);
+  cudaMemcpy(B_gpu, B_host, m * n * sizeof(*B_gpu), cudaMemcpyHostToDevice);
   cudaDeviceSynchronize();
 
   fe::graph::Graph graph;
 
+  // input tensors (should be at least 3d)
   auto A = graph.tensor(fe::graph::Tensor_attributes()
                             .set_name("A")
                             .set_dim({1, m, n})
@@ -46,18 +49,23 @@ void hadamard(ftype *A_host, ftype *B_host, int64_t m, int64_t n, ftype *C_host)
                             .set_stride({m * n, n, 1})
                             .set_data_type(fe::DataType_t::FLOAT));
 
+  // add pointwise operation to the graph
   auto C = graph.pointwise(A, B,
                            fe::graph::Pointwise_attributes()
                                .set_name("hadamard")
                                .set_mode(fe::PointwiseMode_t::MUL)
                                .set_compute_data_type(fe::DataType_t::FLOAT));
+
+  // C should be set as output
   C->set_output(true).set_data_type(fe::DataType_t::FLOAT);
 
   CUDNN_CHECK(graph.validate());
 
+  // map the tensors attributes to the gpu memory
   std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void *>
       memory_map = {{A, A_gpu}, {B, B_gpu}, {C, C_gpu}};
 
+  // graph configuration
   cudnnHandle_t handle;
   cudnnCreate(&handle);
 
@@ -72,11 +80,14 @@ void hadamard(ftype *A_host, ftype *B_host, int64_t m, int64_t n, ftype *C_host)
   float *workspace = nullptr;
   cudaMalloc((void **)(&workspace), workspace_size * sizeof(*workspace));
 
+  // execute
   CUDNN_CHECK(graph.execute(handle, memory_map, workspace));
 
-  assert(cudaSuccess == cudaMemcpy(C_host, C_gpu, m * n * sizeof(*C_gpu), cudaMemcpyDeviceToHost));
+  // copy result matrix to cpu
+  cudaMemcpy(C_host, C_gpu, m * n * sizeof(*C_gpu), cudaMemcpyDeviceToHost);
   cudaDeviceSynchronize();
 
+  // free
   cudaFree(workspace);
   cudnnDestroy(handle);
   cudaFree(A_gpu);
@@ -98,8 +109,8 @@ void matmul(ftype *A_host, ftype *B_host, int64_t m, int64_t n, int64_t k,
   cudaMalloc((void **)(&B_gpu), n * k * sizeof(*B_gpu));
   cudaMalloc((void **)(&C_gpu), m * k * sizeof(*C_gpu));
 
-  assert(cudaSuccess == cudaMemcpy(A_gpu, A_host, m * n * sizeof(*A_gpu), cudaMemcpyHostToDevice));
-  assert(cudaSuccess == cudaMemcpy(B_gpu, B_host, n * k * sizeof(*B_gpu), cudaMemcpyHostToDevice));
+  cudaMemcpy(A_gpu, A_host, m * n * sizeof(*A_gpu), cudaMemcpyHostToDevice);
+  cudaMemcpy(B_gpu, B_host, n * k * sizeof(*B_gpu), cudaMemcpyHostToDevice);
   cudaDeviceSynchronize();
 
   fe::graph::Graph graph;
@@ -142,7 +153,7 @@ void matmul(ftype *A_host, ftype *B_host, int64_t m, int64_t n, int64_t k,
 
   CUDNN_CHECK(graph.execute(handle, memory_map, workspace));
 
-  assert(cudaSuccess == cudaMemcpy(C_host, C_gpu, m * k * sizeof(*C_gpu), cudaMemcpyDeviceToHost));
+  cudaMemcpy(C_host, C_gpu, m * k * sizeof(*C_gpu), cudaMemcpyDeviceToHost);
   cudaDeviceSynchronize();
 
   cudaFree(workspace);
