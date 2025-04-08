@@ -14,6 +14,7 @@ add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
 
 add_executable(test-cudnn
     src/main.cpp
+    src/cudnn_operations.cpp
 )
 target_link_directories(test-cudnn
     PUBLIC
@@ -23,6 +24,7 @@ target_include_directories(test-cudnn
     PUBLIC
     ~/Programming/usr/include/
     lib/cudnn-frontend/include/
+    lib/hedgehog/
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 target_link_libraries(test-cudnn
