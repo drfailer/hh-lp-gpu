@@ -21,15 +21,15 @@ struct FullyConnectedLayerTask : LayerTask {
         std::unordered_map<
             std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void *>
             memory_map = {
-                {fwd_.input_tensor, fwd_data->layer.weights_cpu},
+                {fwd_.input_tensor, fwd_data->input_gpu},
                 {fwd_.weights_tensor, fwd_data->layer.weights_gpu},
                 {fwd_.bias_tensor, fwd_data->layer.biases_gpu},
-                {fwd_.z_tensor, fwd_data->z_gpu}, // TODO
+                {fwd_.z_tensor, fwd_data->z_gpu},
                 {fwd_.act_tensor, fwd_data->act_gpu},
             };
         CUDNN_CHECK(fwd_.graph.execute(*handle_, memory_map, fwd_.workspace));
-        this->addResult(std::make_shared<FwdOutputData<ftype>>(fwd_data->z_gpu,
-                    fwd_data->act_gpu));
+        this->addResult(std::make_shared<FwdOutputData<ftype>>(
+            fwd_data->z_gpu, fwd_data->act_gpu));
     }
 
     void execute(std::shared_ptr<BwdInputData<ftype>> bwd_data) {
