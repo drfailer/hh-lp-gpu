@@ -2,7 +2,7 @@
 #include <cudnn.h>
 #include <cudnn_frontend.h>
 #include <cudnn_graph.h>
-#include "utils.hpp"
+#include "tools/gpu.hpp"
 
 /*
  * C[m, n] = A[m, n] 0 B[m, n]
