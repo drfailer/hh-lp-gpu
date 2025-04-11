@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include "utest.hpp"
 
 // design:
 //
@@ -95,7 +96,7 @@ void display_matrix(std::string const &name, ftype *matrix, int64_t rows,
 void test_cdnn_operations() {
     constexpr int64_t m = 3;
     constexpr int64_t n = 3;
-    constexpr int64_t k = 1;
+    constexpr int64_t k = 3;
     ftype *A = new ftype[m * n];
     ftype *B = new ftype[n * k];
     ftype *C = new ftype[m * k];
@@ -123,7 +124,7 @@ void test_cdnn_operations() {
     delete[] C;
 }
 
-void test_fully_connected_layer_fwd() {
+Test(fully_connected_layer_fwd) {
     constexpr int64_t nb_nodes = 3;
     constexpr int64_t nb_inputs = 3;
     LayerDimentions dims = {
@@ -172,19 +173,19 @@ void test_fully_connected_layer_fwd() {
 
     ftype *result_output_gpu = std::get<0>(*result)->output_gpu;
 
-    assert(output_gpu == result_output_gpu);
+    urequire(output_gpu == result_output_gpu);
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
     cudaDeviceSynchronize();
 
     graph.waitForTermination();
 
     for (size_t i = 0; i < nb_nodes; ++i) {
-        std::cout << output_host[i] << std::endl;
+        uassert_equal(output_host[i], 7)
     }
 }
 
 int main(int, char **) {
     /* test_cdnn_operations(); */
-    test_fully_connected_layer_fwd();
+    run_test(fully_connected_layer_fwd);
     return 0;
 }
