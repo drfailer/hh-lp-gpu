@@ -63,7 +63,12 @@
 //
 // Idea: add the a ans z tensors in the layer
 
-void init(ftype *A, ftype *B, ftype *C, int64_t m, int64_t n, int64_t k) {
+ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
+
+ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
+
+void init(ftype *A, ftype *B, ftype *C, ftype *V, int64_t m, int64_t n,
+          int64_t k) {
     // init A
     for (int64_t i = 0; i < m; ++i) {
         for (int64_t j = 0; j < n; ++j) {
@@ -80,6 +85,11 @@ void init(ftype *A, ftype *B, ftype *C, int64_t m, int64_t n, int64_t k) {
 
     // init C to zero
     memset(C, 0, m * k * sizeof(*C));
+
+    // init V
+    for (int64_t i = 0; i < m; ++i) {
+        V[i] = i;
+    }
 }
 
 void display_matrix(std::string const &name, ftype *matrix, int64_t rows,
@@ -101,6 +111,7 @@ void test_cdnn_operations() {
     ftype *A = new ftype[m * n];
     ftype *B = new ftype[n * k];
     ftype *C = new ftype[m * k];
+    ftype *V = new ftype[m];
 
     std::cout << "perform matrix multiplication: C[m, k] = A[m, n] * B[n, k]"
               << std::endl;
@@ -108,7 +119,7 @@ void test_cdnn_operations() {
     std::cout << "n = " << n << std::endl;
     std::cout << "k = " << k << std::endl;
 
-    init(A, B, C, m, n, k);
+    init(A, B, C, V, m, n, k);
     display_matrix("A", A, m, n);
     display_matrix("B", B, n, k);
     display_matrix("C", C, m, k);
@@ -120,9 +131,13 @@ void test_cdnn_operations() {
     matmul(A, B, m, n, k, C);
     display_matrix("C", C, m, k);
 
+    sigmoid(V, m);
+    display_matrix("V", V, m, 1);
+
     delete[] A;
     delete[] B;
     delete[] C;
+    delete[] V;
 }
 
 UTest(fully_connected_layer_fwd) {
@@ -131,14 +146,14 @@ UTest(fully_connected_layer_fwd) {
     LayerDimentions dims = {
         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
     ftype input_host[nb_inputs] = {1, 2, 3}, output_host[nb_nodes] = {0};
-    ftype *input_gpu = nullptr, *output_gpu = nullptr;
+    ftype *input_gpu = nullptr;
     cudnnHandle_t cudnn_handle;
     cublasHandle_t cublas_handle;
+    Model<ftype> model;
 
     Layer<ftype> layer = layer_create<ftype>(dims);
     defer(layer_destroy(layer));
-
-    std::vector<Layer<ftype>> layers = {layer};
+    model.layers.push_back(layer);
 
     cudnnCreate(&cudnn_handle);
     defer(cudnnDestroy(cudnn_handle));
@@ -151,33 +166,24 @@ UTest(fully_connected_layer_fwd) {
     CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
     defer(cudaFree(input_gpu));
 
-    CUDA_CHECK(alloc_gpu(&output_gpu, nb_nodes));
-    defer(cudaFree(output_gpu));
-
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
     hh::Graph<LayerTaskType> graph;
     auto fc_layer_task = std::make_shared<FullyConnectedLayerTask>(
-        cudnn_handle, cublas_handle, dims);
+        cudnn_handle, cublas_handle, 0, dims);
 
     graph.inputs(fc_layer_task);
     graph.outputs(fc_layer_task);
 
     graph.executeGraph(true);
-    graph.pushData(std::make_shared<FwdData<ftype>>(layers.begin(), input_gpu,
-                                                    output_gpu));
+    graph.pushData(std::make_shared<FwdData<ftype>>(model, input_gpu));
     graph.finishPushingData();
+    ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input_gpu;
+    graph.waitForTermination();
 
-    auto result = graph.getBlockingResult();
-
-    ftype *result_output_gpu = std::get<0>(*result)->output_gpu;
-
-    urequire(output_gpu == result_output_gpu);
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
     cudaDeviceSynchronize();
-
-    graph.waitForTermination();
 
     for (size_t i = 0; i < nb_nodes; ++i) {
         uassert_equal(output_host[i], 7);
@@ -190,52 +196,38 @@ UTest(sigmoid_activation_fwd) {
     LayerDimentions dims = {
         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
     ftype input_host[nb_inputs] = {1, 2, 3}, output_host[nb_nodes] = {0};
-    ftype *input_gpu = nullptr, *output_gpu = nullptr;
-    std::vector<Layer<ftype>> layers = {};
+    ftype *input_gpu = nullptr;
+    Model<ftype> model;
     cudnnHandle_t cudnn_handle;
-    cublasHandle_t cublas_handle;
 
     cudnnCreate(&cudnn_handle);
     defer(cudnnDestroy(cudnn_handle));
 
-    cublasCreate_v2(&cublas_handle);
-    defer(cublasDestroy_v2(cublas_handle));
-
     CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
     defer(cudaFree(input_gpu));
-
-    CUDA_CHECK(alloc_gpu(&output_gpu, nb_nodes));
-    defer(cudaFree(output_gpu));
 
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
     hh::Graph<LayerTaskType> graph;
     auto fc_layer_task =
-        std::make_shared<SigmoidActivationTask>(cudnn_handle, dims);
+        std::make_shared<SigmoidActivationTask>(cudnn_handle, 0, dims);
 
     graph.inputs(fc_layer_task);
     graph.outputs(fc_layer_task);
 
     graph.executeGraph(true);
-    graph.pushData(std::make_shared<FwdData<ftype>>(layers.begin(), input_gpu,
-                                                    output_gpu));
+    graph.pushData(std::make_shared<FwdData<ftype>>(model, input_gpu));
     graph.finishPushingData();
+    ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input_gpu;
+    graph.waitForTermination();
 
-    auto result = graph.getBlockingResult();
-
-    ftype *result_output_gpu = std::get<0>(*result)->output_gpu;
-
-    urequire(output_gpu == result_output_gpu);
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
     cudaDeviceSynchronize();
 
-    graph.waitForTermination();
-
     for (size_t i = 0; i < nb_nodes; ++i) {
-        DBG(output_host[i])
+        uassert_float_equal(output_host[i], sigmoid(input_host[i]), 1e-6);
     }
-    uassert(false);
 }
 
 int main(int, char **) {
