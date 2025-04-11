@@ -13,12 +13,12 @@
 struct FullyConnectedLayerTask : LayerTask {
     FullyConnectedLayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
                             cublasHandle_t cublas_handle,
-                            [[maybe_unused]] std::vector<int64_t> dims)
+                            [[maybe_unused]] LayerDimentions const &dims)
         : LayerTask(name), cudnn_handle_(cudnn_handle),
           cublas_handle_(cublas_handle) {}
     FullyConnectedLayerTask(cudnnHandle_t cudnn_handle,
                             cublasHandle_t cublas_handle,
-                            std::vector<int64_t> dims)
+                            LayerDimentions const &dims)
         : FullyConnectedLayerTask("FullyConnectedLayerTask", cudnn_handle,
                                   cublas_handle, dims) {}
 
