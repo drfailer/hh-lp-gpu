@@ -8,7 +8,7 @@
 struct SigmoidActivationTask : LayerTask {
     SigmoidActivationTask(std::string const &name, cudnnHandle_t cudnn_handle,
                           size_t layer_idx, LayerDimentions const &dims)
-        : LayerTask(name), layer_idx_(layer_idx), cudnn_handle_(cudnn_handle) {
+        : LayerTask(name, layer_idx), cudnn_handle_(cudnn_handle) {
         build_fwd_graph(dims);
         build_bwd_graph(dims);
     }
@@ -20,16 +20,15 @@ struct SigmoidActivationTask : LayerTask {
     ~SigmoidActivationTask() { cudaFree(fwd_.workspace); }
 
     void execute(std::shared_ptr<FwdData<ftype>> fwd_data) {
+        namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask FWD", INFO_GRP_LAYER_TASK);
 
-        /* std::unordered_map< */
-        /*     std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void
-         * *> */
-        /*     tensors = {{fwd_.input_tensor, fwd_data->input_gpu}, */
-        /*                {fwd_.output_tensor, fwd_data->input_gpu}}; */
-        /* CUDNN_CHECK(fwd_.graph.execute(cudnn_handle_, tensors,
-         * fwd_.workspace)); */
-        sigmoid(fwd_data->input_gpu, 3);
+        std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>,
+                           void *>
+            memory_map = {{fwd_.input_tensor, fwd_data->input_gpu},
+                          {fwd_.output_tensor, fwd_data->input_gpu}};
+        CUDNN_CHECK(
+            fwd_.graph.execute(cudnn_handle_, memory_map, fwd_.workspace));
         this->addResult(fwd_data);
     }
 
@@ -39,20 +38,20 @@ struct SigmoidActivationTask : LayerTask {
 
     void build_fwd_graph(LayerDimentions const &dims) {
         namespace fe = cudnn_frontend;
-
         auto &graph = fwd_.graph;
+
         fwd_.input_tensor =
-            graph.tensor(fe::graph::Tensor_attributes()
-                             .set_name("input")
-                             .set_dim({1, dims.nb_nodes, 1})
-                             .set_stride({dims.nb_nodes, 1, 1})
-                             .set_data_type(fe::DataType_t::FLOAT));
-        fwd_.output_tensor =
-            graph.pointwise(fwd_.input_tensor,
-                            fe::graph::Pointwise_attributes()
-                                .set_name("sigmoid")
-                                .set_mode(fe::PointwiseMode_t::SIGMOID_FWD)
-                                .set_compute_data_type(fe::DataType_t::FLOAT));
+            fwd_.graph.tensor(fe::graph::Tensor_attributes()
+                                  .set_name("input")
+                                  .set_dim({1, dims.nb_inputs, 1})
+                                  .set_stride({dims.nb_inputs, 1, 1})
+                                  .set_data_type(fe::DataType_t::FLOAT));
+        fwd_.output_tensor = fwd_.graph.pointwise(
+            fwd_.input_tensor,
+            fe::graph::Pointwise_attributes()
+                .set_name("sigmoid")
+                .set_mode(fe::PointwiseMode_t::SIGMOID_FWD)
+                .set_compute_data_type(fe::DataType_t::FLOAT));
         fwd_.output_tensor->set_output(true).set_data_type(
             fe::DataType_t::FLOAT);
 
@@ -73,7 +72,6 @@ struct SigmoidActivationTask : LayerTask {
     }
 
   private:
-    [[maybe_unused]] size_t layer_idx_ = 0;
     cudnnHandle_t cudnn_handle_;
     struct {
         cudnn_frontend::graph::Graph graph;

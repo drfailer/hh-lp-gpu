@@ -14,7 +14,7 @@ struct FullyConnectedLayerTask : LayerTask {
     FullyConnectedLayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
                             cublasHandle_t cublas_handle, size_t layer_idx,
                             [[maybe_unused]] LayerDimentions const &dims)
-        : LayerTask(name), layer_idx_(layer_idx), output_gpu_(nullptr),
+        : LayerTask(name, layer_idx), output_gpu_(nullptr),
           cudnn_handle_(cudnn_handle), cublas_handle_(cublas_handle) {
         size_t size = dims.nb_inputs * dims.nb_nodes;
         CUDA_CHECK(alloc_gpu(&output_gpu_, size));
@@ -30,7 +30,7 @@ struct FullyConnectedLayerTask : LayerTask {
     void execute(std::shared_ptr<FwdData<ftype>> fwd_data) {
         INFO_GRP("FullyConnectedLayerTask FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 1;
-        auto &layer = fwd_data->model.layers[layer_idx_];
+        auto &layer = fwd_data->model.layers[this->layer_idx()];
         auto dims = layer.dims;
 
         CUDA_CHECK(
@@ -49,7 +49,6 @@ struct FullyConnectedLayerTask : LayerTask {
     }
 
   private:
-    size_t layer_idx_ = 0;
     ftype *output_gpu_ = nullptr;
     cudnnHandle_t cudnn_handle_;
     cublasHandle_t cublas_handle_;

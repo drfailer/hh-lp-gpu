@@ -200,21 +200,20 @@ UTest(sigmoid_activation_fwd) {
     Model<ftype> model;
     cudnnHandle_t cudnn_handle;
 
-    cudnnCreate(&cudnn_handle);
-    defer(cudnnDestroy(cudnn_handle));
-
     CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
     defer(cudaFree(input_gpu));
-
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
+    cudnnCreate(&cudnn_handle);
+    defer(cudnnDestroy(cudnn_handle));
+
     hh::Graph<LayerTaskType> graph;
-    auto fc_layer_task =
+    auto sig_task =
         std::make_shared<SigmoidActivationTask>(cudnn_handle, 0, dims);
 
-    graph.inputs(fc_layer_task);
-    graph.outputs(fc_layer_task);
+    graph.inputs(sig_task);
+    graph.outputs(sig_task);
 
     graph.executeGraph(true);
     graph.pushData(std::make_shared<FwdData<ftype>>(model, input_gpu));
@@ -222,7 +221,8 @@ UTest(sigmoid_activation_fwd) {
     ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input_gpu;
     graph.waitForTermination();
 
-    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
+    urequire(output_gpu == input_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_inputs));
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < nb_nodes; ++i) {
