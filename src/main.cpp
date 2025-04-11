@@ -1,12 +1,13 @@
 #include "cudnn_operations.hpp"
 #include "data/layer.hpp"
 #include "task/fully_connected_layer_task.hpp"
+#include "task/sigmoid_activation_task.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
+#include "tools/utest.hpp"
 #include <cstdint>
 #include <cstring>
 #include <iostream>
-#include "utest.hpp"
 
 // design:
 //
@@ -124,7 +125,7 @@ void test_cdnn_operations() {
     delete[] C;
 }
 
-Test(fully_connected_layer_fwd) {
+UTest(fully_connected_layer_fwd) {
     constexpr int64_t nb_nodes = 3;
     constexpr int64_t nb_inputs = 3;
     LayerDimentions dims = {
@@ -158,8 +159,7 @@ Test(fully_connected_layer_fwd) {
 
     hh::Graph<LayerTaskType> graph;
     auto fc_layer_task = std::make_shared<FullyConnectedLayerTask>(
-        cudnn_handle, cublas_handle,
-        std::vector<int64_t>({1, nb_nodes, nb_inputs}));
+        cudnn_handle, cublas_handle, dims);
 
     graph.inputs(fc_layer_task);
     graph.outputs(fc_layer_task);
@@ -180,12 +180,67 @@ Test(fully_connected_layer_fwd) {
     graph.waitForTermination();
 
     for (size_t i = 0; i < nb_nodes; ++i) {
-        uassert_equal(output_host[i], 7)
+        uassert_equal(output_host[i], 7);
     }
+}
+
+UTest(sigmoid_activation_fwd) {
+    constexpr int64_t nb_nodes = 3;
+    constexpr int64_t nb_inputs = 3;
+    LayerDimentions dims = {
+        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+    ftype input_host[nb_inputs] = {1, 2, 3}, output_host[nb_nodes] = {0};
+    ftype *input_gpu = nullptr, *output_gpu = nullptr;
+    std::vector<Layer<ftype>> layers = {};
+    cudnnHandle_t cudnn_handle;
+    cublasHandle_t cublas_handle;
+
+    cudnnCreate(&cudnn_handle);
+    defer(cudnnDestroy(cudnn_handle));
+
+    cublasCreate_v2(&cublas_handle);
+    defer(cublasDestroy_v2(cublas_handle));
+
+    CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
+    defer(cudaFree(input_gpu));
+
+    CUDA_CHECK(alloc_gpu(&output_gpu, nb_nodes));
+    defer(cudaFree(output_gpu));
+
+    CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
+    cudaDeviceSynchronize();
+
+    hh::Graph<LayerTaskType> graph;
+    auto fc_layer_task =
+        std::make_shared<SigmoidActivationTask>(cudnn_handle, dims);
+
+    graph.inputs(fc_layer_task);
+    graph.outputs(fc_layer_task);
+
+    graph.executeGraph(true);
+    graph.pushData(std::make_shared<FwdData<ftype>>(layers.begin(), input_gpu,
+                                                    output_gpu));
+    graph.finishPushingData();
+
+    auto result = graph.getBlockingResult();
+
+    ftype *result_output_gpu = std::get<0>(*result)->output_gpu;
+
+    urequire(output_gpu == result_output_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
+    cudaDeviceSynchronize();
+
+    graph.waitForTermination();
+
+    for (size_t i = 0; i < nb_nodes; ++i) {
+        DBG(output_host[i])
+    }
+    uassert(false);
 }
 
 int main(int, char **) {
     /* test_cdnn_operations(); */
     run_test(fully_connected_layer_fwd);
+    run_test(sigmoid_activation_fwd);
     return 0;
 }
