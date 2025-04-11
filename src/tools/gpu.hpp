@@ -22,6 +22,15 @@
         }                                                                      \
     }
 
+#define CUBLAS_CHECK(expr)                                                     \
+    {                                                                          \
+        auto result = expr;                                                    \
+        if (result != CUBLAS_STATUS_SUCCESS) {                                 \
+            std::cerr << "[CUBLAS_ERROR]: " __FILE__ ":" << __LINE__ << ": "   \
+                      << cublasGetStatusName(result) << std::endl;             \
+        }                                                                      \
+    }
+
 template <typename T>
 auto memcpy_host_to_gpu(T *dest_gpu, T *src_host, size_t size) {
     return cudaMemcpy(dest_gpu, src_host, size * sizeof(T),
@@ -41,7 +50,7 @@ auto memcpy_gpu_to_gpu(T *dest_gpu, T *src_gpu, size_t size) {
 }
 
 template <typename T> auto alloc_gpu(T **dest, size_t size) {
-    return cudaMalloc((void **)(&dest), size * sizeof(T));
+    return cudaMalloc((void **)dest, size * sizeof(T));
 }
 
 #endif
