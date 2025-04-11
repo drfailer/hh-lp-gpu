@@ -7,19 +7,21 @@
 
 struct SigmoidActivationTask : LayerTask {
     SigmoidActivationTask(std::string const &name, cudnnHandle_t cudnn_handle,
-                          size_t layer_idx, LayerDimentions const &dims)
-        : LayerTask(name, layer_idx), cudnn_handle_(cudnn_handle) {
+                          cublasHandle_t cublas_handle, size_t layer_idx,
+                          LayerDimentions const &dims)
+        : LayerTask(name, cudnn_handle, cublas_handle, layer_idx) {
         build_fwd_graph(dims);
         build_bwd_graph(dims);
     }
-    SigmoidActivationTask(cudnnHandle_t cudnn_handle, size_t layer_idx,
+    SigmoidActivationTask(cudnnHandle_t cudnn_handle,
+                          cublasHandle_t cublas_handle, size_t layer_idx,
                           LayerDimentions const &dims)
         : SigmoidActivationTask("SigmoidActivationTask", cudnn_handle,
-                                layer_idx, dims) {}
+                                cublas_handle, layer_idx, dims) {}
 
     ~SigmoidActivationTask() { cudaFree(fwd_.workspace); }
 
-    void execute(std::shared_ptr<FwdData<ftype>> fwd_data) {
+    void execute(std::shared_ptr<FwdData<ftype>> fwd_data) override {
         namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask FWD", INFO_GRP_LAYER_TASK);
 
@@ -27,12 +29,11 @@ struct SigmoidActivationTask : LayerTask {
                            void *>
             memory_map = {{fwd_.input_tensor, fwd_data->input_gpu},
                           {fwd_.output_tensor, fwd_data->input_gpu}};
-        CUDNN_CHECK(
-            fwd_.graph.execute(cudnn_handle_, memory_map, fwd_.workspace));
+        CUDNN_CHECK(fwd_.graph.execute(cudnn(), memory_map, fwd_.workspace));
         this->addResult(fwd_data);
     }
 
-    void execute(std::shared_ptr<BwdInputData<ftype>> bwd_data) {
+    void execute(std::shared_ptr<BwdData<ftype>> bwd_data) override {
         // TODO: execute the bwd graph
     }
 
@@ -56,11 +57,11 @@ struct SigmoidActivationTask : LayerTask {
             fe::DataType_t::FLOAT);
 
         CUDNN_CHECK(graph.validate());
-        CUDNN_CHECK(graph.build_operation_graph(cudnn_handle_));
+        CUDNN_CHECK(graph.build_operation_graph(cudnn()));
         CUDNN_CHECK(graph.create_execution_plans({fe::HeurMode_t::A}));
-        CUDNN_CHECK(graph.check_support(cudnn_handle_));
+        CUDNN_CHECK(graph.check_support(cudnn()));
         CUDNN_CHECK(graph.build_plans(
-            cudnn_handle_, fe::BuildPlanPolicy_t::HEURISTICS_CHOICE));
+            cudnn(), fe::BuildPlanPolicy_t::HEURISTICS_CHOICE));
 
         int64_t workspace_size;
         CUDNN_CHECK(graph.get_workspace_size(workspace_size));
@@ -72,7 +73,6 @@ struct SigmoidActivationTask : LayerTask {
     }
 
   private:
-    cudnnHandle_t cudnn_handle_;
     struct {
         cudnn_frontend::graph::Graph graph;
         tensor_attr_t input_tensor;

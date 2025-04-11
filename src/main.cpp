@@ -210,7 +210,7 @@ UTest(sigmoid_activation_fwd) {
 
     hh::Graph<LayerTaskType> graph;
     auto sig_task =
-        std::make_shared<SigmoidActivationTask>(cudnn_handle, 0, dims);
+        std::make_shared<SigmoidActivationTask>(cudnn_handle, nullptr, 0, dims);
 
     graph.inputs(sig_task);
     graph.outputs(sig_task);
