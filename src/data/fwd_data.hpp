@@ -1,12 +1,11 @@
 #ifndef DATA_FWD_DATA_H
 #define DATA_FWD_DATA_H
-#include "layer.hpp"
+#include "model.hpp"
 
 template <typename T>
 struct FwdData {
-    std::vector<Layer<T>>::iterator layer;
+    Model<T> &model;
     T *input_gpu;
-    T *output_gpu;
 };
 
 #endif
