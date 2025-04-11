@@ -3,17 +3,10 @@
 #include "layer.hpp"
 
 template <typename T>
-struct FwdInputData {
-    Layer<T> layer;
+struct FwdData {
+    std::vector<Layer<T>>::iterator layer;
     T *input_gpu;
-    T *z_gpu;
-    T *act_gpu;
-};
-
-template <typename T>
-struct FwdOutputData {
-    T *z_gpu;
-    T *act_gpu;
+    T *output_gpu;
 };
 
 #endif

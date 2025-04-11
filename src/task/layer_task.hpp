@@ -5,8 +5,8 @@
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define LayerTaskIn FwdInputData<ftype>, BwdInputData<ftype>
-#define LayerTaskOut FwdOutputData<ftype>, BwdOutputData<ftype>
+#define LayerTaskIn FwdData<ftype>, BwdInputData<ftype>
+#define LayerTaskOut FwdData<ftype>, BwdOutputData<ftype>
 #define LayerTaskType 2, LayerTaskIn, LayerTaskOut
 
 struct LayerTask : hh::AbstractAtomicTask<LayerTaskType> {
