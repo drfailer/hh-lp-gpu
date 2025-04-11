@@ -1,9 +1,11 @@
 #ifndef TOOLS_GPU_H
 #define TOOLS_GPU_H
+#include "utest.hpp"
 #include <cuda_runtime_api.h>
 #include <functional>
 #include <iostream>
 
+#ifndef UTEST
 #define CUDNN_CHECK(expr)                                                      \
     {                                                                          \
         auto result = expr;                                                    \
@@ -30,6 +32,33 @@
                       << cublasGetStatusName(result) << std::endl;             \
         }                                                                      \
     }
+#else
+#define CUDNN_CHECK(expr)                                                      \
+    {                                                                          \
+        auto result = expr;                                                    \
+        if (result.is_bad()) {                                                 \
+            upanic("cudnn_error :: " + result.get_message());                  \
+        }                                                                      \
+    }
+
+#define CUDA_CHECK(expr)                                                       \
+    {                                                                          \
+        auto result = expr;                                                    \
+        if (result != cudaSuccess) {                                           \
+            upanic("cuda_error :: " +                                          \
+                   std::string(cudaGetErrorString(result)));                   \
+        }                                                                      \
+    }
+
+#define CUBLAS_CHECK(expr)                                                     \
+    {                                                                          \
+        auto result = expr;                                                    \
+        if (result != CUBLAS_STATUS_SUCCESS) {                                 \
+            upanic("cublas_error :: " +                                        \
+                   std::string(cublasGetStatusName(result)));                  \
+        }                                                                      \
+    }
+#endif
 
 template <typename T>
 auto memcpy_host_to_gpu(T *dest_gpu, T *src_host, size_t size) {
