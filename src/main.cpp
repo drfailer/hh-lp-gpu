@@ -182,6 +182,7 @@ UTest(fully_connected_layer_fwd) {
     ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input_gpu;
     graph.waitForTermination();
 
+    urequire(output_gpu != input_gpu);
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
     cudaDeviceSynchronize();
 
@@ -221,7 +222,7 @@ UTest(sigmoid_activation_fwd) {
     ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input_gpu;
     graph.waitForTermination();
 
-    urequire(output_gpu == input_gpu);
+    urequire(output_gpu != input_gpu);
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_inputs));
     cudaDeviceSynchronize();
 
