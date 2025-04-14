@@ -1,9 +1,9 @@
 #ifndef CPP_UTILS_UTEST_H
 #define CPP_UTILS_UTEST_H
 #include <iostream>
+#include <log.h/log.h>
 #include <sstream>
 #include <string>
-#include <log.h/log.h>
 
 #define UTest(name)                                                            \
     void test_function_##name(                                                 \
@@ -81,8 +81,8 @@ inline int assert_equal_(std::string const &group, auto const &found,
                          std::string const &filename, size_t line) {
     if (found != expect) {
         std::ostringstream oss;
-        oss << "`" << lhs_str << "` != `" << rhs_str << "` -> found " << found
-            << " expected " << expect << ".";
+        oss << lhs_str << " != " << rhs_str << " -> " << found
+            << " != " << expect << ".";
         error(group, filename, line, oss.str());
         return 1;
     }
@@ -96,8 +96,8 @@ inline int assert_float_equal_(std::string const &group, float found,
                                std::string const &filename, size_t line) {
     if (!(expect - prec <= found && found <= expect + prec)) {
         std::ostringstream oss;
-        oss << "`" << lhs_str << "` != `" << rhs_str << "` -> found " << found
-            << " expected " << expect << ".";
+        oss << lhs_str << " != " << rhs_str << " -> " << found
+            << " != " << expect << ".";
         error(group, filename, line, oss.str());
         return 1;
     }
