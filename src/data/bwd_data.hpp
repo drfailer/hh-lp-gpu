@@ -5,7 +5,7 @@
 template <typename T>
 struct BwdData {
     Model<T> &model;
-    T *input_gpu;
+    T *err_gpu;
 };
 
 #endif

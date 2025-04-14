@@ -80,12 +80,12 @@ struct SigmoidActivationTask : LayerTask {
         std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>,
                            void *>
             memory_map = {
-                {bwd_.err_tensor, bwd_data->input_gpu},
+                {bwd_.err_tensor, bwd_data->err_gpu},
                 {bwd_.fwd_input_tensor, fwd_input_gpu_},
                 {bwd_.output_tensor, bwd_output_gpu_},
             };
         CUDNN_CHECK(bwd_.graph.execute(cudnn(), memory_map, bwd_.workspace));
-        bwd_data->input_gpu = bwd_output_gpu_;
+        bwd_data->err_gpu = bwd_output_gpu_;
         this->addResult(bwd_data);
     }
 
