@@ -211,7 +211,7 @@ UTest(sigmoid_activation_fwd) {
 
     hh::Graph<LayerTaskType> graph;
     auto sig_task =
-        std::make_shared<SigmoidActivationTask>(cudnn_handle, nullptr, 0, dims);
+        std::make_shared<SigmoidActivationTask>(cudnn_handle, nullptr, dims);
 
     graph.inputs(sig_task);
     graph.outputs(sig_task);
@@ -219,7 +219,9 @@ UTest(sigmoid_activation_fwd) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<FwdData<ftype>>(model, input_gpu));
     graph.finishPushingData();
-    ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input_gpu;
+    ftype *output_gpu =
+        std::get<std::shared_ptr<FwdData<ftype>>>(*graph.getBlockingResult())
+            ->input_gpu;
     graph.waitForTermination();
 
     urequire(output_gpu != input_gpu);
@@ -231,9 +233,59 @@ UTest(sigmoid_activation_fwd) {
     }
 }
 
+UTest(sigmoid_activation_bwd) {
+    constexpr int64_t nb_nodes = 6;
+    constexpr int64_t nb_inputs = 6;
+    LayerDimentions dims = {
+        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+    ftype input_host[nb_inputs] = {1, 2, 3, 4, 5, 6},
+          err[nb_inputs] = {10, 10, 10, 10, 10, 10},
+          output_host[nb_nodes] = {0};
+    ftype *input_gpu = nullptr, *err_gpu = nullptr;
+    Model<ftype> model;
+    cudnnHandle_t cudnn_handle;
+
+    CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
+    CUDA_CHECK(alloc_gpu(&err_gpu, nb_inputs));
+    defer(cudaFree(input_gpu));
+    defer(cudaFree(err_gpu));
+    CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
+    CUDA_CHECK(memcpy_host_to_gpu(err_gpu, err, nb_inputs));
+    cudaDeviceSynchronize();
+
+    cudnnCreate(&cudnn_handle);
+    defer(cudnnDestroy(cudnn_handle));
+
+    hh::Graph<LayerTaskType> graph;
+    auto sig_task =
+        std::make_shared<SigmoidActivationTask>(cudnn_handle, nullptr, dims);
+    // init sig_task (we expect the forward pass to be done at this point)
+    sig_task->execute(std::make_shared<FwdData<ftype>>(model, input_gpu));
+
+    graph.inputs(sig_task);
+    graph.outputs(sig_task);
+
+    graph.executeGraph(true);
+    graph.pushData(std::make_shared<BwdData<ftype>>(model, err_gpu));
+    graph.finishPushingData();
+    ftype *output_gpu =
+        std::get<std::shared_ptr<BwdData<ftype>>>(*graph.getBlockingResult())
+            ->err_gpu;
+    graph.waitForTermination();
+
+    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_inputs));
+    cudaDeviceSynchronize();
+
+    for (size_t i = 0; i < nb_nodes; ++i) {
+        uassert_float_equal(output_host[i],
+                            err[i] * sigmoid_derivative(input_host[i]), 1e-6);
+    }
+}
+
 int main(int, char **) {
     /* test_cdnn_operations(); */
     run_test(fully_connected_layer_fwd);
     run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
     return 0;
 }
