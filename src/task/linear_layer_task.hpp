@@ -9,12 +9,8 @@
 #include <memory>
 #include <vector>
 
-// err = hadamard(matmul(T(layers[L - l + 1].weights), err),
-//                act_prime(zs[zs.size() - l]));
-// act_prime = bwd_data->input_gpu
-
-struct FullyConnectedLayerTask : LayerTask {
-    FullyConnectedLayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
+struct LinearLayerTask : LayerTask {
+    LinearLayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
                             cublasHandle_t cublas_handle, size_t layer_idx,
                             [[maybe_unused]] LayerDimentions const &dims)
         : LayerTask(name, cudnn_handle, cublas_handle, layer_idx),
@@ -22,16 +18,16 @@ struct FullyConnectedLayerTask : LayerTask {
         size_t size = dims.nb_inputs * dims.nb_nodes;
         CUDA_CHECK(alloc_gpu(&output_gpu_, size));
     }
-    FullyConnectedLayerTask(cudnnHandle_t cudnn_handle,
+    LinearLayerTask(cudnnHandle_t cudnn_handle,
                             cublasHandle_t cublas_handle, size_t layer_idx,
                             LayerDimentions const &dims)
-        : FullyConnectedLayerTask("FullyConnectedLayerTask", cudnn_handle,
+        : LinearLayerTask("LinearLayerTask", cudnn_handle,
                                   cublas_handle, layer_idx, dims) {}
 
-    ~FullyConnectedLayerTask() { cudaFree(output_gpu_); }
+    ~LinearLayerTask() { cudaFree(output_gpu_); }
 
     void execute(std::shared_ptr<FwdData<ftype>> fwd_data) override {
-        INFO_GRP("FullyConnectedLayerTask FWD", INFO_GRP_LAYER_TASK);
+        INFO_GRP("LinearLayerTask FWD", INFO_GRP_LAYER_TASK);
         auto &layer = fwd_data->model.layers[this->layer_idx()];
         auto dims = layer.dims;
 
@@ -47,6 +43,8 @@ struct FullyConnectedLayerTask : LayerTask {
 
     void execute(std::shared_ptr<BwdData<ftype>> bwd_data) override {
         // TODO: execute the bwd graph
+        // Backward:
+        // - grads_b = err, grads_w = matmul(fwd_inputT, err), err = matmul(err, w)
     }
 
   private:

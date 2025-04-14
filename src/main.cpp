@@ -1,6 +1,6 @@
 #include "cudnn_operations.hpp"
 #include "data/layer.hpp"
-#include "task/fully_connected_layer_task.hpp"
+#include "task/linear_layer_task.hpp"
 #include "task/sigmoid_activation_task.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
@@ -170,7 +170,7 @@ UTest(fully_connected_layer_fwd) {
     cudaDeviceSynchronize();
 
     hh::Graph<LayerTaskType> graph;
-    auto fc_layer_task = std::make_shared<FullyConnectedLayerTask>(
+    auto fc_layer_task = std::make_shared<LinearLayerTask>(
         cudnn_handle, cublas_handle, 0, dims);
 
     graph.inputs(fc_layer_task);
