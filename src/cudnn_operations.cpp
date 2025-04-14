@@ -1,6 +1,7 @@
 #include "cudnn_operations.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
+#include "tools/timer.hpp"
 #include <cudnn.h>
 #include <cudnn_frontend.h>
 #include <cudnn_graph.h>
@@ -25,6 +26,7 @@ void hadamard(ftype *A_host, ftype *B_host, int64_t m, int64_t n,
     cudaMemcpy(B_gpu, B_host, m * n * sizeof(*B_gpu), cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
 
+    timer_start(hadamard_graph_creation);
     fe::graph::Graph graph;
 
     // input tensors (should be at least 3d)
@@ -69,9 +71,15 @@ void hadamard(ftype *A_host, ftype *B_host, int64_t m, int64_t n,
     CUDNN_CHECK(graph.get_workspace_size(workspace_size));
     float *workspace = nullptr;
     cudaMalloc((void **)(&workspace), workspace_size * sizeof(*workspace));
+    timer_end(hadamard_graph_creation);
 
     // execute
+    timer_start(hadamard_graph_execution);
     CUDNN_CHECK(graph.execute(handle, memory_map, workspace));
+    timer_end(hadamard_graph_execution);
+
+    timer_report(hadamard_graph_creation);
+    timer_report(hadamard_graph_execution);
 
     // copy result matrix to cpu
     cudaMemcpy(C_host, C_gpu, m * n * sizeof(*C_gpu), cudaMemcpyDeviceToHost);
@@ -103,6 +111,7 @@ void matmul(ftype *A_host, ftype *B_host, int64_t m, int64_t n, int64_t k,
     cudaMemcpy(B_gpu, B_host, n * k * sizeof(*B_gpu), cudaMemcpyHostToDevice);
     cudaDeviceSynchronize();
 
+    timer_start(matmul_graph_creation);
     fe::graph::Graph graph;
 
     auto A = graph.tensor(fe::graph::Tensor_attributes()
@@ -140,8 +149,14 @@ void matmul(ftype *A_host, ftype *B_host, int64_t m, int64_t n, int64_t k,
     CUDNN_CHECK(graph.get_workspace_size(workspace_size));
     float *workspace = nullptr;
     cudaMalloc((void **)(&workspace), workspace_size * sizeof(*workspace));
+    timer_end(matmul_graph_creation);
 
+    timer_start(matmul_graph_execution);
     CUDNN_CHECK(graph.execute(handle, memory_map, workspace));
+    timer_end(matmul_graph_execution);
+
+    timer_report(matmul_graph_creation);
+    timer_report(matmul_graph_execution);
 
     cudaMemcpy(C_host, C_gpu, m * k * sizeof(*C_gpu), cudaMemcpyDeviceToHost);
     cudaDeviceSynchronize();
@@ -157,6 +172,8 @@ void sigmoid(ftype *A_host, int64_t size) {
     namespace fe = cudnn_frontend;
     ftype *A_gpu = nullptr;
     cudnnHandle_t handle;
+
+    timer_start(sigmoid_graph_creation);
     fe::graph::Graph graph;
 
     CUDA_CHECK(alloc_gpu(&A_gpu, size));
@@ -190,11 +207,17 @@ void sigmoid(ftype *A_host, int64_t size) {
     CUDNN_CHECK(graph.get_workspace_size(workspace_size));
     CUDA_CHECK(alloc_gpu(&workspace, workspace_size));
     defer(cudaFree(workspace))
+    timer_end(sigmoid_graph_creation);
 
     std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>, void *>
         memory_map = {{input_tensor, A_gpu}, {output_tensor, A_gpu}};
 
+    timer_start(sigmoid_graph_execution);
     CUDNN_CHECK(graph.execute(handle, memory_map, workspace));
+    timer_end(sigmoid_graph_execution);
+
+    timer_report(sigmoid_graph_creation);
+    timer_report(sigmoid_graph_execution);
 
     CUDA_CHECK(memcpy_gpu_to_host(A_host, A_gpu, size));
     cudaDeviceSynchronize();
