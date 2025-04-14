@@ -3,12 +3,15 @@
 #include "../tools/gpu.hpp"
 #include "layer_task.hpp"
 #include "log.h/log.h"
-#include <cublas_v2.h>
 #include <cudnn.h>
 #include <cudnn_frontend/graph_interface.h>
 #include <cudnn_graph.h>
 #include <memory>
 #include <vector>
+
+// err = hadamard(matmul(T(layers[L - l + 1].weights), err),
+//                act_prime(zs[zs.size() - l]));
+// act_prime = bwd_data->input_gpu
 
 struct FullyConnectedLayerTask : LayerTask {
     FullyConnectedLayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
@@ -29,17 +32,15 @@ struct FullyConnectedLayerTask : LayerTask {
 
     void execute(std::shared_ptr<FwdData<ftype>> fwd_data) override {
         INFO_GRP("FullyConnectedLayerTask FWD", INFO_GRP_LAYER_TASK);
-        ftype alpha = 1, beta = 1;
         auto &layer = fwd_data->model.layers[this->layer_idx()];
         auto dims = layer.dims;
 
         CUDA_CHECK(
             memcpy_gpu_to_gpu(output_gpu_, layer.biases_gpu, dims.nb_nodes));
         cudaDeviceSynchronize();
-        CUBLAS_CHECK(cublasSgemv_v2(
-            cublas(), cublasOperation_t::CUBLAS_OP_N, dims.nb_nodes,
-            dims.nb_inputs, &alpha, layer.weights_gpu, dims.nb_inputs,
-            fwd_data->input_gpu, 1, &beta, output_gpu_, 1));
+        CUBLAS_CHECK(matvecmul(cublas(), false, dims.nb_nodes, dims.nb_inputs,
+                               layer.weights_gpu, fwd_data->input_gpu,
+                               output_gpu_));
         fwd_data->input_gpu = output_gpu_;
         this->addResult(fwd_data);
     }

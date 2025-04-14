@@ -3,6 +3,7 @@
 #include <cuda_runtime_api.h>
 #include <functional>
 #include <iostream>
+#include <cublas_v2.h>
 
 #define CUDNN_CHECK(expr)                                                      \
     {                                                                          \
@@ -51,6 +52,18 @@ auto memcpy_gpu_to_gpu(T *dest_gpu, T *src_gpu, size_t size) {
 
 template <typename T> auto alloc_gpu(T **dest, size_t size) {
     return cudaMalloc((void **)dest, size * sizeof(T));
+}
+
+template <typename T>
+auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols, T *mat, T *vec, T *out) {
+    cublasOperation_t cublas_trans =
+        trans ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N;
+    T alpha = 1, beta = 1;
+
+    // we will only use float in this program, but there is still the
+    // possibility to ad support for more
+    return cublasSgemv_v2(handle, cublas_trans, rows, cols, &alpha, mat, cols,
+                          vec, 1, &beta, out, 1);
 }
 
 #endif
