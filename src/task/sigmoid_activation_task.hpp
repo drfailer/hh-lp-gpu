@@ -18,6 +18,11 @@ struct SigmoidActivationTask : LayerTask {
         : SigmoidActivationTask("SigmoidActivationTask", cudnn_handle,
                                 cublas_handle, idx, dims) {}
 
+    ~SigmoidActivationTask() {
+        cudaFree(fwd_.workspace);
+        cudaFree(bwd_.workspace);
+    }
+
     /*
      * Allocates memory for a layer state (output memory for the fwd pass, bwd
      * pass, parameters and gradiants). Since this layer is an activation one,
