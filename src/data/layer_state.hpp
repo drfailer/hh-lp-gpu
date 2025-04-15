@@ -93,10 +93,11 @@ void parameters_gpu_to_host(Parameters<T> &gpu, Parameters<T> const &host,
 
 template <typename T>
 LayerState<T> layer_state_create_gpu(LayerDimentions const &dims,
-                                     Parameters<T> params,
-                                     Parameters<T> grads) {
+                                     Parameters<T> const &params,
+                                     Parameters<T> const &grads) {
     LayerState<T> state;
 
+    // warn: the layer deosn't own the input vector
     CUDA_CHECK(alloc_gpu(&state.output, dims.nb_nodes));
     CUDA_CHECK(alloc_gpu(&state.error, dims.nb_inputs));
     state.params = params;
@@ -114,10 +115,11 @@ template <typename T> void layer_state_destroy_gpu(LayerState<T> &state) {
 
 template <typename T>
 LayerState<T> layer_state_create_host(LayerDimentions const &dims,
-                                      Parameters<T> params,
-                                      Parameters<T> grads) {
+                                      Parameters<T> const &params,
+                                      Parameters<T> const &grads) {
     LayerState<T> state;
 
+    // warn: the layer deosn't own the input vector
     state.output = new T[dims.nb_nodes];
     state.error = new T[dims.nb_inputs];
     state.params = params;
@@ -126,8 +128,7 @@ LayerState<T> layer_state_create_host(LayerDimentions const &dims,
     return state;
 }
 
-template <typename T>
-void layer_state_destroy_host(LayerState<T> &state) {
+template <typename T> void layer_state_destroy_host(LayerState<T> &state) {
     delete[] state.output;
     delete[] state.error;
     state.output = nullptr;

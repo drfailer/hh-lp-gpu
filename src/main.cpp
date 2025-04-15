@@ -66,6 +66,10 @@ ftype *create_test_gpu_array(ftype *host, size_t size) {
     return gpu;
 }
 
+template <typename T> std::shared_ptr<T> hh_get_result(auto &graph) {
+    return std::get<std::shared_ptr<T>>(*graph.getBlockingResult());
+}
+
 void init(ftype *A, ftype *B, ftype *C, ftype *V, int64_t m, int64_t n,
           int64_t k) {
     // init A
@@ -139,6 +143,54 @@ UTest(cdnn_operations) {
     delete[] V;
 }
 
+UTest(linear_layer_init) {
+    constexpr int64_t nb_nodes = 3;
+    constexpr int64_t nb_inputs = 3;
+    LayerDimentions dims = {
+        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+    NetworkState<ftype> network_state(1);
+
+    urequire(network_state.size() == 1);
+
+    hh::Graph<LayerTaskType> graph;
+    auto fc_layer_task =
+        std::make_shared<LinearLayerTask>(nullptr, nullptr, 0, dims);
+
+    graph.inputs(fc_layer_task);
+    graph.outputs(fc_layer_task);
+
+    graph.executeGraph(true);
+    graph.pushData(std::make_shared<InitData<ftype>>(network_state));
+    graph.finishPushingData();
+    auto init_data = hh_get_result<InitData<ftype>>(graph);
+    graph.waitForTermination();
+
+    urequire(&init_data->states == &network_state);
+    auto state = init_data->states[0];
+
+    uassert(state.dims.nb_nodes == nb_nodes);
+    uassert(state.dims.nb_inputs == nb_inputs);
+    uassert(state.dims.kernel_size == 1);
+    uassert(state.input == nullptr);
+    uassert(state.error != nullptr);
+    uassert(state.output != nullptr);
+    uassert(state.params.weights != nullptr);
+    uassert(state.params.biases != nullptr);
+    uassert(state.grads.weights != nullptr);
+    uassert(state.grads.biases != nullptr);
+
+    layer_state_destroy_gpu(state);
+    parameters_destroy_gpu(state.params);
+    parameters_destroy_gpu(state.grads);
+    uassert(state.input == nullptr);
+    uassert(state.error == nullptr);
+    uassert(state.output == nullptr);
+    uassert(state.params.weights == nullptr);
+    uassert(state.params.biases == nullptr);
+    uassert(state.grads.weights == nullptr);
+    uassert(state.grads.biases == nullptr);
+}
+
 UTest(linear_layer_fwd) {
     constexpr int64_t nb_nodes = 3;
     constexpr int64_t nb_inputs = 3;
@@ -176,7 +228,7 @@ UTest(linear_layer_fwd) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<FwdData<ftype>>(network_state, input_gpu));
     graph.finishPushingData();
-    ftype *output_gpu = std::get<0>(*graph.getBlockingResult())->input;
+    ftype *output_gpu = hh_get_result<FwdData<ftype>>(graph)->input;
     graph.waitForTermination();
 
     urequire(output_gpu == layer_state.output);
@@ -234,7 +286,7 @@ UTest(linear_layer_bwd) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<BwdData<ftype>>(network_state, err_gpu));
     graph.finishPushingData();
-    ftype *output_err_gpu = std::get<1>(*graph.getBlockingResult())->error;
+    ftype *output_err_gpu = hh_get_result<BwdData<ftype>>(graph)->error;
     graph.waitForTermination();
 
     urequire(output_err_gpu == layer_state.error);
@@ -245,6 +297,51 @@ UTest(linear_layer_bwd) {
     uassert_equal(output_err_host[1], 234);
     uassert_equal(output_err_host[2], 345);
     uassert_equal(output_err_host[3], 456);
+}
+
+UTest(sigmoid_activation_init) {
+    constexpr int64_t nb_nodes = 3;
+    constexpr int64_t nb_inputs = 3;
+    LayerDimentions dims = {
+        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+    NetworkState<ftype> network_state(1);
+    cudnnHandle_t cudnn_handle;
+
+    cudnnCreate(&cudnn_handle);
+    defer(cudnnDestroy(cudnn_handle));
+
+    hh::Graph<LayerTaskType> graph;
+    auto sig_task =
+        std::make_shared<SigmoidActivationTask>(cudnn_handle, nullptr, 0, dims);
+
+    graph.inputs(sig_task);
+    graph.outputs(sig_task);
+
+    graph.executeGraph(true);
+    graph.pushData(std::make_shared<InitData<ftype>>(network_state));
+    graph.finishPushingData();
+    auto state = hh_get_result<InitData<ftype>>(graph)->states[0];
+    graph.waitForTermination();
+
+    uassert(state.dims.nb_nodes == nb_nodes);
+    uassert(state.dims.nb_inputs == nb_inputs);
+    uassert(state.dims.kernel_size == 1);
+    uassert(state.input == nullptr);
+    uassert(state.error != nullptr);
+    uassert(state.output != nullptr);
+    uassert(state.params.weights == nullptr);
+    uassert(state.params.biases == nullptr);
+    uassert(state.grads.weights == nullptr);
+    uassert(state.grads.biases == nullptr);
+
+    layer_state_destroy_gpu(state);
+    uassert(state.input == nullptr);
+    uassert(state.error == nullptr);
+    uassert(state.output == nullptr);
+    uassert(state.params.weights == nullptr);
+    uassert(state.params.biases == nullptr);
+    uassert(state.grads.weights == nullptr);
+    uassert(state.grads.biases == nullptr);
 }
 
 UTest(sigmoid_activation_fwd) {
@@ -277,9 +374,7 @@ UTest(sigmoid_activation_fwd) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<FwdData<ftype>>(network_state, input_gpu));
     graph.finishPushingData();
-    ftype *output_gpu =
-        std::get<std::shared_ptr<FwdData<ftype>>>(*graph.getBlockingResult())
-            ->input;
+    ftype *output_gpu = hh_get_result<FwdData<ftype>>(graph)->input;
     graph.waitForTermination();
 
     urequire(output_gpu != input_gpu);
@@ -329,9 +424,7 @@ UTest(sigmoid_activation_bwd) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<BwdData<ftype>>(network_state, err_gpu));
     graph.finishPushingData();
-    ftype *output_gpu =
-        std::get<std::shared_ptr<BwdData<ftype>>>(*graph.getBlockingResult())
-            ->error;
+    ftype *output_gpu = hh_get_result<BwdData<ftype>>(graph)->error;
     graph.waitForTermination();
 
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_inputs));
@@ -345,8 +438,10 @@ UTest(sigmoid_activation_bwd) {
 
 int main(int, char **) {
     /* run_test(cdnn_operations); */
+    run_test(linear_layer_init);
     run_test(linear_layer_fwd);
     run_test(linear_layer_bwd);
+    run_test(sigmoid_activation_init);
     run_test(sigmoid_activation_fwd);
     run_test(sigmoid_activation_bwd);
     return 0;
