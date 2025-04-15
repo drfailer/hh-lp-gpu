@@ -12,20 +12,20 @@
 class LayerTask : public hh::AbstractCUDATask<LayerTaskType> {
   public:
     LayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
-              cublasHandle_t cublas_handle, size_t layer_idx)
+              cublasHandle_t cublas_handle, size_t idx)
         : hh::AbstractCUDATask<LayerTaskType>(name, 1),
           cudnn_handle_(cudnn_handle), cublas_handle_(cublas_handle),
-          layer_idx_(layer_idx) {}
+          idx_(idx) {}
 
-  public:
+  protected:
     cudnnHandle_t cudnn() { return cudnn_handle_; }
     cublasHandle_t cublas() { return cublas_handle_; }
-    size_t layer_idx() const { return layer_idx_; }
+    size_t idx() { return idx_; }
 
   private:
     cudnnHandle_t cudnn_handle_;
     cublasHandle_t cublas_handle_;
-    size_t layer_idx_;
+    size_t idx_;
 };
 
 #endif

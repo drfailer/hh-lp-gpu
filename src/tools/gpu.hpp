@@ -1,9 +1,10 @@
 #ifndef TOOLS_GPU_H
 #define TOOLS_GPU_H
+#include "log.h/log.h"
+#include <cublas_v2.h>
 #include <cuda_runtime_api.h>
 #include <functional>
 #include <iostream>
-#include <cublas_v2.h>
 
 #define CUDNN_CHECK(expr)                                                      \
     {                                                                          \
@@ -55,15 +56,42 @@ template <typename T> auto alloc_gpu(T **dest, size_t size) {
 }
 
 template <typename T>
-auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols, T *mat, T *vec, T *out) {
+auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
+               T *mat, T *vec, T *out) {
     cublasOperation_t cublas_trans =
         trans ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N;
     T alpha = 1, beta = 1;
+
+    INFO_GRP("gemv: C = op(A) * X + Y", INFO_GRP_CUBLAS)
+    INFO_GRP("op(A)[" << rows << ", " << cols << "] = " << mat, INFO_GRP_CUBLAS);
+    INFO_GRP("X[" << cols << "] = " << vec, INFO_GRP_CUBLAS);
+    INFO_GRP("C[" << rows << "] = " << out, INFO_GRP_CUBLAS);
 
     // we will only use float in this program, but there is still the
     // possibility to ad support for more
     return cublasSgemv_v2(handle, cublas_trans, rows, cols, &alpha, mat, cols,
                           vec, 1, &beta, out, 1);
+}
+
+template <typename T>
+auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
+            size_t n, size_t k, T const *A, T const *B, T *C) {
+    cublasOperation_t cublas_trans_A = A_trans ? cublasOperation_t::CUBLAS_OP_N
+                                               : cublasOperation_t::CUBLAS_OP_T;
+    cublasOperation_t cublas_trans_B = B_trans ? cublasOperation_t::CUBLAS_OP_N
+                                               : cublasOperation_t::CUBLAS_OP_T;
+    size_t lda = A_trans ? m : k;
+    size_t ldb = B_trans ? k : n;
+    size_t ldc = n;
+    T alpha = 1, beta = 0;
+
+    INFO_GRP("gemm: C = op(A) * op(B) + C", INFO_GRP_CUBLAS)
+    INFO_GRP("op(A)[" << m << ", " << k << "] = " << A, INFO_GRP_CUBLAS);
+    INFO_GRP("op(B)[" << k << ", " << n << "] = " << B, INFO_GRP_CUBLAS);
+    INFO_GRP("C[" << m << ", " << n << "] = " << C, INFO_GRP_CUBLAS);
+
+    return cublasSgemm_v2(handle, cublas_trans_A, cublas_trans_B, n, m, k,
+                          &alpha, B, ldb, A, lda, &beta, C, ldc);
 }
 
 #endif

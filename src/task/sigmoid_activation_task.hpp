@@ -6,39 +6,32 @@
 
 struct SigmoidActivationTask : LayerTask {
     SigmoidActivationTask(std::string const &name, cudnnHandle_t cudnn_handle,
-                          cublasHandle_t cublas_handle,
+                          cublasHandle_t cublas_handle, size_t idx,
                           LayerDimentions const &dims)
-        : LayerTask(name, cudnn_handle, cublas_handle, -1) {
+        : LayerTask(name, cudnn_handle, cublas_handle, idx) {
         build_fwd_graph(dims);
         build_bwd_graph(dims);
-        CUDA_CHECK(alloc_gpu(&fwd_output_gpu_, dims.nb_inputs));
-        CUDA_CHECK(alloc_gpu(&bwd_output_gpu_, dims.nb_inputs));
     }
     SigmoidActivationTask(cudnnHandle_t cudnn_handle,
-                          cublasHandle_t cublas_handle,
+                          cublasHandle_t cublas_handle, size_t idx,
                           LayerDimentions const &dims)
         : SigmoidActivationTask("SigmoidActivationTask", cudnn_handle,
-                                cublas_handle, dims) {}
-
-    ~SigmoidActivationTask() {
-        cudaFree(fwd_.workspace);
-        cudaFree(fwd_output_gpu_);
-        cudaFree(bwd_output_gpu_);
-    }
+                                cublas_handle, idx, dims) {}
 
     void execute(std::shared_ptr<FwdData<ftype>> fwd_data) override {
+        auto &state = fwd_data->states[this->idx()];
         namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask FWD", INFO_GRP_LAYER_TASK);
 
         // save the input for the backwards pass
-        fwd_input_gpu_ = fwd_data->input_gpu;
+        state.input = fwd_data->input;
 
         std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>,
                            void *>
-            memory_map = {{fwd_.input_tensor, fwd_data->input_gpu},
-                          {fwd_.output_tensor, fwd_output_gpu_}};
+            memory_map = {{fwd_.input_tensor, fwd_data->input},
+                          {fwd_.output_tensor, state.output}};
         CUDNN_CHECK(fwd_.graph.execute(cudnn(), memory_map, fwd_.workspace));
-        fwd_data->input_gpu = fwd_output_gpu_;
+        fwd_data->input = state.output;
         this->addResult(fwd_data);
     }
 
@@ -74,18 +67,17 @@ struct SigmoidActivationTask : LayerTask {
     }
 
     void execute(std::shared_ptr<BwdData<ftype>> bwd_data) override {
+        auto &state = bwd_data->states[this->idx()];
         namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask BWD", INFO_GRP_LAYER_TASK);
 
         std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>,
                            void *>
-            memory_map = {
-                {bwd_.err_tensor, bwd_data->err_gpu},
-                {bwd_.fwd_input_tensor, fwd_input_gpu_},
-                {bwd_.output_tensor, bwd_output_gpu_},
-            };
+            memory_map = {{bwd_.err_tensor, bwd_data->error},
+                          {bwd_.fwd_input_tensor, state.input},
+                          {bwd_.output_tensor, state.error}};
         CUDNN_CHECK(bwd_.graph.execute(cudnn(), memory_map, bwd_.workspace));
-        bwd_data->err_gpu = bwd_output_gpu_;
+        bwd_data->error = state.error;
         this->addResult(bwd_data);
     }
 
@@ -127,9 +119,6 @@ struct SigmoidActivationTask : LayerTask {
     }
 
   private:
-    ftype *fwd_input_gpu_ = nullptr;
-    ftype *fwd_output_gpu_ = nullptr;
-    ftype *bwd_output_gpu_ = nullptr;
     struct {
         cudnn_frontend::graph::Graph graph;
         tensor_attr_t input_tensor;
