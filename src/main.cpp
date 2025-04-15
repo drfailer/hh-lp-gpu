@@ -170,8 +170,8 @@ UTest(fully_connected_layer_fwd) {
     cudaDeviceSynchronize();
 
     hh::Graph<LayerTaskType> graph;
-    auto fc_layer_task = std::make_shared<LinearLayerTask>(
-        cudnn_handle, cublas_handle, 0, dims);
+    auto fc_layer_task =
+        std::make_shared<LinearLayerTask>(cudnn_handle, cublas_handle, 0, dims);
 
     graph.inputs(fc_layer_task);
     graph.outputs(fc_layer_task);
@@ -189,6 +189,75 @@ UTest(fully_connected_layer_fwd) {
     for (size_t i = 0; i < nb_nodes; ++i) {
         uassert_equal(output_host[i], 7);
     }
+}
+
+UTest(fully_connected_layer_bwd) {
+    constexpr int64_t nb_nodes = 3;
+    constexpr int64_t nb_inputs = 4;
+    LayerDimentions dims = {
+        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+    ftype input_host[nb_inputs] = {1, 2, 3, 4},
+          input_err_host[nb_nodes] = {100, 10, 1},
+          output_err_host[nb_inputs] = {0};
+    ftype *input_gpu = nullptr, *err_gpu = nullptr;
+    cudnnHandle_t cudnn_handle;
+    cublasHandle_t cublas_handle;
+    Model<ftype> model;
+
+    Layer<ftype> layer = layer_create<ftype>(dims);
+    defer(layer_destroy(layer));
+    model.layers.push_back(layer);
+
+    cudnnCreate(&cudnn_handle);
+    defer(cudnnDestroy(cudnn_handle));
+
+    cublasCreate_v2(&cublas_handle);
+    defer(cublasDestroy_v2(cublas_handle));
+
+    // init the parameters
+    for (size_t i = 0; i < nb_nodes; ++i) {
+        for (size_t j = 0; j < nb_inputs; ++j) {
+            layer.weights_host[i * nb_inputs + j] = i + j + 1;
+        }
+    }
+    for (size_t i = 0; i < nb_nodes; ++i) {
+        layer.biases_host[i] = i + 1;
+    }
+    layer_sync_to_gpu(layer);
+
+    CUDA_CHECK(alloc_gpu(&err_gpu, nb_nodes));
+    CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
+    defer(cudaFree(err_gpu));
+    defer(cudaFree(input_gpu));
+
+    CUDA_CHECK(memcpy_host_to_gpu(err_gpu, input_err_host, nb_nodes));
+    CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
+    cudaDeviceSynchronize();
+
+    hh::Graph<LayerTaskType> graph;
+    auto fc_layer_task =
+        std::make_shared<LinearLayerTask>(cudnn_handle, cublas_handle, 0, dims);
+    fc_layer_task->execute(std::make_shared<FwdData<ftype>>(model, input_gpu));
+
+    graph.inputs(fc_layer_task);
+    graph.outputs(fc_layer_task);
+
+    graph.executeGraph(true);
+    graph.pushData(std::make_shared<BwdData<ftype>>(model, err_gpu));
+    graph.finishPushingData();
+    ftype *output_err_gpu =
+        std::get<std::shared_ptr<BwdData<ftype>>>(*graph.getBlockingResult())
+            ->err_gpu;
+    graph.waitForTermination();
+
+    urequire(output_err_gpu != err_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(output_err_host, output_err_gpu, nb_inputs));
+    cudaDeviceSynchronize();
+
+    uassert_equal(output_err_host[0], 123);
+    uassert_equal(output_err_host[1], 234);
+    uassert_equal(output_err_host[2], 345);
+    uassert_equal(output_err_host[3], 456);
 }
 
 UTest(sigmoid_activation_fwd) {
@@ -285,6 +354,7 @@ UTest(sigmoid_activation_bwd) {
 int main(int, char **) {
     /* test_cdnn_operations(); */
     run_test(fully_connected_layer_fwd);
+    run_test(fully_connected_layer_bwd);
     run_test(sigmoid_activation_fwd);
     run_test(sigmoid_activation_bwd);
     return 0;
