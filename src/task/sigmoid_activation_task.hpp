@@ -95,13 +95,13 @@ struct SigmoidActivationTask : LayerTask {
 
         bwd_.err_tensor =
             bwd_.graph.tensor(fe::graph::Tensor_attributes()
-                                  .set_name("input y")
+                                  .set_name("input error")
                                   .set_dim({1, dims.nb_inputs, 1})
                                   .set_stride({dims.nb_inputs, 1, 1})
                                   .set_data_type(fe::DataType_t::FLOAT));
         bwd_.fwd_input_tensor =
             bwd_.graph.tensor(fe::graph::Tensor_attributes()
-                                  .set_name("error")
+                                  .set_name("fwd input")
                                   .set_dim({1, dims.nb_inputs, 1})
                                   .set_stride({dims.nb_inputs, 1, 1})
                                   .set_data_type(fe::DataType_t::FLOAT));
