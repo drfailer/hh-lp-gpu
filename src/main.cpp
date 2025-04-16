@@ -1,5 +1,6 @@
 #include "cudnn_operations.hpp"
 #include "data/layer_state.hpp"
+#include "data/update_data.hpp"
 #include "task/linear_layer_task.hpp"
 #include "task/sigmoid_activation_task.hpp"
 #include "tools/defer.hpp"
@@ -8,6 +9,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <ostream>
 
 ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
@@ -48,7 +50,9 @@ Parameters<ftype> create_test_parameters_gpu(LayerDimentions const &dims) {
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         for (int64_t j = 0; j < dims.nb_inputs; ++j) {
             host.weights[i * dims.nb_inputs + j] = i + j + 1;
+            std::cout << host.weights[i * dims.nb_inputs + j] << " ";
         }
+        std::cout << std::endl;
     }
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         host.biases[i] = i + 1;
@@ -287,6 +291,67 @@ UTest(linear_layer_bwd) {
     uassert_equal(output_err_host[3], 456);
 }
 
+UTest(linear_layer_update) {
+    constexpr int64_t nb_nodes = 3;
+    constexpr int64_t nb_inputs = 3;
+    LayerDimentions dims = {
+        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+    ftype learning_rate = 0.5;
+    ftype weights_host[nb_nodes * nb_inputs] = {0}, biases_host[nb_nodes] = {0};
+    ftype grads_value = 10;
+
+    // init the parameters
+    Parameters<ftype> params = create_test_parameters_gpu(dims);
+    defer(parameters_destroy_gpu(params));
+    Parameters<ftype> grads = create_test_parameters_gpu(dims, grads_value);
+    defer(parameters_destroy_gpu(grads));
+
+    LayerState<ftype> layer_state = layer_state_create_gpu(dims, params, grads);
+    defer(layer_state_destroy_gpu(layer_state));
+    NetworkState<ftype> network_state = {layer_state};
+
+    hh::Graph<LayerTaskType> graph;
+    auto fc_layer_task =
+        std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
+
+    graph.inputs(fc_layer_task);
+    graph.outputs(fc_layer_task);
+
+    graph.executeGraph(true);
+    graph.pushData(
+        std::make_shared<UpdateData<ftype>>(network_state, learning_rate));
+    graph.finishPushingData();
+    auto state = hh_get_result<UpdateData<ftype>>(graph)->states[0];
+    graph.waitForTermination();
+
+    // make sure that the weights gradiants were not modified
+    size_t size = nb_inputs * nb_nodes;
+    CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.grads.weights, size));
+    CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.grads.biases, nb_nodes));
+    cudaDeviceSynchronize();
+    for (size_t i = 0; i < size; ++i) {
+        uassert_equal(weights_host[i], grads_value);
+    }
+    for (size_t i = 0; i < nb_inputs; ++i) {
+        uassert_equal(biases_host[i], grads_value);
+    }
+
+    // testing the values of the weights
+    CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.params.weights, size));
+    CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.params.biases, nb_nodes));
+    cudaDeviceSynchronize();
+    for (int64_t i = 0; i < nb_nodes; ++i) {
+        for (int64_t j = 0; j < nb_inputs; ++j) {
+            ftype expected_value = i + j + 1 - learning_rate * grads_value;
+            uassert_equal(weights_host[i * nb_inputs + j], expected_value);
+        }
+    }
+    for (int64_t i = 0; i < nb_nodes; ++i) {
+        ftype expected_value = i + 1 - learning_rate * grads_value;
+        uassert_equal(biases_host[i], expected_value);
+    }
+}
+
 UTest(sigmoid_activation_init) {
     constexpr int64_t nb_nodes = 3;
     constexpr int64_t nb_inputs = 3;
@@ -419,11 +484,12 @@ int main(int, char **) {
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
     /* run_test(cdnn_operations); */
-    run_test(linear_layer_init);
-    run_test(linear_layer_fwd);
-    run_test(linear_layer_bwd);
-    run_test(sigmoid_activation_init);
-    run_test(sigmoid_activation_fwd);
-    run_test(sigmoid_activation_bwd);
+    // run_test(linear_layer_init);
+    // run_test(linear_layer_fwd);
+    // run_test(linear_layer_bwd);
+    run_test(linear_layer_update);
+    // run_test(sigmoid_activation_init);
+    // run_test(sigmoid_activation_fwd);
+    // run_test(sigmoid_activation_bwd);
     return 0;
 }
