@@ -7,7 +7,6 @@
 #include <cudnn_frontend/graph_interface.h>
 #include <cudnn_graph.h>
 #include <memory>
-#include <ostream>
 
 struct LinearLayerTask : LayerTask {
     LinearLayerTask(std::string const &name, cudnnHandle_t cudnn_handle,

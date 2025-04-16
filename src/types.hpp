@@ -6,7 +6,5 @@
 
 using ftype = float;
 using tensor_attr_t = std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>;
-constexpr cudnn_frontend::DataType_t COMPUTE_DATA_TYPE =
-    cudnn_frontend::DataType_t::FLOAT;
 
 #endif
