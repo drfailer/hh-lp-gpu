@@ -50,9 +50,9 @@ Parameters<ftype> create_test_parameters_gpu(LayerDimentions const &dims) {
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         for (int64_t j = 0; j < dims.nb_inputs; ++j) {
             host.weights[i * dims.nb_inputs + j] = i + j + 1;
-            std::cout << host.weights[i * dims.nb_inputs + j] << " ";
+            // std::cout << host.weights[i * dims.nb_inputs + j] << " ";
         }
-        std::cout << std::endl;
+        // std::cout << std::endl;
     }
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         host.biases[i] = i + 1;
@@ -483,13 +483,13 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    /* run_test(cdnn_operations); */
-    // run_test(linear_layer_init);
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
+    run_test(cdnn_operations);
+    run_test(linear_layer_init);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
     run_test(linear_layer_update);
-    // run_test(sigmoid_activation_init);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
+    run_test(sigmoid_activation_init);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
     return 0;
 }
