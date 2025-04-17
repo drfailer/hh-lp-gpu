@@ -86,8 +86,8 @@ struct LinearLayerTask : LayerTask {
         MemoryMap mem_biases = {
             {update_biases_.scale_tensor, &learning_rate_biases}};
 
-        map_update_graph_memory(mem_weights, update_weights_, state.params.weights,
-                                state.grads.weights);
+        map_update_graph_memory(mem_weights, update_weights_,
+                                state.params.weights, state.grads.weights);
         map_update_graph_memory(mem_biases, update_biases_, state.params.biases,
                                 state.grads.biases);
 
@@ -103,9 +103,6 @@ struct LinearLayerTask : LayerTask {
 
     void map_update_graph_memory(auto &mem_map, auto &update_data,
                                  ftype *parameters, ftype *gradiants) {
-        WARN("Populate memory map for parameters update.");
-        DBG(parameters);
-        DBG(gradiants);
         mem_map.insert({update_data.tensor, parameters});
         mem_map.insert({update_data.gradiant_tensor, gradiants});
         mem_map.insert({update_data.scaled_gradiant_tensor, gradiants});
@@ -113,46 +110,36 @@ struct LinearLayerTask : LayerTask {
     }
 
     void create_update_graph(LayerDimentions const &dims) {
-        INFO("create_update_graph");
-        namespace fe = cudnn_frontend;
         std::vector<int64_t> w_dims = {1, dims.nb_nodes, dims.nb_inputs},
                              w_strides = {dims.nb_nodes * dims.nb_inputs,
                                           dims.nb_inputs, 1};
         std::vector<int64_t> b_dims = {1, dims.nb_nodes, 1},
                              b_strides = {dims.nb_nodes, 1, 1};
 
-        update_weights_.graph.set_io_data_type(fe::DataType_t::FLOAT)
-            .set_intermediate_data_type(fe::DataType_t::FLOAT)
-            .set_compute_data_type(fe::DataType_t::FLOAT);
-        update_biases_.graph.set_io_data_type(fe::DataType_t::FLOAT)
+        setup_update_graph(update_weights_, w_dims, w_strides);
+        setup_update_graph(update_biases_, b_dims, b_strides);
+    }
+
+    void setup_update_graph(auto &data, std::vector<int64_t> const &dims,
+                            std::vector<int64_t> const &strides) {
+        namespace fe = cudnn_frontend;
+        data.graph.set_io_data_type(fe::DataType_t::FLOAT)
             .set_intermediate_data_type(fe::DataType_t::FLOAT)
             .set_compute_data_type(fe::DataType_t::FLOAT);
 
         // tenors attributes
-        auto weights_scale_attributes = fe::graph::Tensor_attributes()
+        auto learning_rate_attributes = fe::graph::Tensor_attributes()
                                             .set_name("learning rate")
                                             .set_dim({1, 1, 1})
                                             .set_stride({1, 1, 1});
-        auto biases_scale_attributes = fe::graph::Tensor_attributes()
-                                           .set_name("learning rate")
-                                           .set_dim({1, 1, 1})
-                                           .set_stride({1, 1, 1});
-        auto weights_attributes = fe::graph::Tensor_attributes()
-                                      .set_name("weights")
-                                      .set_dim(w_dims)
-                                      .set_stride(w_strides);
-        auto biases_attributes = fe::graph::Tensor_attributes()
-                                     .set_name("biases")
-                                     .set_dim(b_dims)
-                                     .set_stride(b_strides);
-        auto weights_gradiants_attributes = fe::graph::Tensor_attributes()
-                                                .set_name("weights gradiants")
-                                                .set_dim(w_dims)
-                                                .set_stride(w_strides);
-        auto biases_gradiants_attributes = fe::graph::Tensor_attributes()
-                                               .set_name("biases gradiants")
-                                               .set_dim(b_dims)
-                                               .set_stride(b_strides);
+        auto param_attributes = fe::graph::Tensor_attributes()
+                                    .set_name("parameter")
+                                    .set_dim(dims)
+                                    .set_stride(strides);
+        auto grad_attributes = fe::graph::Tensor_attributes()
+                                   .set_name("parameter gradiant")
+                                   .set_dim(dims)
+                                   .set_stride(strides);
         auto scale_attributes = fe::graph::Pointwise_attributes()
                                     .set_name("learning_rate * gradiant")
                                     .set_mode(fe::PointwiseMode_t::MUL);
@@ -163,56 +150,29 @@ struct LinearLayerTask : LayerTask {
 
         // graph inputs:
 
-        update_weights_.tensor =
-            update_weights_.graph.tensor(weights_attributes);
-        update_biases_.tensor = update_biases_.graph.tensor(biases_attributes);
-        update_weights_.gradiant_tensor =
-            update_weights_.graph.tensor(weights_gradiants_attributes);
-        update_biases_.gradiant_tensor =
-            update_biases_.graph.tensor(biases_gradiants_attributes);
-        update_weights_.scale_tensor =
-            update_weights_.graph.tensor(weights_scale_attributes);
-        update_biases_.scale_tensor =
-            update_biases_.graph.tensor(biases_scale_attributes);
+        data.tensor = data.graph.tensor(param_attributes);
+        data.gradiant_tensor = data.graph.tensor(grad_attributes);
+        data.scale_tensor = data.graph.tensor(learning_rate_attributes);
 
         // operations:
 
         // scaled_gradiant = gradiants * learning_rate
-        update_weights_.scaled_gradiant_tensor =
-            update_weights_.graph.pointwise(update_weights_.scale_tensor,
-                                            update_weights_.gradiant_tensor,
-                                            scale_attributes);
-        update_biases_.scaled_gradiant_tensor = update_biases_.graph.pointwise(
-            update_biases_.scale_tensor, update_biases_.gradiant_tensor,
-            scale_attributes);
+        data.scaled_gradiant_tensor = data.graph.pointwise(
+            data.scale_tensor, data.gradiant_tensor, scale_attributes);
         // parameters -= scaled_gradiant
-        update_weights_.result_tensor = update_weights_.graph.pointwise(
-            update_weights_.tensor, update_weights_.scaled_gradiant_tensor,
-            substract_attributes);
-        update_biases_.result_tensor = update_biases_.graph.pointwise(
-            update_biases_.tensor, update_biases_.scaled_gradiant_tensor,
-            substract_attributes);
+        data.result_tensor = data.graph.pointwise(
+            data.tensor, data.scaled_gradiant_tensor, substract_attributes);
 
         // result:
 
-        update_weights_.result_tensor->set_output(true);
-        update_biases_.result_tensor->set_output(true);
+        data.result_tensor->set_output(true);
 
-        CUDNN_CHECK(update_weights_.graph.validate());
-        CUDNN_CHECK(update_weights_.graph.build(cudnn(), {fe::HeurMode_t::A}));
+        CUDNN_CHECK(data.graph.validate());
+        CUDNN_CHECK(data.graph.build(cudnn(), {fe::HeurMode_t::A}));
 
-        CUDNN_CHECK(update_biases_.graph.validate());
-        CUDNN_CHECK(update_biases_.graph.build(cudnn(), {fe::HeurMode_t::A}));
-
-        int64_t weights_workspace_size;
-        CUDNN_CHECK(
-            update_weights_.graph.get_workspace_size(weights_workspace_size));
-        CUDA_CHECK(
-            alloc_gpu(&update_weights_.workspace, weights_workspace_size));
-        int64_t biases_workspace_size;
-        CUDNN_CHECK(
-            update_biases_.graph.get_workspace_size(biases_workspace_size));
-        CUDA_CHECK(alloc_gpu(&update_biases_.workspace, biases_workspace_size));
+        int64_t workspace_size;
+        CUDNN_CHECK(data.graph.get_workspace_size(workspace_size));
+        CUDA_CHECK(alloc_gpu(&data.workspace, workspace_size));
     }
 
   private:
@@ -224,12 +184,6 @@ struct LinearLayerTask : LayerTask {
         tensor_attr_t scaled_gradiant_tensor;
         tensor_attr_t result_tensor;
         tensor_attr_t scale_tensor;
-        // cudnnHandle_t handle; // Not sure why we need two context to execute
-        //                       // these two graphs without error. Normally, the
-        //                       // two graphs should be executable sequentially on
-        //                       // the same stream, but doing so skips the
-        //                       // execution of one of the graphs. Using one
-        //                       // graphs doesn't work either.
     };
     LinearLayerUpdateData update_weights_;
     LinearLayerUpdateData update_biases_;
