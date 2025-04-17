@@ -6,5 +6,7 @@
 
 using ftype = float;
 using tensor_attr_t = std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>;
+using MemoryMap = std::unordered_map<
+    std::shared_ptr<cudnn_frontend::graph::Tensor_attributes>, void *>;
 
 #endif
