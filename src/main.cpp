@@ -160,7 +160,7 @@ UTest(linear_layer_init) {
 
     urequire(network_state.size() == 1);
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto fc_layer_task =
         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
 
@@ -218,7 +218,7 @@ UTest(linear_layer_fwd) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto fc_layer_task =
         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
 
@@ -266,7 +266,7 @@ UTest(linear_layer_bwd) {
     defer(layer_state_destroy_gpu(layer_state));
     NetworkState<ftype> network_state = {layer_state};
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto fc_layer_task =
         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
     fc_layer_task->execute(
@@ -310,7 +310,7 @@ UTest(linear_layer_update) {
     defer(layer_state_destroy_gpu(layer_state));
     NetworkState<ftype> network_state = {layer_state};
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto fc_layer_task =
         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
 
@@ -359,7 +359,7 @@ UTest(sigmoid_activation_init) {
         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
     NetworkState<ftype> network_state(1);
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto sig_task = std::make_shared<SigmoidActivationTask>(
         CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
 
@@ -409,7 +409,7 @@ UTest(sigmoid_activation_fwd) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto sig_task = std::make_shared<SigmoidActivationTask>(
         CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
 
@@ -452,7 +452,7 @@ UTest(sigmoid_activation_bwd) {
     CUDA_CHECK(memcpy_host_to_gpu(err_gpu, err, nb_inputs));
     cudaDeviceSynchronize();
 
-    hh::Graph<LayerTaskType> graph;
+    hh::Graph<LayerTaskIO> graph;
     auto sig_task = std::make_shared<SigmoidActivationTask>(
         CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
     // init sig_task (we expect the forward pass to be done at this point)

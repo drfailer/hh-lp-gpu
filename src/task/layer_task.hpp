@@ -11,14 +11,14 @@
     InitData<ftype>, FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
 #define LayerTaskOut                                                           \
     InitData<ftype>, FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
-#define LayerTaskType 4, LayerTaskIn, LayerTaskOut
+#define LayerTaskIO 4, LayerTaskIn, LayerTaskOut
 
-class LayerTask : public hh::AbstractCUDATask<LayerTaskType> {
+class LayerTask : public hh::AbstractCUDATask<LayerTaskIO> {
   public:
     LayerTask(std::string const &name, cudnnHandle_t cudnn_handle,
               cublasHandle_t cublas_handle, size_t idx,
               LayerDimentions const &dims)
-        : hh::AbstractCUDATask<LayerTaskType>(name, 1),
+        : hh::AbstractCUDATask<LayerTaskIO>(name, 1),
           cudnn_handle_(cudnn_handle), cublas_handle_(cublas_handle), idx_(idx),
           dims_(dims) {}
 
