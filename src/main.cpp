@@ -158,57 +158,6 @@ UTest(cdnn_operations) {
     delete[] V;
 }
 
-// UTest(linear_layer_init) {
-//     constexpr int64_t nb_nodes = 3;
-//     constexpr int64_t nb_inputs = 3;
-//     LayerDimentions dims = {
-//         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
-//     NetworkState<ftype> network_state;
-//
-//     urequire(network_state.layer_states.size() == 1);
-//
-//     hh::Graph<LayerTaskIO> graph;
-//     auto fc_layer_task =
-//         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0,
-//         dims);
-//
-//     graph.inputs(fc_layer_task);
-//     graph.outputs(fc_layer_task);
-//
-//     graph.init(network_state)
-//
-//     graph.executeGraph(true);
-//     graph.pushData(std::make_shared<InitData<ftype>>(network_state));
-//     graph.finishPushingData();
-//     auto init_data = hh_get_result<InitData<ftype>>(graph);
-//     graph.waitForTermination();
-//
-//     urequire(&init_data->nn == &network_state);
-//     auto state = init_data->nn[0];
-//
-//     uassert(state.dims.nb_nodes == nb_nodes);
-//     uassert(state.dims.nb_inputs == nb_inputs);
-//     uassert(state.dims.kernel_size == 1);
-//     uassert(state.input == nullptr);
-//     uassert(state.error != nullptr);
-//     uassert(state.output != nullptr);
-//     uassert(state.params.weights != nullptr);
-//     uassert(state.params.biases != nullptr);
-//     uassert(state.grads.weights != nullptr);
-//     uassert(state.grads.biases != nullptr);
-//
-//     layer_state_destroy_gpu(state);
-//     parameters_destroy_gpu(state.params);
-//     parameters_destroy_gpu(state.grads);
-//     uassert(state.input == nullptr);
-//     uassert(state.error == nullptr);
-//     uassert(state.output == nullptr);
-//     uassert(state.params.weights == nullptr);
-//     uassert(state.params.biases == nullptr);
-//     uassert(state.grads.weights == nullptr);
-//     uassert(state.grads.biases == nullptr);
-// }
-
 UTest(linear_layer_fwd) {
     constexpr int64_t nb_nodes = 3;
     constexpr int64_t nb_inputs = 3;
@@ -362,47 +311,6 @@ UTest(linear_layer_update) {
         uassert_equal(biases_host[i], expected_value);
     }
 }
-
-// UTest(sigmoid_activation_init) {
-//     constexpr int64_t nb_nodes = 3;
-//     constexpr int64_t nb_inputs = 3;
-//     LayerDimentions dims = {
-//         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
-//     NetworkState<ftype> network_state;
-//
-//     hh::Graph<LayerTaskIO> graph;
-//     auto sig_task = std::make_shared<SigmoidActivationTask>(
-//         CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
-//
-//     graph.inputs(sig_task);
-//     graph.outputs(sig_task);
-//
-//     graph.executeGraph(true);
-//     graph.pushData(std::make_shared<InitData<ftype>>(network_state));
-//     graph.finishPushingData();
-//     auto state = hh_get_result<InitData<ftype>>(graph)->nn[0];
-//     graph.waitForTermination();
-//
-//     uassert(state.dims.nb_nodes == nb_nodes);
-//     uassert(state.dims.nb_inputs == nb_inputs);
-//     uassert(state.dims.kernel_size == 1);
-//     uassert(state.input == nullptr);
-//     uassert(state.error != nullptr);
-//     uassert(state.output != nullptr);
-//     uassert(state.params.weights == nullptr);
-//     uassert(state.params.biases == nullptr);
-//     uassert(state.grads.weights == nullptr);
-//     uassert(state.grads.biases == nullptr);
-//
-//     layer_state_destroy_gpu(state);
-//     uassert(state.input == nullptr);
-//     uassert(state.error == nullptr);
-//     uassert(state.output == nullptr);
-//     uassert(state.params.weights == nullptr);
-//     uassert(state.params.biases == nullptr);
-//     uassert(state.grads.weights == nullptr);
-//     uassert(state.grads.biases == nullptr);
-// }
 
 UTest(sigmoid_activation_fwd) {
     constexpr int64_t nb_nodes = 3;
