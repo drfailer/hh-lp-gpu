@@ -9,18 +9,16 @@
 
 class QuadraticLossTask : public LossTask {
   public:
-    QuadraticLossTask(int64_t size) : LossTask("QuadraticLossTask") {
+    QuadraticLossTask(int64_t size, cudnnHandle_t cudnn_handle,
+                      cublasHandle_t cublas_handle)
+        : LossTask("QuadraticLossTask", cudnn_handle, cublas_handle) {
         // TODO: make batch size configurable
         create_bwd_graph(size);
     }
 
-    void
-    execute(std::shared_ptr<InitData<ftype, InitStatus::Init>> data) override {
-        CUDA_CHECK(
-            alloc_gpu(&data->states.loss_output,
-                      (size_t)data->states.layer_states.back().dims.nb_nodes));
-        this->addResult(
-            std::make_shared<InitData<ftype, InitStatus::Done>>(data->states));
+    void init(NetworkState<ftype> &state) override {
+        CUDA_CHECK(alloc_gpu(&state.loss_output,
+                             (size_t)state.layer_states.back().dims.nb_nodes));
     }
 
     void execute(std::shared_ptr<LossFwdData<ftype>>) override {

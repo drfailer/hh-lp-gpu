@@ -27,7 +27,13 @@ template <typename T> struct LayerState {
     LayerDimentions dims; // dimentions of the layer
 };
 
-template <typename T> using NetworkState = std::vector<LayerState<T>>;
+
+template <typename T> struct NetworkState {
+    std::vector<LayerState<T>> layer_states;
+    // TODO: we should have a configurable type for different loss functions
+    // (Adam needs more data)
+    T *loss_output;
+};
 
 /******************************************************************************/
 /*                            parameters functions                            */

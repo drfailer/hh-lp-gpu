@@ -27,17 +27,16 @@ struct LinearLayerTask : LayerTask {
      * Allocates memory for a layer state (output memory for the fwd pass, bwd
      * pass, parameters and gradiants).
      */
-    void execute(std::shared_ptr<InitData<ftype>> data) override {
-        auto &state = data->states[this->idx()];
+    void init(NetworkState<ftype> &state) override {
         auto params = parameters_create_gpu<ftype>(this->dims());
         auto grads = parameters_create_gpu<ftype>(this->dims());
-        state = layer_state_create_gpu(this->dims(), params, grads);
-        this->addResult(data);
+        state.layer_states[this->idx()] =
+            layer_state_create_gpu(this->dims(), params, grads);
     }
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         INFO_GRP("LinearLayerTask FWD", INFO_GRP_LAYER_TASK);
-        auto &state = data->states[this->idx()];
+        auto &state = data->states.layer_states[this->idx()];
 
         // save input (used for the backwards pass)
         state.input = data->input;
@@ -54,7 +53,7 @@ struct LinearLayerTask : LayerTask {
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
         INFO_GRP("LinearLayerTask BWD", INFO_GRP_LAYER_TASK);
-        auto &state = data->states[this->idx()];
+        auto &state = data->states.layer_states[this->idx()];
         // Backward:
         // - grads_b = err, grads_w = err * update_inputT, err = err * w
 
@@ -78,7 +77,7 @@ struct LinearLayerTask : LayerTask {
 
     void execute(std::shared_ptr<UpdateData<ftype>> data) override {
         INFO_GRP("LinearLayerTask Update", INFO_GRP_LAYER_TASK);
-        auto &state = data->states[this->idx()];
+        auto &state = data->states.layer_states[this->idx()];
         ftype learning_rate_weights = data->learning_rate;
         ftype learning_rate_biases = data->learning_rate;
         MemoryMap mem_weights = {

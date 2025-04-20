@@ -28,14 +28,13 @@ struct SigmoidActivationTask : LayerTask {
      * pass, parameters and gradiants). Since this layer is an activation one,
      * there no need to allocate parameters and gradiants.
      */
-    void execute(std::shared_ptr<InitData<ftype>> data) override {
-        auto &state = data->states[this->idx()];
-        state = layer_state_create_gpu<ftype>(this->dims(), {}, {});
-        this->addResult(data);
+    void init(NetworkState<ftype> &state) override {
+        state.layer_states[this->idx()] =
+            layer_state_create_gpu<ftype>(this->dims(), {}, {});
     }
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
-        auto &state = data->states[this->idx()];
+        auto &state = data->states.layer_states[this->idx()];
         namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask FWD", INFO_GRP_LAYER_TASK);
 
@@ -83,7 +82,7 @@ struct SigmoidActivationTask : LayerTask {
     }
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        auto &state = data->states[this->idx()];
+        auto &state = data->states.layer_states[this->idx()];
         namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask BWD", INFO_GRP_LAYER_TASK);
 

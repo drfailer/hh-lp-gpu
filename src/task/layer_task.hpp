@@ -2,16 +2,13 @@
 #define TASK_LAYER_TASK_H
 #include "../data/bwd_data.hpp"
 #include "../data/fwd_data.hpp"
-#include "../data/init_data.hpp"
 #include "../data/update_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define LayerTaskIn                                                            \
-    InitData<ftype>, FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
-#define LayerTaskOut                                                           \
-    InitData<ftype>, FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
-#define LayerTaskIO 4, LayerTaskIn, LayerTaskOut
+#define LayerTaskIn FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
+#define LayerTaskOut FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
+#define LayerTaskIO 3, LayerTaskIn, LayerTaskOut
 
 class LayerTask : public hh::AbstractCUDATask<LayerTaskIO> {
   public:
@@ -21,6 +18,8 @@ class LayerTask : public hh::AbstractCUDATask<LayerTaskIO> {
         : hh::AbstractCUDATask<LayerTaskIO>(name, 1),
           cudnn_handle_(cudnn_handle), cublas_handle_(cublas_handle), idx_(idx),
           dims_(dims) {}
+
+    virtual void init(NetworkState<ftype> &state) = 0;
 
   protected:
     cudnnHandle_t cudnn() { return cudnn_handle_; }

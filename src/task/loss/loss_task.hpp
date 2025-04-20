@@ -1,21 +1,22 @@
 #ifndef TASK_LOSS_LOSS_TASK_H
 #define TASK_LOSS_LOSS_TASK_H
-#include "../../data/init_data.hpp"
 #include "../../data/loss_bwd_data.hpp"
 #include "../../data/loss_fwd_data.hpp"
 #include "../../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define LossTaskIn                                                             \
-    InitData<ftype, InitStatus::Init>, LossFwdData<ftype>, LossBwdData<ftype>
-#define LossTaskOut                                                            \
-    InitData<ftype, InitStatus::Done>, LossFwdData<ftype>, LossBwdData<ftype>
-#define LossTaskIO 3, LossTaskIn, LossTaskOut
+#define LossTaskIn LossFwdData<ftype>, LossBwdData<ftype>
+#define LossTaskOut LossFwdData<ftype>, LossBwdData<ftype>
+#define LossTaskIO 2, LossTaskIn, LossTaskOut
 
 class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
   public:
-    LossTask(std::string const &name = "LossTask")
-        : hh::AbstractCUDATask<LossTaskIO>(name, 1) {}
+    LossTask(std::string const &name, cudnnHandle_t cudnn_handle,
+             cublasHandle_t cublas_handle)
+        : hh::AbstractCUDATask<LossTaskIO>(name, 1),
+          cudnn_handle_(cudnn_handle), cublas_handle_(cublas_handle) {}
+
+    virtual void init(NetworkState<ftype> &state) = 0;
 
   protected:
     cudnnHandle_t cudnn() { return cudnn_handle_; }
