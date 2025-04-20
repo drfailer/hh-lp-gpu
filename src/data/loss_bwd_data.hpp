@@ -6,7 +6,7 @@ template <typename T> struct LossBwdData {
     NetworkState<T> &states;
     T *input;
     T *ground_truth;
-    T *result;
+    T *error;
 };
 
 #endif
