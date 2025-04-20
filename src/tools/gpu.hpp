@@ -59,7 +59,8 @@ template <typename T>
 auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
                T *mat, T *vec, T *out) {
     cublasOperation_t cublas_trans =
-        trans ? cublasOperation_t::CUBLAS_OP_T : cublasOperation_t::CUBLAS_OP_N;
+        trans ? cublasOperation_t::CUBLAS_OP_N : cublasOperation_t::CUBLAS_OP_T;
+    size_t ldmat = trans ? rows : cols;
     T alpha = 1, beta = 1;
 
     INFO_GRP("gemv: C = op(A) * X + Y", INFO_GRP_CUBLAS)
@@ -69,7 +70,7 @@ auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
 
     // we will only use float in this program, but there is still the
     // possibility to ad support for more
-    return cublasSgemv_v2(handle, cublas_trans, rows, cols, &alpha, mat, cols,
+    return cublasSgemv_v2(handle, cublas_trans, cols, rows, &alpha, mat, ldmat,
                           vec, 1, &beta, out, 1);
 }
 
