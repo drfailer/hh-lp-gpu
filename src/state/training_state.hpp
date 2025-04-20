@@ -25,12 +25,13 @@
         OptData<ftype>, UpdateData<ftype>
 #define TrainingStateIO 6, TrainingStateIn, TrainingStateOut
 
-class TrainingState : hh::AbstractState<TrainingStateIO> {
+class TrainingState : public hh::AbstractState<TrainingStateIO> {
   public:
     TrainingState() : hh::AbstractState<TrainingStateIO>() {}
 
   public:
     enum class Steps {
+        Idle,
         Fwd,
         LossBwd,
         Bwd,
@@ -40,13 +41,13 @@ class TrainingState : hh::AbstractState<TrainingStateIO> {
 
   public:
     void execute(std::shared_ptr<TrainingData<ftype>> data) override {
+        from_step_to(Steps::Idle, Steps::Fwd);
         // init
         train_data.data_set = data->data_set;
         train_data.epochs = data->epochs;
         train_data.learning_rate = data->learning_rate;
 
         // start computation
-        state.step = Steps::Fwd;
         if (state.data_set_idx < train_data.data_set.datas.size()) {
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
@@ -102,13 +103,13 @@ class TrainingState : hh::AbstractState<TrainingStateIO> {
 
   private:
     struct {
-        Steps step;
-        size_t epoch;
-        size_t data_set_idx;
+        Steps step = Steps::Idle;
+        size_t epoch = 0;
+        size_t data_set_idx = 0;
     } state;
     struct {
-        size_t epochs;
-        ftype learning_rate;
+        size_t epochs = 0;
+        ftype learning_rate = 0;
         DataSet<ftype> data_set;
     } train_data;
 };

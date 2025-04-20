@@ -46,21 +46,26 @@ Parameters<ftype> create_test_parameters_gpu(LayerDimentions const &dims,
     return gpu;
 }
 
-Parameters<ftype> create_test_parameters_gpu(LayerDimentions const &dims) {
+Parameters<ftype> init_test_parameters_gpu(LayerDimentions const &dims, Parameters<ftype> &gpu) {
     Parameters<ftype> host = parameters_create_host<ftype>(dims);
-    Parameters<ftype> gpu = parameters_create_gpu<ftype>(dims);
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         for (int64_t j = 0; j < dims.nb_inputs; ++j) {
             host.weights[i * dims.nb_inputs + j] = i + j + 1;
-            // std::cout << host.weights[i * dims.nb_inputs + j] << " ";
+            std::cout << host.weights[i * dims.nb_inputs + j] << " ";
         }
-        // std::cout << std::endl;
+        std::cout << std::endl;
     }
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         host.biases[i] = i + 1;
     }
     parameters_host_to_gpu(gpu, host, dims);
     parameters_destroy_host(host);
+    return gpu;
+}
+
+Parameters<ftype> create_test_parameters_gpu(LayerDimentions const &dims) {
+    Parameters<ftype> gpu = parameters_create_gpu<ftype>(dims);
+    init_test_parameters_gpu(dims, gpu);
     return gpu;
 }
 
@@ -486,7 +491,7 @@ UTest(sigmoid_activation_bwd) {
 UTest(inference) {
     constexpr size_t nb_nodes = 3;
     constexpr size_t nb_inputs = 3;
-    ftype input_host[nb_inputs] = {1, 2, 3}, output_host[nb_nodes] = {0};
+    ftype input_host[nb_inputs] = {1, 1, 1}, output_host[nb_nodes] = {0};
     ftype *input_gpu = nullptr;
     NetworkGraph graph;
     NetworkState<ftype> state;
@@ -510,6 +515,11 @@ UTest(inference) {
     graph.build();
 
     graph.init_network_state(state);
+    defer(graph.destroy_network_state(state));
+
+    init_test_parameters_gpu(state.layer_states[0].dims,
+            state.layer_states[0].params);
+
     graph.executeGraph(true);
     graph.pushData(std::make_shared<InferenceData<ftype>>(state, input_gpu));
     ftype *output_gpu = hh_get_result<InferenceData<ftype>>(graph)->input;
@@ -519,7 +529,11 @@ UTest(inference) {
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < nb_nodes; ++i) {
-        std::cout << output_host[i] << std::endl;
+        ftype weights_input_bias =
+            input_host[0] * (i + 1) + output_host[1] * (i + 2) +
+            output_host[2] * (i + 3) + i + 1;
+        ftype expected_value = sigmoid(weights_input_bias);
+        uassert_float_equal(output_host[i], expected_value, 1e-6);
     }
 }
 
@@ -529,12 +543,12 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(cdnn_operations);
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(linear_layer_update);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
+    run_test(cdnn_operations);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(linear_layer_update);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
     run_test(inference);
     return 0;
 }

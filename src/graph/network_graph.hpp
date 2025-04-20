@@ -51,6 +51,15 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         loss_task->init(state);
     }
 
+    void destroy_network_state(NetworkState<ftype> &state) {
+        for (auto &layer_state : state.layer_states) {
+            parameters_destroy_gpu(layer_state.params);
+            parameters_destroy_gpu(layer_state.grads);
+            layer_state_destroy_gpu(layer_state);
+        }
+        cudaFree(state.loss_output);
+    }
+
   private:
     std::shared_ptr<InferenceStateManager> inference_state =
         nullptr;
