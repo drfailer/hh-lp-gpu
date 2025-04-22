@@ -63,10 +63,11 @@ auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
     size_t ldmat = trans ? rows : cols;
     T alpha = 1, beta = 1;
 
-    INFO_GRP("gemv: C = op(A) * X + Y", INFO_GRP_CUBLAS)
-    INFO_GRP("op(A)[" << rows << ", " << cols << "] = " << mat, INFO_GRP_CUBLAS);
-    INFO_GRP("X[" << cols << "] = " << vec, INFO_GRP_CUBLAS);
-    INFO_GRP("C[" << rows << "] = " << out, INFO_GRP_CUBLAS);
+    INFO_GRP("gemv: C = op(A) * X + Y", INFO_GRP_CUBLAS_OPS)
+    INFO_GRP("op(A)[" << rows << ", " << cols << "] = " << mat,
+             INFO_GRP_CUBLAS_OPS);
+    INFO_GRP("X[" << cols << "] = " << vec, INFO_GRP_CUBLAS_OPS);
+    INFO_GRP("C[" << rows << "] = " << out, INFO_GRP_CUBLAS_OPS);
 
     // we will only use float in this program, but there is still the
     // possibility to ad support for more
@@ -86,10 +87,10 @@ auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
     size_t ldc = n;
     T alpha = 1, beta = 0;
 
-    INFO_GRP("gemm: C = op(A) * op(B) + C", INFO_GRP_CUBLAS)
-    INFO_GRP("op(A)[" << m << ", " << k << "] = " << A, INFO_GRP_CUBLAS);
-    INFO_GRP("op(B)[" << k << ", " << n << "] = " << B, INFO_GRP_CUBLAS);
-    INFO_GRP("C[" << m << ", " << n << "] = " << C, INFO_GRP_CUBLAS);
+    INFO_GRP("gemm: C = op(A) * op(B) + C", INFO_GRP_CUBLAS_OPS)
+    INFO_GRP("op(A)[" << m << ", " << k << "] = " << A, INFO_GRP_CUBLAS_OPS);
+    INFO_GRP("op(B)[" << k << ", " << n << "] = " << B, INFO_GRP_CUBLAS_OPS);
+    INFO_GRP("C[" << m << ", " << n << "] = " << C, INFO_GRP_CUBLAS_OPS);
 
     return cublasSgemm_v2(handle, cublas_trans_A, cublas_trans_B, n, m, k,
                           &alpha, B, ldb, A, lda, &beta, C, ldc);
