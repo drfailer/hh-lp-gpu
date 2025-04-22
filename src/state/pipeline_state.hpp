@@ -6,7 +6,6 @@
 #include "../data/loss_bwd_data.hpp"
 #include "../data/opt_data.hpp"
 #include "../data/training_data.hpp"
-#include "../data/update_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 #include <log.h/log.h>
@@ -22,11 +21,11 @@
 
 #define PipelineStateIn                                                        \
     TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
-        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>, UpdateData<ftype>
+        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>
 #define PipelineStateOut                                                       \
     TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
-        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>, UpdateData<ftype>
-#define PipelineStateIO 7, PipelineStateIn, PipelineStateOut
+        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>
+#define PipelineStateIO 6, PipelineStateIn, PipelineStateOut
 
 class PipelineState : public hh::AbstractState<PipelineStateIO> {
   public:
@@ -40,7 +39,6 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         LossBwd,
         Bwd,
         Opt,
-        Update,
         Finish,
     };
 
@@ -63,8 +61,6 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
                 train_data.data_set.datas[state.data_set_idx].input));
-            state.data_set_idx =
-                (state.data_set_idx + 1) % train_data.data_set.datas.size();
         }
     }
 
@@ -92,28 +88,24 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
         from_step_to(Steps::Bwd, Steps::Opt);
 
-        this->addResult(std::make_shared<OptData<ftype>>(data->states));
-    }
-
-    void execute(std::shared_ptr<OptData<ftype>> data) override {
-        from_step_to(Steps::Opt, Steps::Update);
-
-        this->addResult(std::make_shared<UpdateData<ftype>>(
+        this->addResult(std::make_shared<OptData<ftype>>(
             data->states, train_data.learning_rate));
     }
 
-    // TODO: the update should be done in separated state so all the update can
-    // be done in parallel
-    void execute(std::shared_ptr<UpdateData<ftype>> data) override {
+    void execute(std::shared_ptr<OptData<ftype>> data) override {
+        ++state.data_set_idx;
+        if (state.data_set_idx == train_data.data_set.datas.size()) {
+            state.data_set_idx = 0;
+            ++state.epoch;
+        }
+
         if (state.epoch < train_data.epochs) {
-            from_step_to(Steps::Update, Steps::Fwd);
+            from_step_to(Steps::Opt, Steps::Fwd);
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
-                train_data.data_set.datas[state.data_set_idx++].input));
-            state.data_set_idx =
-                (state.data_set_idx + 1) % train_data.data_set.datas.size();
+                train_data.data_set.datas[state.data_set_idx].input));
         } else {
-            from_step_to(Steps::Update, Steps::Finish);
+            from_step_to(Steps::Opt, Steps::Finish);
             this->addResult(std::make_shared<TrainingData<ftype>>(
                 data->states, train_data.data_set, train_data.learning_rate,
                 train_data.epochs));

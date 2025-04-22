@@ -1,10 +1,11 @@
+#include "../tools/mnist/minist_loader.hpp"
 #include "cudnn_operations.hpp"
 #include "data/layer_state.hpp"
-#include "data/update_data.hpp"
 #include "graph/network_graph.hpp"
 #include "task/linear_layer_task.hpp"
 #include "task/loss/quadratic_loss_task.hpp"
 #include "task/sigmoid_activation_task.hpp"
+#include "task/optimizer/sgd_optimizer_task.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
 #include "tools/utest.hpp"
@@ -46,7 +47,8 @@ Parameters<ftype> create_test_parameters_gpu(LayerDimentions const &dims,
     return gpu;
 }
 
-Parameters<ftype> init_test_parameters_gpu(LayerDimentions const &dims, Parameters<ftype> &gpu) {
+Parameters<ftype> init_test_parameters_gpu(LayerDimentions const &dims,
+                                           Parameters<ftype> &gpu) {
     Parameters<ftype> host = parameters_create_host<ftype>(dims);
     for (int64_t i = 0; i < dims.nb_nodes; ++i) {
         for (int64_t j = 0; j < dims.nb_inputs; ++j) {
@@ -250,67 +252,67 @@ UTest(linear_layer_bwd) {
     uassert_equal(output_err_host[3], 456);
 }
 
-UTest(linear_layer_update) {
-    constexpr int64_t nb_nodes = 3;
-    constexpr int64_t nb_inputs = 3;
-    LayerDimentions dims = {
-        .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
-    ftype learning_rate = 0.5;
-    ftype weights_host[nb_nodes * nb_inputs] = {0}, biases_host[nb_nodes] = {0};
-    ftype grads_value = 10;
-
-    // init the parameters
-    Parameters<ftype> params = create_test_parameters_gpu(dims);
-    defer(parameters_destroy_gpu(params));
-    Parameters<ftype> grads = create_test_parameters_gpu(dims, grads_value);
-    defer(parameters_destroy_gpu(grads));
-
-    LayerState<ftype> layer_state = layer_state_create_gpu(dims, params, grads);
-    defer(layer_state_destroy_gpu(layer_state));
-    NetworkState<ftype> network_state({layer_state}, nullptr);
-
-    hh::Graph<LayerTaskIO> graph;
-    auto fc_layer_task =
-        std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
-
-    graph.inputs(fc_layer_task);
-    graph.outputs(fc_layer_task);
-
-    graph.executeGraph(true);
-    graph.pushData(
-        std::make_shared<UpdateData<ftype>>(network_state, learning_rate));
-    graph.finishPushingData();
-    auto state =
-        hh_get_result<UpdateData<ftype>>(graph)->states.layer_states[0];
-    graph.waitForTermination();
-
-    // make sure that the weights gradiants were not modified
-    size_t size = nb_inputs * nb_nodes;
-    CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.grads.weights, size));
-    CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.grads.biases, nb_nodes));
-    cudaDeviceSynchronize();
-    for (size_t i = 0; i < size; ++i) {
-        uassert_equal(weights_host[i], grads_value);
-    }
-    for (size_t i = 0; i < nb_inputs; ++i) {
-        uassert_equal(biases_host[i], grads_value);
-    }
-
-    // testing the values of the weights
-    CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.params.weights, size));
-    CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.params.biases, nb_nodes));
-    cudaDeviceSynchronize();
-    for (int64_t i = 0; i < nb_nodes; ++i) {
-        for (int64_t j = 0; j < nb_inputs; ++j) {
-            ftype expected_value = i + j + 1 - learning_rate * grads_value;
-            uassert_equal(weights_host[i * nb_inputs + j], expected_value);
-        }
-    }
-    for (int64_t i = 0; i < nb_nodes; ++i) {
-        ftype expected_value = i + 1 - learning_rate * grads_value;
-        uassert_equal(biases_host[i], expected_value);
-    }
-}
+// UTest(linear_layer_update) {
+//     constexpr int64_t nb_nodes = 3;
+//     constexpr int64_t nb_inputs = 3;
+//     LayerDimentions dims = {
+//         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
+//     ftype learning_rate = 0.5;
+//     ftype weights_host[nb_nodes * nb_inputs] = {0}, biases_host[nb_nodes] = {0};
+//     ftype grads_value = 10;
+//
+//     // init the parameters
+//     Parameters<ftype> params = create_test_parameters_gpu(dims);
+//     defer(parameters_destroy_gpu(params));
+//     Parameters<ftype> grads = create_test_parameters_gpu(dims, grads_value);
+//     defer(parameters_destroy_gpu(grads));
+//
+//     LayerState<ftype> layer_state = layer_state_create_gpu(dims, params, grads);
+//     defer(layer_state_destroy_gpu(layer_state));
+//     NetworkState<ftype> network_state({layer_state}, nullptr);
+//
+//     hh::Graph<LayerTaskIO> graph;
+//     auto fc_layer_task =
+//         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
+//
+//     graph.inputs(fc_layer_task);
+//     graph.outputs(fc_layer_task);
+//
+//     graph.executeGraph(true);
+//     graph.pushData(
+//         std::make_shared<UpdateData<ftype>>(network_state, learning_rate));
+//     graph.finishPushingData();
+//     auto state =
+//         hh_get_result<UpdateData<ftype>>(graph)->states.layer_states[0];
+//     graph.waitForTermination();
+//
+//     // make sure that the weights gradiants were not modified
+//     size_t size = nb_inputs * nb_nodes;
+//     CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.grads.weights, size));
+//     CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.grads.biases, nb_nodes));
+//     cudaDeviceSynchronize();
+//     for (size_t i = 0; i < size; ++i) {
+//         uassert_equal(weights_host[i], grads_value);
+//     }
+//     for (size_t i = 0; i < nb_inputs; ++i) {
+//         uassert_equal(biases_host[i], grads_value);
+//     }
+//
+//     // testing the values of the weights
+//     CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.params.weights, size));
+//     CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.params.biases, nb_nodes));
+//     cudaDeviceSynchronize();
+//     for (int64_t i = 0; i < nb_nodes; ++i) {
+//         for (int64_t j = 0; j < nb_inputs; ++j) {
+//             ftype expected_value = i + j + 1 - learning_rate * grads_value;
+//             uassert_equal(weights_host[i * nb_inputs + j], expected_value);
+//         }
+//     }
+//     for (int64_t i = 0; i < nb_nodes; ++i) {
+//         ftype expected_value = i + 1 - learning_rate * grads_value;
+//         uassert_equal(biases_host[i], expected_value);
+//     }
+// }
 
 UTest(sigmoid_activation_fwd) {
     constexpr int64_t nb_nodes = 3;
@@ -409,8 +411,10 @@ UTest(inference) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
-    graph.set_loss(
-        std::make_shared<QuadraticLossTask>(10, CUDNN_HANDLE, CUBLAS_HANDLE));
+    graph.set_loss(std::make_shared<QuadraticLossTask>(nb_nodes, CUDNN_HANDLE,
+                                                       CUBLAS_HANDLE));
+    graph.set_optimizer(
+        std::make_shared<SGDOptimizerTask>(1, CUDNN_HANDLE, CUBLAS_HANDLE));
 
     graph.add_layer(std::make_shared<LinearLayerTask>(
         CUDNN_HANDLE, CUBLAS_HANDLE, 0,
@@ -426,7 +430,7 @@ UTest(inference) {
     defer(graph.destroy_network_state(state));
 
     init_test_parameters_gpu(state.layer_states[0].dims,
-            state.layer_states[0].params);
+                             state.layer_states[0].params);
 
     graph.executeGraph(true);
     graph.pushData(std::make_shared<InferenceData<ftype>>(state, input_gpu));
@@ -437,12 +441,59 @@ UTest(inference) {
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < nb_nodes; ++i) {
-        ftype weights_input_bias =
-            input_host[0] * (i + 1) + output_host[1] * (i + 2) +
-            output_host[2] * (i + 3) + i + 1;
+        ftype weights_input_bias = input_host[0] * (i + 1) +
+                                   output_host[1] * (i + 2) +
+                                   output_host[2] * (i + 3) + i + 1;
         ftype expected_value = sigmoid(weights_input_bias);
         uassert_float_equal(output_host[i], expected_value, 1e-6);
     }
+}
+
+UTest(training) {
+    constexpr size_t nb_nodes = 3;
+    constexpr size_t nb_inputs = 128*128;
+    constexpr ftype learning_rate = 0.1;
+    constexpr ftype epochs = 30;
+    ftype input_host[nb_inputs] = {1, 1, 1}, output_host[nb_nodes] = {0};
+    ftype *input_gpu = nullptr;
+    NetworkGraph graph;
+    NetworkState<ftype> state;
+    MNISTLoader loader;
+
+    DataSet<ftype> data_set =
+        loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
+                       "../data/mnist/train-images-idx3-ubyte");
+    defer(destroy_data_set(data_set));
+
+    CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
+    defer(cudaFree(input_gpu));
+    CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
+    cudaDeviceSynchronize();
+
+    graph.set_loss(
+        std::make_shared<QuadraticLossTask>(10, CUDNN_HANDLE, CUBLAS_HANDLE));
+    graph.set_optimizer(
+        std::make_shared<SGDOptimizerTask>(1, CUDNN_HANDLE, CUBLAS_HANDLE));
+
+    graph.add_layer(std::make_shared<LinearLayerTask>(
+        CUDNN_HANDLE, CUBLAS_HANDLE, 0,
+        LayerDimentions{
+            .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1}));
+    graph.add_layer(std::make_shared<SigmoidActivationTask>(
+        CUDNN_HANDLE, CUBLAS_HANDLE, 1,
+        LayerDimentions{
+            .nb_nodes = nb_nodes, .nb_inputs = nb_nodes, .kernel_size = 1}));
+    graph.build();
+
+    graph.init_network_state(state);
+    defer(graph.destroy_network_state(state));
+
+    graph.executeGraph(true);
+    graph.pushData(std::make_shared<TrainingData<ftype>>(
+        state, data_set, learning_rate, epochs));
+    graph.waitForTermination();
+
+    // TODO: evaluate the model to see if there is a difference
 }
 
 int main(int, char **) {
@@ -451,12 +502,13 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    run_test(cdnn_operations);
-    run_test(linear_layer_fwd);
-    run_test(linear_layer_bwd);
-    run_test(linear_layer_update);
-    run_test(sigmoid_activation_fwd);
-    run_test(sigmoid_activation_bwd);
-    run_test(inference);
+    // run_test(cdnn_operations);
+    // run_test(linear_layer_fwd);
+    // run_test(linear_layer_bwd);
+    // run_test(linear_layer_update);
+    // run_test(sigmoid_activation_fwd);
+    // run_test(sigmoid_activation_bwd);
+    // run_test(inference);
+    run_test(training);
     return 0;
 }

@@ -4,6 +4,7 @@
 
 template <typename T> struct OptData {
     NetworkState<T> &states;
+    T learning_rate;
 };
 
 #endif
