@@ -80,7 +80,6 @@ void parameters_host_to_gpu(Parameters<T> &gpu, Parameters<T> const &host,
 
     CUDA_CHECK(memcpy_host_to_gpu(gpu.weights, host.weights, size));
     CUDA_CHECK(memcpy_host_to_gpu(gpu.biases, host.biases, dims.nb_nodes));
-    cudaDeviceSynchronize();
 }
 
 template <typename T>
@@ -90,7 +89,6 @@ void parameters_gpu_to_host(Parameters<T> &gpu, Parameters<T> const &host,
 
     CUDA_CHECK(memcpy_gpu_to_host(host.weights, gpu.weights, size));
     CUDA_CHECK(memcpy_gpu_to_host(host.biases, gpu.biases, dims.nb_nodes));
-    cudaDeviceSynchronize();
 }
 
 /******************************************************************************/
@@ -145,14 +143,12 @@ template <typename T>
 void layer_state_host_to_gpu(LayerState<T> &gpu, LayerState<T> &host) {
     CUDA_CHECK(memcpy_host_to_gpu(gpu.output, host.output, gpu.dims.nb_nodes));
     CUDA_CHECK(memcpy_host_to_gpu(gpu.error, host.error, gpu.dims.error));
-    cudaDeviceSynchronize();
 }
 
 template <typename T>
 void layer_state_gpu_to_host(LayerState<T> &host, LayerState<T> &gpu) {
     CUDA_CHECK(memcpy_gpu_to_host(host.output, gpu.output, host.dims.nb_nodes));
     CUDA_CHECK(memcpy_gpu_to_host(host.error, gpu.error, host.dims.error));
-    cudaDeviceSynchronize();
 }
 
 #endif
