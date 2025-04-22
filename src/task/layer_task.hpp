@@ -2,13 +2,12 @@
 #define TASK_LAYER_TASK_H
 #include "../data/bwd_data.hpp"
 #include "../data/fwd_data.hpp"
-#include "../data/update_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define LayerTaskIn FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
-#define LayerTaskOut FwdData<ftype>, BwdData<ftype>, UpdateData<ftype>
-#define LayerTaskIO 3, LayerTaskIn, LayerTaskOut
+#define LayerTaskIn FwdData<ftype>, BwdData<ftype>
+#define LayerTaskOut FwdData<ftype>, BwdData<ftype>
+#define LayerTaskIO 2, LayerTaskIn, LayerTaskOut
 
 class LayerTask : public hh::AbstractCUDATask<LayerTaskIO> {
   public:

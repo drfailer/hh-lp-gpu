@@ -133,10 +133,6 @@ struct SigmoidActivationTask : LayerTask {
         CUDA_CHECK(alloc_gpu(&bwd_.workspace, workspace_size));
     }
 
-    void execute(std::shared_ptr<UpdateData<ftype>> data) override {
-        this->addResult(data);
-    }
-
   private:
     struct {
         cudnn_frontend::graph::Graph graph;
