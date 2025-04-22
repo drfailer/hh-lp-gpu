@@ -5,6 +5,7 @@
 #include "../task/optimizer/optimizer_task.hpp"
 #include "../task/layer_task.hpp"
 #include "../task/loss/loss_task.hpp"
+#include "../tools/timer.hpp"
 #include <hedgehog/hedgehog.h>
 
 #define NetworkGraphIn InferenceData<ftype>, TrainingData<ftype>
@@ -53,11 +54,15 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
     void init_network_state(NetworkState<ftype> &state) {
+        timer_start(graph_init);
         state.layer_states = std::vector<LayerState<ftype>>(layers_.size());
-        for (auto layer : layers_) {
+        for (auto &layer : layers_) {
             layer->init(state);
         }
+        optimizer_task_->init(state);
         loss_task_->init(state);
+        timer_end(graph_init);
+        timer_report_prec(graph_init, milliseconds);
     }
 
     void destroy_network_state(NetworkState<ftype> &state) {
