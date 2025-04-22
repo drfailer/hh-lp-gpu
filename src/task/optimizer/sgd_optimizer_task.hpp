@@ -1,6 +1,7 @@
 #ifndef TASK_OPTIMIZER_SGD_OPTIMIZER_TASK_H
 #define TASK_OPTIMIZER_SGD_OPTIMIZER_TASK_H
 #include "optimizer_task.hpp"
+#include "../../tools/timer.hpp"
 
 /* We need an optimizer state
  *
@@ -29,7 +30,7 @@
 
 class SGDOptimizerTask : public OptimizerTask {
   public:
-    struct LayerUpdateData {
+    struct UpdateGraph {
         cudnn_frontend::graph::Graph graph;
         ftype *workspace = nullptr;
         tensor_attr_t tensor;
@@ -39,14 +40,39 @@ class SGDOptimizerTask : public OptimizerTask {
         tensor_attr_t scale_tensor;
     };
 
+    struct LayerUpdateData {
+        std::shared_ptr<UpdateGraph> update_weights = nullptr;
+        std::shared_ptr<UpdateGraph> update_biases = nullptr;
+    };
+
   public:
     SGDOptimizerTask(size_t nb_threads, cudnnHandle_t cudnn_handle,
                      cublasHandle_t cublas_handle)
         : OptimizerTask("SGD Optimizer", nb_threads, cudnn_handle,
-                        cublas_handle),
-          kernel_cache_(std::make_shared<cudnn_frontend::KernelCache>()) {}
+                        cublas_handle) {}
 
-#warning "we need an init funciton that create NB_LAYERS graphs so we don't have to rebuild the graphs every iteration"
+#warning "Generalize dims and strides: changing the Parameters type and adding the dims and the strides here would be a good idea"
+
+    void init(NetworkState<ftype> const &state) override {
+        update_graphs_ =
+            std::vector<LayerUpdateData>(state.layer_states.size());
+
+        for (size_t idx = 0; idx < update_graphs_.size(); ++idx) {
+            if (!has_params(state.layer_states[idx])) {
+                WARN("layer " << idx << " has no parameters");
+                continue;
+            }
+            auto dims = state.layer_states[idx].dims;
+            update_graphs_[idx].update_weights = create_update_graph(
+                {1, dims.nb_nodes, dims.nb_inputs},
+                {dims.nb_nodes * dims.nb_inputs, dims.nb_inputs, 1});
+
+            if (has_biases(state.layer_states[idx])) {
+                update_graphs_[idx].update_biases = create_update_graph(
+                    {1, dims.nb_nodes, 1}, {dims.nb_nodes, 1, 1});
+            }
+        }
+    }
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         INFO_GRP("OptimizerTask", INFO_GRP_LAYER_TASK);
@@ -54,54 +80,47 @@ class SGDOptimizerTask : public OptimizerTask {
             this->addResult(data);
             return;
         }
-        auto dims = data->state.dims;
 
-#warning "Generalize dims and strides: changing the Parameters type and adding the dims and the strides here would be a good idea"
+        if (update_graphs_[data->idx].update_weights) {
+            optimize(update_graphs_[data->idx].update_weights,
+                     data->state.params.biases, data->state.grads.biases,
+                     data->learning_rate);
+        }
 
-        // TODO: this dims and strides are valid only for the linear layer, this
-        // code should be generatlized. Note: changing the Parameters type and
-        // adding the dims and the strides here would be a good idea.
-        optimize(data->state.params.biases, data->state.grads.biases,
-                 data->learning_rate, {1, dims.nb_nodes, dims.nb_inputs},
-                 {dims.nb_nodes * dims.nb_inputs, dims.nb_inputs, 1});
-
-        // update biases if requried
-        if (has_biases(data->state)) {
-            optimize(data->state.params.biases, data->state.grads.biases,
-                     data->learning_rate, {1, dims.nb_nodes, 1},
-                     {dims.nb_nodes, 1, 1});
+        if (update_graphs_[data->idx].update_biases) {
+            optimize(update_graphs_[data->idx].update_biases, data->state.params.biases, data->state.grads.biases,
+                     data->learning_rate);
         }
         this->addResult(data);
     }
 
     std::shared_ptr<hh::AbstractTask<OptimizerTaskIO>> copy() override {
-        return std::make_shared<SGDOptimizerTask>(this->numberThreads(),
+        timer_start(sgd_copy);
+        auto copy = std::make_shared<SGDOptimizerTask>(this->numberThreads(),
                                                   cudnn(), cublas());
+        timer_end(sgd_copy);
+        timer_report_prec(sgd_copy, milliseconds);
+        return copy;
     }
 
-    void optimize(ftype *parameter, ftype *gradiant, ftype learning_rate,
-                  std::vector<int64_t> const &dims,
-                  std::vector<int64_t> const &strides) {
-        auto opt = create_update_graph(dims, strides);
+    void optimize(auto opt, ftype *parameter, ftype *gradiant, ftype learning_rate) {
         MemoryMap mem = {
-            {opt.scale_tensor, &learning_rate},
-            {opt.tensor, parameter},
-            {opt.gradiant_tensor, gradiant},
-            {opt.scaled_gradiant_tensor, gradiant},
-            {opt.result_tensor, parameter},
+            {opt->scale_tensor, &learning_rate},
+            {opt->tensor, parameter},
+            {opt->gradiant_tensor, gradiant},
+            {opt->scaled_gradiant_tensor, gradiant},
+            {opt->result_tensor, parameter},
         };
 
-        CUDNN_CHECK(opt.graph.execute(cudnn(), mem, opt.workspace));
+        CUDNN_CHECK(opt->graph.execute(cudnn(), mem, opt->workspace));
     }
 
-    LayerUpdateData create_update_graph(std::vector<int64_t> const &dims,
-                                        std::vector<int64_t> const &strides) {
+    std::shared_ptr<UpdateGraph>
+    create_update_graph(std::vector<int64_t> const &dims,
+                        std::vector<int64_t> const &strides) {
         namespace fe = cudnn_frontend;
-        LayerUpdateData data;
-        // do not work :( v
-        // data.graph.set_dynamic_shape_enabled(true).set_kernel_cache(
-        //     kernel_cache_);
-        data.graph.set_io_data_type(fe::DataType_t::FLOAT)
+        auto data = std::make_shared<UpdateGraph>();
+        data->graph.set_io_data_type(fe::DataType_t::FLOAT)
             .set_intermediate_data_type(fe::DataType_t::FLOAT)
             .set_compute_data_type(fe::DataType_t::FLOAT);
 
@@ -128,29 +147,29 @@ class SGDOptimizerTask : public OptimizerTask {
 
         // graph inputs:
 
-        data.tensor = data.graph.tensor(param_attributes);
-        data.gradiant_tensor = data.graph.tensor(grad_attributes);
-        data.scale_tensor = data.graph.tensor(learning_rate_attributes);
+        data->tensor = data->graph.tensor(param_attributes);
+        data->gradiant_tensor = data->graph.tensor(grad_attributes);
+        data->scale_tensor = data->graph.tensor(learning_rate_attributes);
 
         // operations:
 
         // scaled_gradiant = gradiants * learning_rate
-        data.scaled_gradiant_tensor = data.graph.pointwise(
-            data.scale_tensor, data.gradiant_tensor, scale_attributes);
+        data->scaled_gradiant_tensor = data->graph.pointwise(
+            data->scale_tensor, data->gradiant_tensor, scale_attributes);
         // parameters -= scaled_gradiant
-        data.result_tensor = data.graph.pointwise(
-            data.tensor, data.scaled_gradiant_tensor, substract_attributes);
+        data->result_tensor = data->graph.pointwise(
+            data->tensor, data->scaled_gradiant_tensor, substract_attributes);
 
         // result:
 
-        data.result_tensor->set_output(true);
+        data->result_tensor->set_output(true);
 
-        CUDNN_CHECK(data.graph.validate());
-        CUDNN_CHECK(data.graph.build(cudnn(), {fe::HeurMode_t::A}));
+        CUDNN_CHECK(data->graph.validate());
+        CUDNN_CHECK(data->graph.build(cudnn(), {fe::HeurMode_t::A}));
 
         int64_t workspace_size;
-        CUDNN_CHECK(data.graph.get_workspace_size(workspace_size));
-        CUDA_CHECK(alloc_gpu(&data.workspace, workspace_size));
+        CUDNN_CHECK(data->graph.get_workspace_size(workspace_size));
+        CUDA_CHECK(alloc_gpu(&data->workspace, workspace_size));
 
         return data;
     }
@@ -166,7 +185,15 @@ class SGDOptimizerTask : public OptimizerTask {
     }
 
   private:
-    std::shared_ptr<cudnn_frontend::KernelCache> kernel_cache_ = nullptr;
+    SGDOptimizerTask(size_t nb_threads, cudnnHandle_t cudnn_handle,
+                     cublasHandle_t cublas_handle,
+                     std::vector<LayerUpdateData> const &update_graphs)
+        : SGDOptimizerTask(nb_threads, cudnn_handle, cublas_handle) {
+        this->update_graphs_ = update_graphs;
+    }
+
+  private:
+    std::vector<LayerUpdateData> update_graphs_ = {};
 };
 
 #endif

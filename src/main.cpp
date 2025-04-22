@@ -454,8 +454,6 @@ UTest(training) {
     constexpr size_t nb_inputs = 128*128;
     constexpr ftype learning_rate = 0.1;
     constexpr ftype epochs = 30;
-    ftype input_host[nb_inputs] = {1, 1, 1}, output_host[nb_nodes] = {0};
-    ftype *input_gpu = nullptr;
     NetworkGraph graph;
     NetworkState<ftype> state;
     MNISTLoader loader;
@@ -465,10 +463,7 @@ UTest(training) {
                        "../data/mnist/train-images-idx3-ubyte");
     defer(destroy_data_set(data_set));
 
-    CUDA_CHECK(alloc_gpu(&input_gpu, nb_inputs));
-    defer(cudaFree(input_gpu));
-    CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
-    cudaDeviceSynchronize();
+    urequire(data_set.datas.size() == 60'000);
 
     graph.set_loss(
         std::make_shared<QuadraticLossTask>(10, CUDNN_HANDLE, CUBLAS_HANDLE));
@@ -494,6 +489,8 @@ UTest(training) {
     graph.waitForTermination();
 
     // TODO: evaluate the model to see if there is a difference
+    graph.createDotFile("train.dot", hh::ColorScheme::EXECUTION,
+        hh::StructureOptions::QUEUE);
 }
 
 int main(int, char **) {
@@ -505,10 +502,9 @@ int main(int, char **) {
     // run_test(cdnn_operations);
     // run_test(linear_layer_fwd);
     // run_test(linear_layer_bwd);
-    // run_test(linear_layer_update);
     // run_test(sigmoid_activation_fwd);
     // run_test(sigmoid_activation_bwd);
-    // run_test(inference);
-    run_test(training);
+    run_test(inference);
+    // run_test(training);
     return 0;
 }

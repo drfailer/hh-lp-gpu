@@ -94,9 +94,11 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         ++state.data_set_idx;
-        if (state.data_set_idx == train_data.data_set.datas.size()) {
+        // if (state.data_set_idx == train_data.data_set.datas.size()) {
+        if (state.data_set_idx == 1500) {
             state.data_set_idx = 0;
             ++state.epoch;
+            INFO("new epoch");
         }
 
         if (state.epoch < train_data.epochs) {

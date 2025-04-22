@@ -15,6 +15,8 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
         : hh::AbstractCUDATask<OptimizerTaskIO>(name, nb_threads),
           cudnn_handle_(cudnn_handle), cublas_handle_(cublas_handle) {}
 
+    virtual void init(NetworkState<ftype> const &state) = 0;
+
   protected:
     cudnnHandle_t cudnn() { return cudnn_handle_; }
     cublasHandle_t cublas() { return cublas_handle_; }
