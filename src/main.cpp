@@ -167,8 +167,7 @@ UTest(cdnn_operations) {
 
 using ftype = float;
 
-UTest(matvecmul_standard) {
-    INFO("matvecmul standard")
+UTest(matvecmul_n) {
     constexpr size_t m = 10;
     constexpr size_t n = 10'000;
     ftype *mat_host = nullptr, *vec_host = nullptr, *gt_host = nullptr,
@@ -219,7 +218,7 @@ UTest(matvecmul_standard) {
 
     // matrix vector multiplication on the gpu
     CUBLAS_CHECK(matvecmul(CUBLAS_HANDLE, false, m, n, 1.f, mat_gpu, vec_gpu,
-                0.f, out_gpu));
+                           0.f, out_gpu));
     CUDA_CHECK(memcpy_gpu_to_host(out_host, out_gpu, m));
     cudaDeviceSynchronize();
 
@@ -227,11 +226,9 @@ UTest(matvecmul_standard) {
     for (size_t i = 0; i < m; ++i) {
         uassert_float_equal(gt_host[i], out_host[i], 1e-2);
     }
-    cudaDeviceSynchronize();
 }
 
-UTest(matvecmul_transpose) {
-    INFO("matvecmul transpose");
+UTest(matvecmul_t) {
     constexpr size_t m = 10;
     constexpr size_t n = 10'000;
     ftype *mat_host = nullptr, *vec_host = nullptr, *gt_host = nullptr,
@@ -290,7 +287,270 @@ UTest(matvecmul_transpose) {
     for (size_t i = 0; i < n; ++i) {
         uassert_float_equal(gt_host[i], out_host[i], 1e-2);
     }
+}
+
+UTest(matmul_n_n) {
+    INFO("matmul n n")
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    constexpr size_t k = 100;
+    ftype *A_host = nullptr, *B_host = nullptr, *GT_host = nullptr,
+          *C_host = nullptr;
+    ftype *A_gpu = nullptr, *B_gpu = nullptr, *C_gpu = nullptr;
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+    auto init_matrix = [&dist, &rand](ftype *mat, size_t rows, size_t cols) {
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                mat[i * cols + j] = dist(rand);
+            }
+        }
+    };
+
+    // allocate on host
+    A_host = new ftype[m * k];
+    defer(delete[] A_host);
+    B_host = new ftype[k * n];
+    defer(delete[] B_host);
+    C_host = new ftype[m * n];
+    defer(delete[] C_host);
+    GT_host = new ftype[m * n];
+    defer(delete[] GT_host);
+
+    // allocate on gpu
+    CUDA_CHECK(alloc_gpu(&A_gpu, m * k));
+    defer(cudaFree(A_gpu));
+    CUDA_CHECK(alloc_gpu(&B_gpu, k * n));
+    defer(cudaFree(B_gpu));
+    CUDA_CHECK(alloc_gpu(&C_gpu, m * n));
+    defer(cudaFree(C_gpu));
+
+    // init
+    init_matrix(A_host, m, k);
+    init_matrix(B_host, k, n);
+    CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, m * k));
+    CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, k * n));
     cudaDeviceSynchronize();
+
+    // matrix multiplication on host
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            GT_host[i * n + j] = 0;
+            for (size_t e = 0; e < k; ++e) {
+                GT_host[i * n + j] += A_host[i * k + e] * B_host[e * n + j];
+            }
+        }
+    }
+
+    // matrix multiplication on the gpu
+    matmul(CUBLAS_HANDLE, false, false, m, n, k, (ftype)1, A_gpu, B_gpu,
+           (ftype)0, C_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(C_host, C_gpu, m * n));
+
+    // verify the results
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            uassert_float_equal(GT_host[i * n + j], C_host[i * n + j], 1e-1);
+        }
+    }
+}
+
+UTest(matmul_t_n) {
+    INFO("matmul t n")
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    constexpr size_t k = 100;
+    ftype *A_host = nullptr, *B_host = nullptr, *GT_host = nullptr,
+          *C_host = nullptr;
+    ftype *A_gpu = nullptr, *B_gpu = nullptr, *C_gpu = nullptr;
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+    auto init_matrix = [&dist, &rand](ftype *mat, size_t rows, size_t cols) {
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                mat[i * cols + j] = dist(rand);
+            }
+        }
+    };
+
+    // allocate on host
+    A_host = new ftype[k * m];
+    defer(delete[] A_host);
+    B_host = new ftype[k * n];
+    defer(delete[] B_host);
+    C_host = new ftype[m * n];
+    defer(delete[] C_host);
+    GT_host = new ftype[m * n];
+    defer(delete[] GT_host);
+
+    // allocate on gpu
+    CUDA_CHECK(alloc_gpu(&A_gpu, m * k));
+    defer(cudaFree(A_gpu));
+    CUDA_CHECK(alloc_gpu(&B_gpu, k * n));
+    defer(cudaFree(B_gpu));
+    CUDA_CHECK(alloc_gpu(&C_gpu, m * n));
+    defer(cudaFree(C_gpu));
+
+    // init
+    init_matrix(A_host, k, m);
+    init_matrix(B_host, k, n);
+    CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, k * m));
+    CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, k * n));
+    cudaDeviceSynchronize();
+
+    // matrix multiplication on host
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            GT_host[i * n + j] = 0;
+            for (size_t e = 0; e < k; ++e) {
+                GT_host[i * n + j] += A_host[e * m + i] * B_host[e * n + j];
+            }
+        }
+    }
+
+    // matrix multiplication on the gpu
+    matmul(CUBLAS_HANDLE, true, false, m, n, k, (ftype)1, A_gpu, B_gpu,
+           (ftype)0, C_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(C_host, C_gpu, m * n));
+
+    // verify the results
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            uassert_float_equal(GT_host[i * n + j], C_host[i * n + j], 1e-1);
+        }
+    }
+}
+
+UTest(matmul_n_t) {
+    INFO("matmul n t")
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    constexpr size_t k = 100;
+    ftype *A_host = nullptr, *B_host = nullptr, *GT_host = nullptr,
+          *C_host = nullptr;
+    ftype *A_gpu = nullptr, *B_gpu = nullptr, *C_gpu = nullptr;
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+    auto init_matrix = [&dist, &rand](ftype *mat, size_t rows, size_t cols) {
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                mat[i * cols + j] = dist(rand);
+            }
+        }
+    };
+
+    // allocate on host
+    A_host = new ftype[m * k];
+    defer(delete[] A_host);
+    B_host = new ftype[n * k];
+    defer(delete[] B_host);
+    C_host = new ftype[m * n];
+    defer(delete[] C_host);
+    GT_host = new ftype[m * n];
+    defer(delete[] GT_host);
+
+    // allocate on gpu
+    CUDA_CHECK(alloc_gpu(&A_gpu, m * k));
+    defer(cudaFree(A_gpu));
+    CUDA_CHECK(alloc_gpu(&B_gpu, n * k));
+    defer(cudaFree(B_gpu));
+    CUDA_CHECK(alloc_gpu(&C_gpu, m * n));
+    defer(cudaFree(C_gpu));
+
+    // init
+    init_matrix(A_host, m, k);
+    init_matrix(B_host, n, k);
+    CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, m * k));
+    CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, n * k));
+    cudaDeviceSynchronize();
+
+    // matrix multiplication on host
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            GT_host[i * n + j] = 0;
+            for (size_t e = 0; e < k; ++e) {
+                GT_host[i * n + j] += A_host[i * k + e] * B_host[j * k + e];
+            }
+        }
+    }
+
+    // matrix multiplication on the gpu
+    matmul(CUBLAS_HANDLE, false, true, m, n, k, (ftype)1, A_gpu, B_gpu,
+           (ftype)0, C_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(C_host, C_gpu, m * n));
+
+    // verify the results
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            uassert_float_equal(GT_host[i * n + j], C_host[i * n + j], 1e-1);
+        }
+    }
+}
+
+UTest(matmul_t_t) {
+    INFO("matmul t t")
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    constexpr size_t k = 100;
+    ftype *A_host = nullptr, *B_host = nullptr, *GT_host = nullptr,
+          *C_host = nullptr;
+    ftype *A_gpu = nullptr, *B_gpu = nullptr, *C_gpu = nullptr;
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+    auto init_matrix = [&dist, &rand](ftype *mat, size_t rows, size_t cols) {
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < cols; ++j) {
+                mat[i * cols + j] = dist(rand);
+            }
+        }
+    };
+
+    // allocate on host
+    A_host = new ftype[k * m];
+    defer(delete[] A_host);
+    B_host = new ftype[n * k];
+    defer(delete[] B_host);
+    C_host = new ftype[m * n];
+    defer(delete[] C_host);
+    GT_host = new ftype[m * n];
+    defer(delete[] GT_host);
+
+    // allocate on gpu
+    CUDA_CHECK(alloc_gpu(&A_gpu, k * m));
+    defer(cudaFree(A_gpu));
+    CUDA_CHECK(alloc_gpu(&B_gpu, n * k));
+    defer(cudaFree(B_gpu));
+    CUDA_CHECK(alloc_gpu(&C_gpu, m * n));
+    defer(cudaFree(C_gpu));
+
+    // init
+    init_matrix(A_host, k, m);
+    init_matrix(B_host, n, k);
+    CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, k * m));
+    CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, n * k));
+    cudaDeviceSynchronize();
+
+    // matrix multiplication on host
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            GT_host[i * n + j] = 0;
+            for (size_t e = 0; e < k; ++e) {
+                GT_host[i * n + j] += A_host[e * m + i] * B_host[j * k + e];
+            }
+        }
+    }
+
+    // matrix multiplication on the gpu
+    matmul(CUBLAS_HANDLE, true, true, m, n, k, (ftype)1, A_gpu, B_gpu,
+           (ftype)0, C_gpu);
+    CUDA_CHECK(memcpy_gpu_to_host(C_host, C_gpu, m * n));
+
+    // verify the results
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            uassert_float_equal(GT_host[i * n + j], C_host[i * n + j], 1e-1);
+        }
+    }
 }
 
 /*
@@ -575,8 +835,12 @@ int main(int, char **) {
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
     // run_test(cdnn_operations);
-    run_test(matvecmul_standard);
-    run_test(matvecmul_transpose);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
 
     // run_test(linear_layer_fwd);
     // run_test(linear_layer_bwd);

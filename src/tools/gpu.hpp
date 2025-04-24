@@ -80,22 +80,21 @@ auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
 
 template <typename T>
 auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
-            size_t n, size_t k, T const *A, T const *B, T *C) {
-    cublasOperation_t cublas_trans_A = A_trans ? cublasOperation_t::CUBLAS_OP_N
-                                               : cublasOperation_t::CUBLAS_OP_T;
-    cublasOperation_t cublas_trans_B = B_trans ? cublasOperation_t::CUBLAS_OP_N
-                                               : cublasOperation_t::CUBLAS_OP_T;
-    size_t lda = A_trans ? k : m;
-    size_t ldb = B_trans ? n : k;
+            size_t n, size_t k, T alpha, T const *A, T const *B, T beta, T *C) {
+    cublasOperation_t cublas_trans_A = B_trans ? cublasOperation_t::CUBLAS_OP_T
+                                               : cublasOperation_t::CUBLAS_OP_N;
+    cublasOperation_t cublas_trans_B = A_trans ? cublasOperation_t::CUBLAS_OP_T
+                                               : cublasOperation_t::CUBLAS_OP_N;
+    size_t lda = A_trans ? m : k;
+    size_t ldb = B_trans ? k : n;
     size_t ldc = n;
-    T alpha = 1, beta = 0;
 
     INFO_GRP("gemm: C = op(A) * op(B) + C", INFO_GRP_CUBLAS_OPS)
     INFO_GRP("op(A)[" << m << ", " << k << "] = " << A, INFO_GRP_CUBLAS_OPS);
     INFO_GRP("op(B)[" << k << ", " << n << "] = " << B, INFO_GRP_CUBLAS_OPS);
     INFO_GRP("C[" << m << ", " << n << "] = " << C, INFO_GRP_CUBLAS_OPS);
 
-    return cublasSgemm_v2(handle, cublas_trans_B, cublas_trans_A, n, m, k,
+    return cublasSgemm_v2(handle, cublas_trans_A, cublas_trans_B, n, m, k,
                           &alpha, B, ldb, A, lda, &beta, C, ldc);
 }
 
