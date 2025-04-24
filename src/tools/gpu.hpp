@@ -57,22 +57,25 @@ template <typename T> auto alloc_gpu(T **dest, size_t size) {
 
 template <typename T>
 auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
-               T *mat, T *vec, T *out) {
+               T alpha, T *mat, T *vec, T beta, T *out) {
     cublasOperation_t cublas_trans =
         trans ? cublasOperation_t::CUBLAS_OP_N : cublasOperation_t::CUBLAS_OP_T;
-    size_t ldmat = trans ? rows : cols;
-    T alpha = 1, beta = 1;
+    size_t ldmat = cols;
+    int m = cols;
+    int n = rows;
 
     INFO_GRP("gemv: C = op(A) * X + Y", INFO_GRP_CUBLAS_OPS)
-    INFO_GRP("op(A)[" << rows << ", " << cols << "] = " << mat,
+    INFO_GRP("op(A)[" << (trans ? cols : rows) << ", " << (trans ? rows : cols)
+                      << "] = " << mat,
              INFO_GRP_CUBLAS_OPS);
-    INFO_GRP("X[" << cols << "] = " << vec, INFO_GRP_CUBLAS_OPS);
-    INFO_GRP("C[" << rows << "] = " << out, INFO_GRP_CUBLAS_OPS);
+    INFO_GRP("X[" << (trans ? rows : cols) << "] = " << vec,
+             INFO_GRP_CUBLAS_OPS);
+    INFO_GRP("C[" << (trans ? cols : rows) << "] = " << out,
+             INFO_GRP_CUBLAS_OPS);
 
     // we will only use float in this program, but there is still the
-    // possibility to ad support for more
-    return cublasSgemv_v2(handle, cublas_trans, cols, rows, &alpha, mat, ldmat,
-                          vec, 1, &beta, out, 1);
+    return cublasSgemv_v2(handle, cublas_trans, m, n, &alpha, mat, ldmat, vec,
+                          1, &beta, out, 1);
 }
 
 template <typename T>
@@ -82,8 +85,8 @@ auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
                                                : cublasOperation_t::CUBLAS_OP_T;
     cublasOperation_t cublas_trans_B = B_trans ? cublasOperation_t::CUBLAS_OP_N
                                                : cublasOperation_t::CUBLAS_OP_T;
-    size_t lda = A_trans ? m : k;
-    size_t ldb = B_trans ? k : n;
+    size_t lda = A_trans ? k : m;
+    size_t ldb = B_trans ? n : k;
     size_t ldc = n;
     T alpha = 1, beta = 0;
 
@@ -92,7 +95,7 @@ auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
     INFO_GRP("op(B)[" << k << ", " << n << "] = " << B, INFO_GRP_CUBLAS_OPS);
     INFO_GRP("C[" << m << ", " << n << "] = " << C, INFO_GRP_CUBLAS_OPS);
 
-    return cublasSgemm_v2(handle, cublas_trans_A, cublas_trans_B, n, m, k,
+    return cublasSgemm_v2(handle, cublas_trans_B, cublas_trans_A, n, m, k,
                           &alpha, B, ldb, A, lda, &beta, C, ldc);
 }
 

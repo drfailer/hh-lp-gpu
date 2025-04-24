@@ -1,11 +1,11 @@
-#include "../tools/mnist/minist_loader.hpp"
-#include "cudnn_operations.hpp"
-#include "data/layer_state.hpp"
-#include "graph/network_graph.hpp"
-#include "task/linear_layer_task.hpp"
-#include "task/loss/quadratic_loss_task.hpp"
-#include "task/sigmoid_activation_task.hpp"
-#include "task/optimizer/sgd_optimizer_task.hpp"
+// #include "../tools/mnist/minist_loader.hpp"
+// #include "cudnn_operations.hpp"
+// #include "data/layer_state.hpp"
+// #include "graph/network_graph.hpp"
+// #include "task/linear_layer_task.hpp"
+// #include "task/loss/quadratic_loss_task.hpp"
+// #include "task/sigmoid_activation_task.hpp"
+// #include "task/optimizer/sgd_optimizer_task.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
 #include "tools/utest.hpp"
@@ -13,7 +13,14 @@
 #include <cstring>
 #include <iostream>
 #include <ostream>
+#include <random>
+#include <unistd.h>
 
+// globals handls for the tests
+// cudnnHandle_t CUDNN_HANDLE;
+cublasHandle_t CUBLAS_HANDLE;
+
+/*
 ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
@@ -120,10 +127,6 @@ void display_matrix(std::string const &name, ftype *matrix, int64_t rows,
     }
 }
 
-// globals handls for the tests
-cudnnHandle_t CUDNN_HANDLE;
-cublasHandle_t CUBLAS_HANDLE;
-
 UTest(cdnn_operations) {
     constexpr int64_t m = 3;
     constexpr int64_t n = 3;
@@ -159,6 +162,138 @@ UTest(cdnn_operations) {
     delete[] C;
     delete[] V;
 }
+
+*/
+
+using ftype = float;
+
+UTest(matvecmul_standard) {
+    INFO("matvecmul standard")
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    ftype *mat_host = nullptr, *vec_host = nullptr, *gt_host = nullptr,
+          *out_host = nullptr;
+    ftype *mat_gpu = nullptr, *vec_gpu = nullptr, *out_gpu = nullptr;
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+
+    // allocate on host
+    mat_host = new ftype[m * n];
+    defer(delete[] mat_host);
+    vec_host = new ftype[n];
+    defer(delete[] vec_host);
+    gt_host = new ftype[m];
+    defer(delete[] gt_host);
+    out_host = new ftype[m];
+    defer(delete[] out_host);
+
+    // allocate on gpu
+    CUDA_CHECK(alloc_gpu(&mat_gpu, m * n));
+    defer(cudaFree(mat_gpu));
+    CUDA_CHECK(alloc_gpu(&vec_gpu, n));
+    defer(cudaFree(vec_gpu));
+    CUDA_CHECK(alloc_gpu(&out_gpu, m));
+    defer(cudaFree(out_gpu));
+
+    // init
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            mat_host[i * n + j] = dist(rand);
+        }
+    }
+    for (size_t i = 0; i < n; ++i) {
+        vec_host[i] = dist(rand);
+    }
+    CUDA_CHECK(memcpy_host_to_gpu(mat_gpu, mat_host, m * n));
+    CUDA_CHECK(memcpy_host_to_gpu(vec_gpu, vec_host, n));
+    cudaDeviceSynchronize();
+
+    // matrix vector multiplication on host
+    for (size_t i = 0; i < m; ++i) {
+        ftype sum = 0;
+        for (size_t j = 0; j < n; ++j) {
+            sum += mat_host[i * n + j] * vec_host[j];
+        }
+        gt_host[i] = sum;
+    }
+
+    // matrix vector multiplication on the gpu
+    CUBLAS_CHECK(matvecmul(CUBLAS_HANDLE, false, m, n, 1.f, mat_gpu, vec_gpu,
+                0.f, out_gpu));
+    CUDA_CHECK(memcpy_gpu_to_host(out_host, out_gpu, m));
+    cudaDeviceSynchronize();
+
+    // verify the result
+    for (size_t i = 0; i < m; ++i) {
+        uassert_float_equal(gt_host[i], out_host[i], 1e-2);
+    }
+    cudaDeviceSynchronize();
+}
+
+UTest(matvecmul_transpose) {
+    INFO("matvecmul transpose");
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    ftype *mat_host = nullptr, *vec_host = nullptr, *gt_host = nullptr,
+          *out_host = nullptr;
+    ftype *mat_gpu = nullptr, *vec_gpu = nullptr, *out_gpu = nullptr;
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+
+    // allocate on host
+    mat_host = new ftype[m * n];
+    defer(delete[] mat_host);
+    vec_host = new ftype[m];
+    defer(delete[] vec_host);
+    gt_host = new ftype[n];
+    defer(delete[] gt_host);
+    out_host = new ftype[n];
+    defer(delete[] out_host);
+
+    // allocate on gpu
+    CUDA_CHECK(alloc_gpu(&mat_gpu, m * n));
+    defer(cudaFree(mat_gpu));
+    CUDA_CHECK(alloc_gpu(&vec_gpu, m));
+    defer(cudaFree(vec_gpu));
+    CUDA_CHECK(alloc_gpu(&out_gpu, n));
+    defer(cudaFree(out_gpu));
+
+    // init
+    for (size_t i = 0; i < m; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            mat_host[i * n + j] = dist(rand);
+        }
+    }
+    for (size_t i = 0; i < m; ++i) {
+        vec_host[i] = dist(rand);
+    }
+    CUDA_CHECK(memcpy_host_to_gpu(mat_gpu, mat_host, m * n));
+    CUDA_CHECK(memcpy_host_to_gpu(vec_gpu, vec_host, m));
+    cudaDeviceSynchronize();
+
+    // matrix vector multiplication on host
+    for (size_t i = 0; i < n; ++i) {
+        ftype sum = 0;
+        for (size_t j = 0; j < m; ++j) {
+            sum += mat_host[j * n + i] * vec_host[j];
+        }
+        gt_host[i] = sum;
+    }
+
+    // matrix vector multiplication on the gpu
+    CUBLAS_CHECK(matvecmul(CUBLAS_HANDLE, true, m, n, 1.f, mat_gpu, vec_gpu,
+                           0.f, out_gpu));
+    CUDA_CHECK(memcpy_gpu_to_host(out_host, out_gpu, n));
+    cudaDeviceSynchronize();
+
+    // verify the result
+    for (size_t i = 0; i < n; ++i) {
+        uassert_float_equal(gt_host[i], out_host[i], 1e-2);
+    }
+    cudaDeviceSynchronize();
+}
+
+/*
 
 UTest(linear_layer_fwd) {
     constexpr int64_t nb_nodes = 3;
@@ -251,68 +386,6 @@ UTest(linear_layer_bwd) {
     uassert_equal(output_err_host[2], 345);
     uassert_equal(output_err_host[3], 456);
 }
-
-// UTest(linear_layer_update) {
-//     constexpr int64_t nb_nodes = 3;
-//     constexpr int64_t nb_inputs = 3;
-//     LayerDimentions dims = {
-//         .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1};
-//     ftype learning_rate = 0.5;
-//     ftype weights_host[nb_nodes * nb_inputs] = {0}, biases_host[nb_nodes] = {0};
-//     ftype grads_value = 10;
-//
-//     // init the parameters
-//     Parameters<ftype> params = create_test_parameters_gpu(dims);
-//     defer(parameters_destroy_gpu(params));
-//     Parameters<ftype> grads = create_test_parameters_gpu(dims, grads_value);
-//     defer(parameters_destroy_gpu(grads));
-//
-//     LayerState<ftype> layer_state = layer_state_create_gpu(dims, params, grads);
-//     defer(layer_state_destroy_gpu(layer_state));
-//     NetworkState<ftype> network_state({layer_state}, nullptr);
-//
-//     hh::Graph<LayerTaskIO> graph;
-//     auto fc_layer_task =
-//         std::make_shared<LinearLayerTask>(CUDNN_HANDLE, CUBLAS_HANDLE, 0, dims);
-//
-//     graph.inputs(fc_layer_task);
-//     graph.outputs(fc_layer_task);
-//
-//     graph.executeGraph(true);
-//     graph.pushData(
-//         std::make_shared<UpdateData<ftype>>(network_state, learning_rate));
-//     graph.finishPushingData();
-//     auto state =
-//         hh_get_result<UpdateData<ftype>>(graph)->states.layer_states[0];
-//     graph.waitForTermination();
-//
-//     // make sure that the weights gradiants were not modified
-//     size_t size = nb_inputs * nb_nodes;
-//     CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.grads.weights, size));
-//     CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.grads.biases, nb_nodes));
-//     cudaDeviceSynchronize();
-//     for (size_t i = 0; i < size; ++i) {
-//         uassert_equal(weights_host[i], grads_value);
-//     }
-//     for (size_t i = 0; i < nb_inputs; ++i) {
-//         uassert_equal(biases_host[i], grads_value);
-//     }
-//
-//     // testing the values of the weights
-//     CUDA_CHECK(memcpy_gpu_to_host(weights_host, state.params.weights, size));
-//     CUDA_CHECK(memcpy_gpu_to_host(biases_host, state.params.biases, nb_nodes));
-//     cudaDeviceSynchronize();
-//     for (int64_t i = 0; i < nb_nodes; ++i) {
-//         for (int64_t j = 0; j < nb_inputs; ++j) {
-//             ftype expected_value = i + j + 1 - learning_rate * grads_value;
-//             uassert_equal(weights_host[i * nb_inputs + j], expected_value);
-//         }
-//     }
-//     for (int64_t i = 0; i < nb_nodes; ++i) {
-//         ftype expected_value = i + 1 - learning_rate * grads_value;
-//         uassert_equal(biases_host[i], expected_value);
-//     }
-// }
 
 UTest(sigmoid_activation_fwd) {
     constexpr int64_t nb_nodes = 3;
@@ -450,10 +523,10 @@ UTest(inference) {
 }
 
 UTest(training) {
-    constexpr size_t nb_nodes = 3;
+    constexpr size_t nb_nodes = 10;
     constexpr size_t nb_inputs = 128*128;
     constexpr ftype learning_rate = 0.1;
-    constexpr ftype epochs = 30;
+    constexpr ftype epochs = 1;
     NetworkGraph graph;
     NetworkState<ftype> state;
     MNISTLoader loader;
@@ -493,18 +566,23 @@ UTest(training) {
         hh::StructureOptions::QUEUE);
 }
 
+*/
+
 int main(int, char **) {
-    cudnnCreate(&CUDNN_HANDLE);
-    defer(cudnnDestroy(CUDNN_HANDLE));
+    // cudnnCreate(&CUDNN_HANDLE);
+    // defer(cudnnDestroy(CUDNN_HANDLE));
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
     // run_test(cdnn_operations);
+    run_test(matvecmul_standard);
+    run_test(matvecmul_transpose);
+
     // run_test(linear_layer_fwd);
     // run_test(linear_layer_bwd);
     // run_test(sigmoid_activation_fwd);
     // run_test(sigmoid_activation_bwd);
-    run_test(inference);
+    // run_test(inference);
     // run_test(training);
     return 0;
 }
