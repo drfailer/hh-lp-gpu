@@ -64,13 +64,13 @@ auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
     int m = cols;
     int n = rows;
 
-    INFO_GRP("gemv: C = op(A) * X + Y", INFO_GRP_CUBLAS_OPS)
+    INFO_GRP("gemv: Y = alph * op(A) * X + beta * Y", INFO_GRP_CUBLAS_OPS)
     INFO_GRP("op(A)[" << (trans ? cols : rows) << ", " << (trans ? rows : cols)
                       << "] = " << mat,
              INFO_GRP_CUBLAS_OPS);
     INFO_GRP("X[" << (trans ? rows : cols) << "] = " << vec,
              INFO_GRP_CUBLAS_OPS);
-    INFO_GRP("C[" << (trans ? cols : rows) << "] = " << out,
+    INFO_GRP("Y[" << (trans ? cols : rows) << "] = " << out,
              INFO_GRP_CUBLAS_OPS);
 
     // we will only use float in this program, but there is still the
