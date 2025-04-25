@@ -1,7 +1,7 @@
 #ifndef TASK_OPTIMIZER_SGD_OPTIMIZER_TASK_H
 #define TASK_OPTIMIZER_SGD_OPTIMIZER_TASK_H
-#include "optimizer_task.hpp"
 #include "../../tools/timer.hpp"
+#include "optimizer_task.hpp"
 
 /* We need an optimizer state
  *
@@ -51,7 +51,8 @@ class SGDOptimizerTask : public OptimizerTask {
         : OptimizerTask("SGD Optimizer", nb_threads, cudnn_handle,
                         cublas_handle) {}
 
-#warning "Generalize dims and strides: changing the Parameters type and adding the dims and the strides here would be a good idea"
+#warning                                                                       \
+    "Generalize dims and strides: changing the Parameters type and adding the dims and the strides here would be a good idea"
 
     void init(NetworkState<ftype> const &state) override {
         update_graphs_ =
@@ -83,12 +84,13 @@ class SGDOptimizerTask : public OptimizerTask {
 
         if (update_graphs_[data->idx].update_weights) {
             optimize(update_graphs_[data->idx].update_weights,
-                     data->state.params.biases, data->state.grads.biases,
+                     data->state.params.weights, data->state.grads.weights,
                      data->learning_rate);
         }
 
         if (update_graphs_[data->idx].update_biases) {
-            optimize(update_graphs_[data->idx].update_biases, data->state.params.biases, data->state.grads.biases,
+            optimize(update_graphs_[data->idx].update_biases,
+                     data->state.params.biases, data->state.grads.biases,
                      data->learning_rate);
         }
         this->addResult(data);
@@ -97,13 +99,14 @@ class SGDOptimizerTask : public OptimizerTask {
     std::shared_ptr<hh::AbstractTask<OptimizerTaskIO>> copy() override {
         timer_start(sgd_copy);
         auto copy = std::make_shared<SGDOptimizerTask>(this->numberThreads(),
-                                                  cudnn(), cublas());
+                                                       cudnn(), cublas());
         timer_end(sgd_copy);
         timer_report_prec(sgd_copy, milliseconds);
         return copy;
     }
 
-    void optimize(auto opt, ftype *parameter, ftype *gradiant, ftype learning_rate) {
+    void optimize(auto opt, ftype *parameter, ftype *gradiant,
+                  ftype learning_rate) {
         MemoryMap mem = {
             {opt->scale_tensor, &learning_rate},
             {opt->tensor, parameter},

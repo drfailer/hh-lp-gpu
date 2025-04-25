@@ -39,8 +39,8 @@ class QuadraticLossTask : public LossTask {
             {bwd.ground_truth_tensor, data->ground_truth},
         };
         CUDNN_CHECK(bwd.graph.execute(cudnn(), mem_map, bwd.workspace));
-        data->error = data->states.loss_output;
-        this->addResult(data);
+        this->addResult(std::make_shared<BwdData<ftype>>(data->states,
+                    data->states.loss_output));
     }
 
     void create_bwd_graph(int64_t size) {

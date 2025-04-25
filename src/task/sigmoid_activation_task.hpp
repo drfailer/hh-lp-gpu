@@ -43,7 +43,7 @@ struct SigmoidActivationTask : LayerTask {
 
         std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>,
                            void *>
-            memory_map = {{fwd_.input_tensor, data->input},
+            memory_map = {{fwd_.input_tensor, state.input},
                           {fwd_.output_tensor, state.output}};
         CUDNN_CHECK(fwd_.graph.execute(cudnn(), memory_map, fwd_.workspace));
         data->input = state.output;
@@ -82,13 +82,14 @@ struct SigmoidActivationTask : LayerTask {
     }
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        auto &state = data->states.layer_states[this->idx()];
         namespace fe = cudnn_frontend;
         INFO_GRP("SigmoidActivationTask BWD", INFO_GRP_LAYER_TASK);
+        auto &state = data->states.layer_states[this->idx()];
+        ftype *error = data->error;
 
         std::unordered_map<std::shared_ptr<fe::graph::Tensor_attributes>,
                            void *>
-            memory_map = {{bwd_.err_tensor, data->error},
+            memory_map = {{bwd_.err_tensor, error},
                           {bwd_.fwd_input_tensor, state.input},
                           {bwd_.output_tensor, state.error}};
         CUDNN_CHECK(bwd_.graph.execute(cudnn(), memory_map, bwd_.workspace));

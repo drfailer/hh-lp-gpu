@@ -39,12 +39,23 @@ class LinearLayerTask : public LayerTask {
         // save input (used for the backwards pass)
         state.input = data->input;
 
-        CUDA_CHECK(memcpy_gpu_to_gpu(state.output, state.params.biases,
-                                     state.dims.nb_nodes));
-        cudaDeviceSynchronize();
+        // CUDA_CHECK(memcpy_gpu_to_gpu(state.output, state.params.biases,
+        //                              state.dims.nb_nodes));
+        if (cudaError_t::cudaSuccess !=
+            memcpy_gpu_to_gpu(state.output, state.params.biases,
+                              state.dims.nb_nodes)) {
+            cudaDeviceSynchronize();
+            ERROR("cuda error");
+            DBG(state.output);
+            DBG(state.params.biases);
+            DBG(state.dims.nb_nodes);
+            DBG(state.dims.nb_inputs);
+            DBG(state.dims.kernel_size);
+            exit(1);
+        }
         CUBLAS_CHECK(matvecmul(cublas(), false, state.dims.nb_nodes,
-                               state.dims.nb_inputs, state.params.weights,
-                               data->input, state.output));
+                               state.dims.nb_inputs, 1.f, state.params.weights,
+                               state.input, 1.f, state.output));
         data->input = state.output;
         this->addResult(data);
     }
@@ -52,22 +63,24 @@ class LinearLayerTask : public LayerTask {
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
         INFO_GRP("LinearLayerTask BWD", INFO_GRP_LAYER_TASK);
         auto &state = data->states.layer_states[this->idx()];
+        ftype *input_error = data->error;
         // Backward:
         // - grads_b = err, grads_w = err * update_inputT, err = err * w
 
         // TODO: for now we just copy but there might be more to do later
-        CUDA_CHECK(memcpy_gpu_to_gpu(state.grads.biases, data->error,
+        CUDA_CHECK(memcpy_gpu_to_gpu(state.grads.biases, input_error,
                                      state.dims.nb_nodes));
+        cudaDeviceSynchronize();
 
         // w_grad = err * update_inputT
         CUBLAS_CHECK(matmul(cublas(), false, true, state.dims.nb_nodes,
-                            state.dims.nb_inputs, 1, data->error, state.input,
-                            state.grads.weights));
+                            state.dims.nb_inputs, 1, 1.f, input_error,
+                            state.input, 0.f, state.grads.weights));
 
         // output_err = errT * weights
         CUBLAS_CHECK(matmul(cublas(), true, false, 1, state.dims.nb_inputs,
-                            state.dims.nb_nodes, data->error,
-                            state.params.weights, state.error));
+                            state.dims.nb_nodes, 1.f, input_error,
+                            state.params.weights, 0.f, state.error));
 
         data->error = state.error;
         this->addResult(data);

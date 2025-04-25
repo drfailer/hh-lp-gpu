@@ -1,12 +1,13 @@
 #ifndef TASK_LOSS_LOSS_TASK_H
 #define TASK_LOSS_LOSS_TASK_H
 #include "../../data/loss_bwd_data.hpp"
+#include "../../data/bwd_data.hpp"
 #include "../../data/loss_fwd_data.hpp"
 #include "../../types.hpp"
 #include <hedgehog/hedgehog.h>
 
 #define LossTaskIn LossFwdData<ftype>, LossBwdData<ftype>
-#define LossTaskOut LossFwdData<ftype>, LossBwdData<ftype>
+#define LossTaskOut LossFwdData<ftype>, BwdData<ftype>
 #define LossTaskIO 2, LossTaskIn, LossTaskOut
 
 class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
