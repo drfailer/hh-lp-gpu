@@ -5,7 +5,6 @@
 #include "../data/inference_data.hpp"
 #include "../data/loss_bwd_data.hpp"
 #include "../data/opt_data.hpp"
-#include "../data/terminiate_data.hpp"
 #include "../data/training_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
@@ -25,7 +24,7 @@
         OptData<ftype>
 #define PipelineStateOut                                                       \
     TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
-        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>, TerminateData
+        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>
 #define PipelineStateIO 5, PipelineStateIn, PipelineStateOut
 
 class PipelineState : public hh::AbstractState<PipelineStateIO> {
@@ -75,12 +74,10 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             from_step_to(Steps::Inference, Steps::Finish);
             this->addResult(std::make_shared<InferenceData<ftype>>(
                 data->states, data->input));
-            this->addResult(std::make_shared<TerminateData>());
         }
     }
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        // TODO: make this appear somewhere v
         from_step_to(Steps::Bwd, Steps::Opt);
 
         this->addResult(std::make_shared<OptData<ftype>>(
@@ -105,7 +102,6 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             this->addResult(std::make_shared<TrainingData<ftype>>(
                 data->states, train_data.data_set, train_data.learning_rate,
                 train_data.epochs));
-            this->addResult(std::make_shared<TerminateData>());
         }
     }
 

@@ -3,31 +3,6 @@
 #include "../../tools/timer.hpp"
 #include "optimizer_task.hpp"
 
-/* We need an optimizer state
- *
- * EXTERIOR -[TrainingData]->  PipelineState
- * EXTERIOR -[InferenceData]-> PipelineState
- *
- * PipelineState -[FwdData]->     LayerTask
- * LayerTask     -[FwdData]->     PipelineState
- * PipelineState -[LossBwdData]-> LossTask
- * LossTask      -[LossBwdData]-> PipelieState
- * PipelineState -[BwdData]->     LayerTask
- * LayerTask     -[BwdData]->     PipelineState
- *
- * PipelineState  -[OptData]->           OptimizerState
- * OptimizerState -[OptLayerData(idx)]-> OptLayerTask<NB_LAYER>
- * OptLayerTask   -[OptLayerData(idx)]-> OptmizerSTate
- * OptimizerState -[OptData]->           PipelineState
- *
- * The optimizer task should be parallelized on the CPU so the gradiants are
- * changed in parallel and the update is done in parallel as well.
- *
- * The UpdateData and the corresponding funcitons in the layers should be
- * removed as everything will be done in the optmizer task.
- *
- */
-
 class SGDOptimizerTask : public OptimizerTask {
   public:
     struct UpdateGraph {

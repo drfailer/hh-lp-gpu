@@ -17,10 +17,10 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
     NetworkGraph(size_t nb_shards = 1) : hh::Graph<NetworkGraphIO>(),
     nb_shards_(nb_shards) {
-        pipeline_state_ = std::make_shared<PipelineStateManager>(
-            std::make_shared<PipelineState>());
+        auto pipeline = std::make_shared<PipelineState>();
+        pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline);
         optimizer_state_ = std::make_shared<OptimizerStateManager>(
-            std::make_shared<OptimizerState>());
+            std::make_shared<OptimizerState>(), pipeline);
 
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);

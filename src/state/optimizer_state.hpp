@@ -2,14 +2,12 @@
 #define STATE_OPTIMIZER_STATE_H
 #include "../data/opt_data.hpp"
 #include "../data/opt_layer_data.hpp"
-#include "../data/terminiate_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define OptimizerStateIn                                                       \
-    OptData<ftype>, OptLayerData<ftype>, TerminateData
+#define OptimizerStateIn OptData<ftype>, OptLayerData<ftype>
 #define OptimizerStateOut OptData<ftype>, OptLayerData<ftype>
-#define OptimizerStateIO 3, OptimizerStateIn, OptimizerStateOut
+#define OptimizerStateIO 2, OptimizerStateIn, OptimizerStateOut
 
 class OptimizerState : public hh::AbstractState<OptimizerStateIO> {
   public:
@@ -18,7 +16,6 @@ class OptimizerState : public hh::AbstractState<OptimizerStateIO> {
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         size_t nb_layers = data->states.layer_states.size();
 
-        isDone_ = false;
         data_ = data;
         nb_processed_layers_ = 0;
         for (size_t i = 0; i < nb_layers; ++i) {
@@ -37,19 +34,9 @@ class OptimizerState : public hh::AbstractState<OptimizerStateIO> {
         }
     }
 
-    // receive this from the pipeline_state to indicate that the training is
-    // over and the graph can terminiate.
-    // TODO: this is not very clean.
-    void execute(std::shared_ptr<TerminateData>) override {
-        isDone_ = true;
-    }
-
-    bool isDone() const { return isDone_; }
-
   private:
     size_t nb_processed_layers_ = 0;
     std::shared_ptr<OptData<ftype>> data_ = nullptr;
-    bool isDone_ = false;
 };
 
 #endif
