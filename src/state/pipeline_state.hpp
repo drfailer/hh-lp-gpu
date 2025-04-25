@@ -5,6 +5,7 @@
 #include "../data/inference_data.hpp"
 #include "../data/loss_bwd_data.hpp"
 #include "../data/opt_data.hpp"
+#include "../data/terminiate_data.hpp"
 #include "../data/training_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
@@ -20,12 +21,12 @@
     state.step = to;
 
 #define PipelineStateIn                                                        \
-    TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
-        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>
+    TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>, BwdData<ftype>, \
+        OptData<ftype>
 #define PipelineStateOut                                                       \
     TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
-        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>
-#define PipelineStateIO 6, PipelineStateIn, PipelineStateOut
+        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>, TerminateData
+#define PipelineStateIO 5, PipelineStateIn, PipelineStateOut
 
 class PipelineState : public hh::AbstractState<PipelineStateIO> {
   public:
@@ -36,7 +37,6 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         Idle,
         Inference,
         Fwd,
-        LossBwd,
         Bwd,
         Opt,
         Finish,
@@ -66,7 +66,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         if (state.step == Steps::Fwd) {
-            from_step_to(Steps::Fwd, Steps::LossBwd);
+            from_step_to(Steps::Fwd, Steps::Bwd);
             this->addResult(std::make_shared<LossBwdData<ftype>>(
                 data->states, data->input,
                 train_data.data_set.datas[state.data_set_idx].ground_truth,
@@ -75,17 +75,12 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             from_step_to(Steps::Inference, Steps::Finish);
             this->addResult(std::make_shared<InferenceData<ftype>>(
                 data->states, data->input));
+            this->addResult(std::make_shared<TerminateData>());
         }
     }
 
-    void execute(std::shared_ptr<LossBwdData<ftype>> data) override {
-        from_step_to(Steps::LossBwd, Steps::Bwd);
-
-        this->addResult(
-            std::make_shared<BwdData<ftype>>(data->states, data->error));
-    }
-
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
+        // TODO: make this appear somewhere v
         from_step_to(Steps::Bwd, Steps::Opt);
 
         this->addResult(std::make_shared<OptData<ftype>>(
@@ -94,8 +89,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         ++state.data_set_idx;
-        // if (state.data_set_idx == train_data.data_set.datas.size()) {
-        if (state.data_set_idx == 1500) {
+        if (state.data_set_idx == train_data.data_set.datas.size()) {
             state.data_set_idx = 0;
             ++state.epoch;
             INFO("new epoch");
@@ -111,6 +105,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             this->addResult(std::make_shared<TrainingData<ftype>>(
                 data->states, train_data.data_set, train_data.learning_rate,
                 train_data.epochs));
+            this->addResult(std::make_shared<TerminateData>());
         }
     }
 
