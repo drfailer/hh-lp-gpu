@@ -8,4 +8,6 @@ struct InferenceData {
     T *input;
 };
 
+#warning "we should have the input and the result here (will facilitate the evaluation)"
+
 #endif

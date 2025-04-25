@@ -1,11 +1,13 @@
-// #include "../tools/mnist/minist_loader.hpp"
-// #include "cudnn_operations.hpp"
-// #include "data/layer_state.hpp"
-// #include "graph/network_graph.hpp"
-// #include "task/linear_layer_task.hpp"
-// #include "task/loss/quadratic_loss_task.hpp"
-// #include "task/sigmoid_activation_task.hpp"
-// #include "task/optimizer/sgd_optimizer_task.hpp"
+#include "../tools/mnist/minist_loader.hpp"
+#include "cudnn_operations.hpp"
+#include "data/layer_state.hpp"
+#include "graph/network_graph.hpp"
+#include "layers/linear_layer.hpp"
+#include "layers/sigmoid_activation_layer.hpp"
+#include "task/linear_layer_task.hpp"
+#include "task/loss/quadratic_loss_task.hpp"
+#include "task/optimizer/sgd_optimizer_task.hpp"
+#include "task/sigmoid_activation_task.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
 #include "tools/utest.hpp"
@@ -17,10 +19,9 @@
 #include <unistd.h>
 
 // globals handls for the tests
-// cudnnHandle_t CUDNN_HANDLE;
+cudnnHandle_t CUDNN_HANDLE;
 cublasHandle_t CUBLAS_HANDLE;
 
-/*
 ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
@@ -162,10 +163,6 @@ UTest(cdnn_operations) {
     delete[] C;
     delete[] V;
 }
-
-*/
-
-using ftype = float;
 
 UTest(matvecmul_n) {
     constexpr size_t m = 10;
@@ -541,8 +538,8 @@ UTest(matmul_t_t) {
     }
 
     // matrix multiplication on the gpu
-    matmul(CUBLAS_HANDLE, true, true, m, n, k, (ftype)1, A_gpu, B_gpu,
-           (ftype)0, C_gpu);
+    matmul(CUBLAS_HANDLE, true, true, m, n, k, (ftype)1, A_gpu, B_gpu, (ftype)0,
+           C_gpu);
     CUDA_CHECK(memcpy_gpu_to_host(C_host, C_gpu, m * n));
 
     // verify the results
@@ -552,8 +549,6 @@ UTest(matmul_t_t) {
         }
     }
 }
-
-/*
 
 UTest(linear_layer_fwd) {
     constexpr int64_t nb_nodes = 3;
@@ -749,14 +744,14 @@ UTest(inference) {
     graph.set_optimizer(
         std::make_shared<SGDOptimizerTask>(1, CUDNN_HANDLE, CUBLAS_HANDLE));
 
-    graph.add_layer(std::make_shared<LinearLayerTask>(
-        CUDNN_HANDLE, CUBLAS_HANDLE, 0,
-        LayerDimentions{
-            .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1}));
-    graph.add_layer(std::make_shared<SigmoidActivationTask>(
-        CUDNN_HANDLE, CUBLAS_HANDLE, 1,
-        LayerDimentions{
-            .nb_nodes = nb_nodes, .nb_inputs = nb_nodes, .kernel_size = 1}));
+    graph.add_layer(std::make_shared<LinearLayer>(
+        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = nb_nodes,
+                                       .nb_inputs = nb_inputs,
+                                       .kernel_size = 1}));
+    graph.add_layer(std::make_shared<SigmoidActivationLayer>(
+        CUDNN_HANDLE, LayerDimentions{.nb_nodes = nb_nodes,
+                                      .nb_inputs = nb_nodes,
+                                      .kernel_size = 1}));
     graph.build();
 
     graph.init_network_state(state);
@@ -803,14 +798,14 @@ UTest(training) {
     graph.set_optimizer(
         std::make_shared<SGDOptimizerTask>(1, CUDNN_HANDLE, CUBLAS_HANDLE));
 
-    graph.add_layer(std::make_shared<LinearLayerTask>(
-        CUDNN_HANDLE, CUBLAS_HANDLE, 0,
-        LayerDimentions{
-            .nb_nodes = nb_nodes, .nb_inputs = nb_inputs, .kernel_size = 1}));
-    graph.add_layer(std::make_shared<SigmoidActivationTask>(
-        CUDNN_HANDLE, CUBLAS_HANDLE, 1,
-        LayerDimentions{
-            .nb_nodes = nb_nodes, .nb_inputs = nb_nodes, .kernel_size = 1}));
+    graph.add_layer(std::make_shared<LinearLayer>(
+        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = nb_nodes,
+                                       .nb_inputs = nb_inputs,
+                                       .kernel_size = 1}));
+    graph.add_layer(std::make_shared<SigmoidActivationLayer>(
+        CUDNN_HANDLE, LayerDimentions{.nb_nodes = nb_nodes,
+                                      .nb_inputs = nb_nodes,
+                                      .kernel_size = 1}));
     graph.build();
 
     graph.init_network_state(state);
@@ -823,30 +818,28 @@ UTest(training) {
 
     // TODO: evaluate the model to see if there is a difference
     graph.createDotFile("train.dot", hh::ColorScheme::EXECUTION,
-        hh::StructureOptions::QUEUE);
+                        hh::StructureOptions::QUEUE);
 }
 
-*/
-
 int main(int, char **) {
-    // cudnnCreate(&CUDNN_HANDLE);
-    // defer(cudnnDestroy(CUDNN_HANDLE));
+    cudnnCreate(&CUDNN_HANDLE);
+    defer(cudnnDestroy(CUDNN_HANDLE));
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
     // run_test(cdnn_operations);
-    run_test(matvecmul_n);
-    run_test(matvecmul_t);
-    run_test(matmul_n_n);
-    run_test(matmul_t_n);
-    run_test(matmul_n_t);
-    run_test(matmul_t_t);
+    // run_test(matvecmul_n);
+    // run_test(matvecmul_t);
+    // run_test(matmul_n_n);
+    // run_test(matmul_t_n);
+    // run_test(matmul_n_t);
+    // run_test(matmul_t_t);
 
     // run_test(linear_layer_fwd);
     // run_test(linear_layer_bwd);
     // run_test(sigmoid_activation_fwd);
     // run_test(sigmoid_activation_bwd);
     // run_test(inference);
-    // run_test(training);
+    run_test(training);
     return 0;
 }
