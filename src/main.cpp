@@ -784,7 +784,7 @@ UTest(inference) {
 
 UTest(training) {
     constexpr size_t nb_nodes = 10;
-    constexpr size_t nb_inputs = 128*128;
+    constexpr size_t nb_inputs = 28 * 28;
     constexpr ftype learning_rate = 0.1;
     constexpr ftype epochs = 1;
     NetworkGraph graph;
