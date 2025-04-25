@@ -10,6 +10,9 @@ set(Hedgehog_INCLUDE_DIR lib/hedgehog/)
 
 find_package(CUDAToolkit)
 find_package(Hedgehog REQUIRED)
+find_package(NVTX QUIET)
+
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
@@ -37,3 +40,4 @@ target_link_libraries(hh-lp-gpu
     CUDA::cuda_driver
     CUDA::cublas
 )
+target_compile_definitions(hh-lp-gpu PUBLIC HH_USE_CUDA)
