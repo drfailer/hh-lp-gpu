@@ -179,6 +179,7 @@ void sigmoid(ftype *A_host, int64_t size) {
     CUDA_CHECK(alloc_gpu(&A_gpu, size));
     defer(cudaFree(A_gpu));
     CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, size));
+    cudaDeviceSynchronize();
 
     cudnnCreate(&handle);
     defer(cudnnDestroy(handle));

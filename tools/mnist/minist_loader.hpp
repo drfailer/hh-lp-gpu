@@ -79,6 +79,7 @@ class MNISTLoader {
             CUDA_CHECK(alloc_gpu(&image_gpu, rows * cols));
             CUDA_CHECK(
                 memcpy_host_to_gpu(image_gpu, image.data(), rows * cols));
+            cudaDeviceSynchronize();
             images[i] = image_gpu;
         }
 
