@@ -40,7 +40,7 @@ class QuadraticLossTask : public LossTask {
         };
         CUDNN_CHECK(bwd.graph.execute(cudnn(), mem_map, bwd.workspace));
         this->addResult(std::make_shared<BwdData<ftype>>(data->states,
-                    data->states.loss_output));
+                    data->states.loss_output, data->learning_rate));
     }
 
     void create_bwd_graph(int64_t size) {

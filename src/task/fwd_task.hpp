@@ -8,11 +8,11 @@
 
 #define FwdTaskIn FwdData<ftype>
 #define FwdTaskOut FwdData<ftype>
-#define FwdTaskType 1, FwdTaskIn, FwdTaskOut
+#define FwdTaskIO 1, FwdTaskIn, FwdTaskOut
 
-class FwdTask : public hh::AbstractCUDATask<FwdTaskType> {
+class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
   public:
-    FwdTask() : hh::AbstractCUDATask<FwdTaskType>("FwdTask", 1) {}
+    FwdTask() : hh::AbstractCUDATask<FwdTaskIO>("FwdTask", 1) {}
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         ftype *input = data->input;
@@ -29,7 +29,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskType> {
         layers_.push_back(layer);
     }
 
-    std::shared_ptr<hh::AbstractTask<FwdTaskType>> copy() override {
+    std::shared_ptr<hh::AbstractTask<FwdTaskIO>> copy() override {
         throw std::logic_error("error: FwdTask should not be copied.");
     }
 

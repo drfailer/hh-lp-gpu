@@ -1,18 +1,19 @@
 #ifndef TASK_BWD_TASK_H
 #define TASK_BWD_TASK_H
 #include "../data/bwd_data.hpp"
+#include "../data/opt_layer_data.hpp"
 #include "../layers/layer.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
 #define BwdTaskIn BwdData<ftype>
-#define BwdTaskOut BwdData<ftype>
-#define BwdTaskType 1, BwdTaskIn, BwdTaskOut
+#define BwdTaskOut BwdData<ftype>, OptLayerData<ftype>
+#define BwdTaskIO 1, BwdTaskIn, BwdTaskOut
 
-class BwdTask : public hh::AbstractCUDATask<BwdTaskType> {
+class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
   public:
-    BwdTask() : hh::AbstractCUDATask<BwdTaskType>("BwdTask", 1) {}
+    BwdTask() : hh::AbstractCUDATask<BwdTaskIO>("BwdTask", 1) {}
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
         ftype *error = data->error;
@@ -20,6 +21,8 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskType> {
 
         for (int i = layers_.size() - 1; i >= 0; --i) {
             error = layers_[i]->bwd(states, error);
+            this->addResult(std::make_shared<OptLayerData<ftype>>(data->states,
+                        data->learning_rate, layers_[i]->idx));
         }
         data->error = error;
         this->addResult(data);
@@ -29,7 +32,7 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskType> {
         layers_.push_back(layer);
     }
 
-    std::shared_ptr<hh::AbstractTask<BwdTaskType>> copy() override {
+    std::shared_ptr<hh::AbstractTask<BwdTaskIO>> copy() override {
         throw std::logic_error("error: BwdTask should not be copied.");
     }
 

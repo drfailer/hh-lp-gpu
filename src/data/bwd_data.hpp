@@ -5,6 +5,7 @@
 template <typename T> struct BwdData {
     NetworkState<T> &states;
     T *error;
+    T learning_rate;
 };
 
 #endif

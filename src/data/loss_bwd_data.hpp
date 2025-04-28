@@ -7,6 +7,7 @@ template <typename T> struct LossBwdData {
     T *input;
     T *ground_truth;
     T *error;
+    T learning_rate;
 };
 
 #endif

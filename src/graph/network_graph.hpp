@@ -2,7 +2,7 @@
 #define GRAPH_NETWORK_GRAPH_H
 #include "../state/pipeline_state_manager.hpp"
 #include "../state/optimizer_state_manager.hpp"
-#include "../task/optimizer/optimizer_task.hpp"
+#include "../task/optimizer_task.hpp"
 #include "../task/fwd_task.hpp"
 #include "../task/bwd_task.hpp"
 #include "../task/loss/loss_task.hpp"
@@ -19,8 +19,9 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     nb_shards_(nb_shards) {
         auto pipeline = std::make_shared<PipelineState>();
         pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline);
+        optimizer_ = std::make_shared<OptimizerState>();
         optimizer_state_ = std::make_shared<OptimizerStateManager>(
-            std::make_shared<OptimizerState>(), pipeline);
+            optimizer_, pipeline);
 
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);
@@ -84,10 +85,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         // there will be dedicated tasks for the fwd and bwd passes, we solve
         // the communcation conflict issue.
 
+        optimizer_->nb_layers(layers_.size());
 
         // connect the fwds tasks
         this->edges(pipeline_state_, fwds_.front());
         for (size_t i = 0; i < fwds_.size() - 1; ++i) {
+            INFO("edges(fwds[" << i << "]), fwds[" << i + 1 << "])");
             this->edges(fwds_[i], fwds_[i + 1]);
         }
         this->edges(fwds_.back(), pipeline_state_);
@@ -95,16 +98,19 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         // connect loss and bwds tasks
         this->edges(pipeline_state_, loss_task_);
         this->edges(loss_task_, bwds_.back());
-        for (size_t i = bwds_.size() - 1; i > 1; --i) {
+        for (size_t i = bwds_.size() - 1; i >= 1; --i) {
+            INFO("edges(bwds[" << i << "]), bwds[" << i - 1 << "])");
             this->edges(bwds_[i], bwds_[i - 1]);
         }
-        this->edges(bwds_.front(), pipeline_state_);
+        // this->edges(bwds_.front(), pipeline_state_);
 
         // connect optimizer
-        this->edges(pipeline_state_, optimizer_state_);
-        this->edges(optimizer_state_, pipeline_state_);
-        this->edges(optimizer_state_, optimizer_task_);
+        for (size_t i = 0; i < bwds_.size(); ++i) {
+            INFO("edges(bwds[" << i << "]), optimizer_task)");
+            this->edges(bwds_[i], optimizer_task_);
+        }
         this->edges(optimizer_task_, optimizer_state_);
+        this->edges(optimizer_state_, pipeline_state_);
     }
 
     void init_network_state(NetworkState<ftype> &state) {
@@ -132,6 +138,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     std::shared_ptr<PipelineStateManager> pipeline_state_ = nullptr;
     std::shared_ptr<LossTask> loss_task_ = nullptr;
     std::shared_ptr<OptimizerTask> optimizer_task_ = nullptr;
+    std::shared_ptr<OptimizerState> optimizer_ = nullptr;
     std::shared_ptr<OptimizerStateManager> optimizer_state_ = nullptr;
     std::vector<std::shared_ptr<FwdTask>> fwds_ = {};
     std::vector<std::shared_ptr<BwdTask>> bwds_ = {};

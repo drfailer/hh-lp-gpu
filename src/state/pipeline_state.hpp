@@ -20,12 +20,11 @@
     state.step = to;
 
 #define PipelineStateIn                                                        \
-    TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>, BwdData<ftype>, \
-        OptData<ftype>
+    TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>, OptData<ftype>
 #define PipelineStateOut                                                       \
     TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
-        LossBwdData<ftype>, BwdData<ftype>, OptData<ftype>
-#define PipelineStateIO 5, PipelineStateIn, PipelineStateOut
+        LossBwdData<ftype>, OptData<ftype>
+#define PipelineStateIO 4, PipelineStateIn, PipelineStateOut
 
 class PipelineState : public hh::AbstractState<PipelineStateIO> {
   public:
@@ -65,11 +64,12 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         if (state.step == Steps::Fwd) {
+            // we might remove this
             from_step_to(Steps::Fwd, Steps::Bwd);
             this->addResult(std::make_shared<LossBwdData<ftype>>(
                 data->states, data->input,
                 train_data.data_set.datas[state.data_set_idx].ground_truth,
-                nullptr));
+                nullptr, train_data.learning_rate));
         } else {
             from_step_to(Steps::Inference, Steps::Finish);
             this->addResult(std::make_shared<InferenceData<ftype>>(
@@ -77,13 +77,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         }
     }
 
-    void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        from_step_to(Steps::Bwd, Steps::Opt);
-
-        this->addResult(std::make_shared<OptData<ftype>>(
-            data->states, train_data.learning_rate));
-    }
-
+    // TODO: remove OptData and put BwdData
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         ++state.data_set_idx;
         if (state.data_set_idx == train_data.data_set.datas.size()) {
@@ -93,12 +87,12 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         }
 
         if (state.epoch < train_data.epochs) {
-            from_step_to(Steps::Opt, Steps::Fwd);
+            from_step_to(Steps::Bwd, Steps::Fwd);
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
                 train_data.data_set.datas[state.data_set_idx].input));
         } else {
-            from_step_to(Steps::Opt, Steps::Finish);
+            from_step_to(Steps::Bwd, Steps::Finish);
             this->addResult(std::make_shared<TrainingData<ftype>>(
                 data->states, train_data.data_set, train_data.learning_rate,
                 train_data.epochs));
