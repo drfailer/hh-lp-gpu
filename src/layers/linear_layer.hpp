@@ -47,7 +47,6 @@ class LinearLayer : public Layer<ftype> {
         // TODO: for now we just copy but there might be more to do later
         CUDA_CHECK(
             memcpy_gpu_to_gpu(state.grads.biases, error, state.dims.nb_nodes));
-        cudaDeviceSynchronize();
 
         // w_grad = err * update_inputT
         CUBLAS_CHECK(matmul(cublas_handle_, false, true, state.dims.nb_nodes,
