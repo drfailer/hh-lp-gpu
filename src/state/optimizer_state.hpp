@@ -5,38 +5,30 @@
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define OptimizerStateIn OptData<ftype>, OptLayerData<ftype>
-#define OptimizerStateOut OptData<ftype>, OptLayerData<ftype>
-#define OptimizerStateIO 2, OptimizerStateIn, OptimizerStateOut
+#define OptimizerStateIn OptLayerData<ftype>
+#define OptimizerStateOut OptData<ftype>
+#define OptimizerStateIO 1, OptimizerStateIn, OptimizerStateOut
 
 class OptimizerState : public hh::AbstractState<OptimizerStateIO> {
   public:
     OptimizerState() : hh::AbstractState<OptimizerStateIO>() {}
 
-    void execute(std::shared_ptr<OptData<ftype>> data) override {
-        size_t nb_layers = data->states.layer_states.size();
-
-        data_ = data;
-        nb_processed_layers_ = 0;
-        for (size_t i = 0; i < nb_layers; ++i) {
-            this->addResult(std::make_shared<OptLayerData<ftype>>(
-                data->states.layer_states[i], data->learning_rate, i));
-        }
-    }
-
-    void execute(std::shared_ptr<OptLayerData<ftype>>) override {
-        assert(data_ != nullptr);
+    void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         ++nb_processed_layers_;
 
-        if (nb_processed_layers_ == data_->states.layer_states.size()) {
+        if (nb_processed_layers_ == nb_layers_) {
             // all the layers have been updated and optimized
-            this->addResult(data_);
+            nb_processed_layers_ = 0;
+            this->addResult(std::make_shared<OptData<ftype>>(
+                data->state, data->learning_rate));
         }
     }
+
+    void nb_layers(size_t n) { this->nb_layers_ = n; }
 
   private:
     size_t nb_processed_layers_ = 0;
-    std::shared_ptr<OptData<ftype>> data_ = nullptr;
+    size_t nb_layers_ = 0;
 };
 
 #endif
