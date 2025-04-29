@@ -11,8 +11,12 @@
 
 class LinearLayer : public Layer<ftype> {
   public:
-    LinearLayer(cublasHandle_t cublas_handle, LayerDimentions const &dims)
-        : Layer(dims), cublas_handle_(cublas_handle) {}
+    LinearLayer(cublasHandle_t cublas_handle, int64_t input_dim,
+                int64_t output_dim)
+        : Layer(LayerDimentions{.nb_nodes = output_dim,
+                                .nb_inputs = input_dim,
+                                .kernel_size = 1}),
+          cublas_handle_(cublas_handle) {}
 
   public:
     /*

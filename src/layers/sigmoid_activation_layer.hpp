@@ -7,8 +7,9 @@
 
 struct SigmoidActivationLayer : Layer<ftype> {
     SigmoidActivationLayer(cudnnHandle_t cudnn_handle,
-                           LayerDimentions const &dims)
-        : Layer(dims), cudnn_handle_(cudnn_handle) {
+                           int64_t size)
+        : Layer(LayerDimentions{.nb_nodes = size, .nb_inputs = size,
+                .kernel_size = 1}), cudnn_handle_(cudnn_handle) {
         build_fwd_graph(dims);
         build_bwd_graph(dims);
     }
