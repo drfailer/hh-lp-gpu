@@ -4,8 +4,8 @@
 #include "graph/network_graph.hpp"
 #include "layers/linear_layer.hpp"
 #include "layers/sigmoid_activation_layer.hpp"
+#include "loss/quadratic_loss.hpp"
 #include "optimizers/sgd_optimizer.hpp"
-#include "task/loss/quadratic_loss_task.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
 #include "tools/utest.hpp"
@@ -703,8 +703,8 @@ UTest(inference) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, nb_inputs));
     cudaDeviceSynchronize();
 
-    graph.set_loss(std::make_shared<QuadraticLossTask>(nb_nodes, CUDNN_HANDLE,
-                                                       CUBLAS_HANDLE));
+    graph.set_loss(std::make_shared<LossTask>(
+        std::make_shared<QuadraticLoss>(CUDNN_HANDLE)));
     graph.set_optimizer(std::make_shared<OptimizerTask>(
         std::make_shared<SGDOptimizer>(CUDNN_HANDLE), 1));
 
@@ -757,8 +757,8 @@ UTest(training) {
 
     urequire(data_set.datas.size() == 60'000);
 
-    graph.set_loss(
-        std::make_shared<QuadraticLossTask>(10, CUDNN_HANDLE, CUBLAS_HANDLE));
+    graph.set_loss(std::make_shared<LossTask>(
+        std::make_shared<QuadraticLoss>(CUDNN_HANDLE)));
     graph.set_optimizer(std::make_shared<OptimizerTask>(
         std::make_shared<SGDOptimizer>(CUDNN_HANDLE), 2));
 
@@ -822,8 +822,8 @@ UTest(evaluate_mnist) {
 
     NetworkGraph graph;
 
-    graph.set_loss(
-        std::make_shared<QuadraticLossTask>(10, CUDNN_HANDLE, CUBLAS_HANDLE));
+    graph.set_loss(std::make_shared<LossTask>(
+        std::make_shared<QuadraticLoss>(CUDNN_HANDLE)));
     graph.set_optimizer(std::make_shared<OptimizerTask>(
         std::make_shared<SGDOptimizer>(CUDNN_HANDLE), 1));
 

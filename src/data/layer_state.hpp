@@ -2,6 +2,7 @@
 #define DATA_LAYER_STATE_H
 #include "../tools/gpu.hpp"
 #include <cstdint>
+#include <vector>
 
 /******************************************************************************/
 /*                                   types                                    */

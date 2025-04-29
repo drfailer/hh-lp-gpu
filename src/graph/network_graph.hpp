@@ -5,7 +5,7 @@
 #include "../task/optimizer_task.hpp"
 #include "../task/fwd_task.hpp"
 #include "../task/bwd_task.hpp"
-#include "../task/loss/loss_task.hpp"
+#include "../task/loss_task.hpp"
 #include "../tools/timer.hpp"
 #include <hedgehog/hedgehog.h>
 
