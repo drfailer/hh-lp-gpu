@@ -15,7 +15,8 @@ find_package(NVTX QUIET)
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
-add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
+# add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
+add_compile_options(-g -O3)
 
 add_executable(hh-lp-gpu
     src/main.cpp
