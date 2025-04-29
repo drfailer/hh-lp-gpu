@@ -1,6 +1,5 @@
 #ifndef STATE_PIPELINE_STATE_H
 #define STATE_PIPELINE_STATE_H
-#include "../data/bwd_data.hpp"
 #include "../data/fwd_data.hpp"
 #include "../data/inference_data.hpp"
 #include "../data/loss_bwd_data.hpp"
@@ -77,13 +76,12 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         }
     }
 
-    // TODO: remove OptData and put BwdData
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         ++state.data_set_idx;
-        if (state.data_set_idx == train_data.data_set.datas.size()) {
+        if (state.data_set_idx >= train_data.data_set.datas.size()) {
+            INFO_GRP("new epoch", INFO_GRP_PIPELINE_STEP);
             state.data_set_idx = 0;
             ++state.epoch;
-            INFO("new epoch");
         }
 
         if (state.epoch < train_data.epochs) {

@@ -3,7 +3,6 @@
 #include "log.h/log.h"
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
-#include <functional>
 #include <iostream>
 
 #define CUDNN_CHECK(expr)                                                      \

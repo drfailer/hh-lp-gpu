@@ -727,8 +727,7 @@ UTest(inference) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<InferenceData<ftype>>(state, input_gpu));
     ftype *output_gpu = hh_get_result<InferenceData<ftype>>(graph)->input;
-    graph.finishPushingData();
-    graph.waitForTermination();
+    graph.terminate();
 
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
     cudaDeviceSynchronize();
@@ -801,15 +800,13 @@ UTest(training) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<TrainingData<ftype>>(
         state, data_set, learning_rate, epochs));
-    graph.finishPushingData();
-    graph.waitForTermination();
+    graph.terminate();
 
-    // TODO: evaluate the model to see if there is a difference
     graph.createDotFile("train.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
 }
 
-void evaluate_mnist() {
+UTest(evaluate_mnist) {
     constexpr ftype learning_rate = 0.01;
     constexpr size_t epochs = 2;
     MNISTLoader loader;
@@ -817,9 +814,6 @@ void evaluate_mnist() {
     DataSet<ftype> training_set =
         loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
                        "../data/mnist/train-images-idx3-ubyte");
-    // DataSet<ftype> training_set =
-    //     loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
-    //                    "../data/mnist/t10k-images-idx3-ubyte");
     defer(destroy_data_set(training_set));
     DataSet<ftype> testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
@@ -869,19 +863,16 @@ void evaluate_mnist() {
             ++errors;
         }
     }
-    std::cout << "accuracy: " << (ftype)success / (ftype)testing_set.datas.size()
-              << std::endl;
+    ftype accuracy_start = (ftype)success / (ftype)testing_set.datas.size();
+    std::cout << "accuracy: " << accuracy_start << std::endl;
     std::cout << "success: " << success << ", errors: " << errors << std::endl;
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     graph.pushData(std::make_shared<TrainingData<ftype>>(
         network, training_set, learning_rate, epochs));
-    auto training_result = hh_get_result<TrainingData<ftype>>(graph);
+    (void)hh_get_result<TrainingData<ftype>>(graph);
     graph.cleanGraph();
-
-    DBG(training_result->epochs);
-    INFO("----------");
 
     success = 0;
     errors = 0;
@@ -902,9 +893,12 @@ void evaluate_mnist() {
         }
     }
     graph.terminate();
-    std::cout << "accuracy: " << (ftype)success / (ftype)testing_set.datas.size()
-              << std::endl;
+
+    ftype accuracy_end = (ftype)success / (ftype)testing_set.datas.size();
+    std::cout << "accuracy: " << accuracy_end << std::endl;
     std::cout << "success: " << success << ", errors: " << errors << std::endl;
+
+    uassert(accuracy_end > 10 * accuracy_start);
 
     graph.createDotFile("train_mnist.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
@@ -916,20 +910,22 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(cdnn_operations);
-    // run_test(matvecmul_n);
-    // run_test(matvecmul_t);
-    // run_test(matmul_n_n);
-    // run_test(matmul_t_n);
-    // run_test(matmul_n_t);
-    // run_test(matmul_t_t);
+    run_test(cdnn_operations);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
 
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
-    // run_test(inference);
-    // run_test(training);
-    evaluate_mnist();
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
+
+    run_test(inference);
+    run_test(training);
+
+    run_test(evaluate_mnist);
     return 0;
 }

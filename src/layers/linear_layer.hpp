@@ -22,7 +22,8 @@ class LinearLayer : public Layer<ftype> {
     void init(LayerState<ftype> &state) override {
         std::mt19937 mt(0);
         std::uniform_real_distribution<> dist(-0.5, 0.5);
-        std::vector<ftype> weights_host(this->dims.nb_inputs * this->dims.nb_nodes, 0);
+        std::vector<ftype> weights_host(
+            this->dims.nb_inputs * this->dims.nb_nodes, 0);
         std::vector<ftype> biases_host(this->dims.nb_nodes, 0);
 
         for (size_t i = 0; i < weights_host.size(); ++i) {
@@ -31,7 +32,6 @@ class LinearLayer : public Layer<ftype> {
         for (size_t i = 0; i < biases_host.size(); ++i) {
             biases_host[i] = dist(mt);
         }
-        DBG(biases_host);
 
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
         auto params = parameters_create_gpu<ftype>(this->dims);
@@ -39,9 +39,9 @@ class LinearLayer : public Layer<ftype> {
         state = layer_state_create_gpu(this->dims, params, grads);
 
         CUDA_CHECK(memcpy_host_to_gpu(state.params.weights, weights_host.data(),
-                    weights_host.size()));
+                                      weights_host.size()));
         CUDA_CHECK(memcpy_host_to_gpu(state.params.biases, biases_host.data(),
-                    biases_host.size()));
+                                      biases_host.size()));
         cudaDeviceSynchronize();
     }
 
@@ -61,23 +61,17 @@ class LinearLayer : public Layer<ftype> {
 
     ftype *bwd(LayerState<ftype> &state, ftype *error) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
-        // Backward:
-        // - grads_b = err, grads_w = err * update_inputT, err = err * w
-
-        // TODO: for now we just copy but there might be more to do later
+        // grads_b = biases
         CUDA_CHECK(
             memcpy_gpu_to_gpu(state.grads.biases, error, state.dims.nb_nodes));
-
         // w_grad = err * update_inputT
         CUBLAS_CHECK(matmul(cublas_handle_, false, true, state.dims.nb_nodes,
                             state.dims.nb_inputs, 1, 1.f, error, state.input,
                             0.f, state.grads.weights));
-
         // output_err = errT * weights
         CUBLAS_CHECK(matmul(cublas_handle_, true, false, 1,
                             state.dims.nb_inputs, state.dims.nb_nodes, 1.f,
                             error, state.params.weights, 0.f, state.error));
-
         return state.error;
     }
 

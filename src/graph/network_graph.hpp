@@ -51,46 +51,11 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
     void build() {
-        // there are a lot of communcations issues
-        //
-        // we need a way to control sender and receivers more clearly. Perhaps
-        // having a copy of each task is a good idea (one copy serving for the
-        // fwd pass and the other for the bwd pass).
-        //
-        // It will be easire if the layers are not task but just functors. In
-        // this case we should have generic FwdTask and BwdTask that will be
-        // create here when a layer is added. These classes will hold the
-        // functors and use theme for the fwd and bwd passes. Each functor
-        // should have a Fwd and Bwd functions that return the appropriate data
-        // to the task.
-        //
-        // The end user will not manage HH communications.
-        //
-        // If we do this, there might be some areas where we could optimize the
-        // communications. For instance, there is no need for any communications
-        // durint the fwd and bwd passes.
-        //
-        // Well this removes the possiblity of using HH for transfering data
-        // between nodes inside the network. In this case we want shards to be
-        // encapsulated in a task that will run on a given devise. This will not
-        // be completely opaque to the user since it will be required to declare
-        // the shards by hand (which is greate).
-        //
-        // Final thought:
-        // Use functors for layers and create generic tasks that will call the
-        // functors functions for the fwd and bwd passes.
-        // This generic tasks will be responsible for managing a shared
-        // (collection of layers).
-        // The result is less classes so less communications. Moreover, since
-        // there will be dedicated tasks for the fwd and bwd passes, we solve
-        // the communcation conflict issue.
-
         optimizer_->nb_layers(layers_.size());
 
         // connect the fwds tasks
         this->edges(pipeline_state_, fwds_.front());
         for (size_t i = 0; i < fwds_.size() - 1; ++i) {
-            INFO("edges(fwds[" << i << "]), fwds[" << i + 1 << "])");
             this->edges(fwds_[i], fwds_[i + 1]);
         }
         this->edges(fwds_.back(), pipeline_state_);
@@ -99,14 +64,11 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         this->edges(pipeline_state_, loss_task_);
         this->edges(loss_task_, bwds_.back());
         for (size_t i = bwds_.size() - 1; i >= 1; --i) {
-            INFO("edges(bwds[" << i << "]), bwds[" << i - 1 << "])");
             this->edges(bwds_[i], bwds_[i - 1]);
         }
-        // this->edges(bwds_.front(), pipeline_state_);
 
         // connect optimizer
         for (size_t i = 0; i < bwds_.size(); ++i) {
-            INFO("edges(bwds[" << i << "]), optimizer_task)");
             this->edges(bwds_[i], optimizer_task_);
         }
         this->edges(optimizer_task_, optimizer_state_);
