@@ -126,6 +126,17 @@ void display_matrix(std::string const &name, ftype *matrix, int64_t rows,
     }
 }
 
+int mnist_get_label(ftype *arr) {
+    size_t imax = 0;
+
+    for (size_t i = 1; i < 10; ++i) {
+        if (arr[i] > arr[imax]) {
+            imax = i;
+        }
+    }
+    return imax;
+}
+
 UTest(cdnn_operations) {
     constexpr int64_t m = 3;
     constexpr int64_t n = 3;
@@ -716,6 +727,7 @@ UTest(inference) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<InferenceData<ftype>>(state, input_gpu));
     ftype *output_gpu = hh_get_result<InferenceData<ftype>>(graph)->input;
+    graph.finishPushingData();
     graph.waitForTermination();
 
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
@@ -752,29 +764,35 @@ UTest(training) {
         std::make_shared<SGDOptimizer>(CUDNN_HANDLE), 2));
 
     graph.add_layer(std::make_shared<LinearLayer>(
-        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = 32,
-                                       .nb_inputs = nb_inputs,
-                                       .kernel_size = 1}), 0);
+                        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = 32,
+                                                       .nb_inputs = nb_inputs,
+                                                       .kernel_size = 1}),
+                    0);
+    graph.add_layer(
+        std::make_shared<SigmoidActivationLayer>(
+            CUDNN_HANDLE,
+            LayerDimentions{.nb_nodes = 32, .nb_inputs = 32, .kernel_size = 1}),
+        0);
+    graph.add_layer(
+        std::make_shared<LinearLayer>(
+            CUBLAS_HANDLE,
+            LayerDimentions{.nb_nodes = 32, .nb_inputs = 32, .kernel_size = 1}),
+        1);
+    graph.add_layer(
+        std::make_shared<SigmoidActivationLayer>(
+            CUDNN_HANDLE,
+            LayerDimentions{.nb_nodes = 32, .nb_inputs = 32, .kernel_size = 1}),
+        1);
+    graph.add_layer(
+        std::make_shared<LinearLayer>(
+            CUBLAS_HANDLE,
+            LayerDimentions{.nb_nodes = 10, .nb_inputs = 32, .kernel_size = 1}),
+        2);
     graph.add_layer(std::make_shared<SigmoidActivationLayer>(
-        CUDNN_HANDLE, LayerDimentions{.nb_nodes = 32,
-                                      .nb_inputs = 32,
-                                      .kernel_size = 1}), 0);
-    graph.add_layer(std::make_shared<LinearLayer>(
-        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = 32,
-                                       .nb_inputs = 32,
-                                       .kernel_size = 1}), 1);
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(
-        CUDNN_HANDLE, LayerDimentions{.nb_nodes = 32,
-                                      .nb_inputs = 32,
-                                      .kernel_size = 1}), 1);
-    graph.add_layer(std::make_shared<LinearLayer>(
-        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = 10,
-                                       .nb_inputs = 32,
-                                       .kernel_size = 1}), 2);
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(
-        CUDNN_HANDLE, LayerDimentions{.nb_nodes = nb_nodes,
-                                      .nb_inputs = nb_nodes,
-                                      .kernel_size = 1}), 2);
+                        CUDNN_HANDLE, LayerDimentions{.nb_nodes = nb_nodes,
+                                                      .nb_inputs = nb_nodes,
+                                                      .kernel_size = 1}),
+                    2);
     graph.build();
 
     graph.init_network_state(state);
@@ -783,10 +801,112 @@ UTest(training) {
     graph.executeGraph(true);
     graph.pushData(std::make_shared<TrainingData<ftype>>(
         state, data_set, learning_rate, epochs));
+    graph.finishPushingData();
     graph.waitForTermination();
 
     // TODO: evaluate the model to see if there is a difference
     graph.createDotFile("train.dot", hh::ColorScheme::EXECUTION,
+                        hh::StructureOptions::QUEUE);
+}
+
+void evaluate_mnist() {
+    constexpr ftype learning_rate = 0.01;
+    constexpr size_t epochs = 2;
+    MNISTLoader loader;
+
+    DataSet<ftype> training_set =
+        loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
+                       "../data/mnist/train-images-idx3-ubyte");
+    // DataSet<ftype> training_set =
+    //     loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
+    //                    "../data/mnist/t10k-images-idx3-ubyte");
+    defer(destroy_data_set(training_set));
+    DataSet<ftype> testing_set =
+        loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
+                       "../data/mnist/t10k-images-idx3-ubyte");
+    defer(destroy_data_set(testing_set));
+
+    NetworkGraph graph;
+
+    graph.set_loss(
+        std::make_shared<QuadraticLossTask>(10, CUDNN_HANDLE, CUBLAS_HANDLE));
+    graph.set_optimizer(std::make_shared<OptimizerTask>(
+        std::make_shared<SGDOptimizer>(CUDNN_HANDLE), 1));
+
+    graph.add_layer(std::make_shared<LinearLayer>(
+        CUBLAS_HANDLE, LayerDimentions{.nb_nodes = 10,
+                                       .nb_inputs = 28 * 28,
+                                       .kernel_size = 1}));
+    graph.add_layer(std::make_shared<SigmoidActivationLayer>(
+        CUDNN_HANDLE,
+        LayerDimentions{.nb_nodes = 10, .nb_inputs = 10, .kernel_size = 1}));
+
+    graph.build();
+
+    NetworkState<ftype> network;
+    graph.init_network_state(network);
+    defer(graph.destroy_network_state(network));
+
+    graph.executeGraph(true);
+
+    INFO("Inference before training...");
+
+    std::vector<ftype> expected(10), found(10);
+    size_t success = 0, errors = 0;
+    for (auto data : testing_set.datas) {
+        graph.pushData(
+            std::make_shared<InferenceData<ftype>>(network, data.input));
+        auto *output = hh_get_result<InferenceData<ftype>>(graph)->input;
+        graph.cleanGraph();
+        CUDA_CHECK(memcpy_gpu_to_host(expected.data(), data.ground_truth, 10));
+        CUDA_CHECK(memcpy_gpu_to_host(found.data(), output, 10));
+        int expected_label = mnist_get_label(expected.data());
+        int found_label = mnist_get_label(found.data());
+
+        if (found_label == expected_label) {
+            ++success;
+        } else {
+            ++errors;
+        }
+    }
+    std::cout << "accuracy: " << (ftype)success / (ftype)testing_set.datas.size()
+              << std::endl;
+    std::cout << "success: " << success << ", errors: " << errors << std::endl;
+
+    INFO("start training (learning_rate = " << learning_rate
+                                            << ", epochs = " << epochs << ")");
+    graph.pushData(std::make_shared<TrainingData<ftype>>(
+        network, training_set, learning_rate, epochs));
+    auto training_result = hh_get_result<TrainingData<ftype>>(graph);
+    graph.cleanGraph();
+
+    DBG(training_result->epochs);
+    INFO("----------");
+
+    success = 0;
+    errors = 0;
+    for (auto data : testing_set.datas) {
+        graph.pushData(
+            std::make_shared<InferenceData<ftype>>(network, data.input));
+        auto *output = hh_get_result<InferenceData<ftype>>(graph)->input;
+        graph.cleanGraph();
+        CUDA_CHECK(memcpy_gpu_to_host(expected.data(), data.ground_truth, 10));
+        CUDA_CHECK(memcpy_gpu_to_host(found.data(), output, 10));
+        int expected_label = mnist_get_label(expected.data());
+        int found_label = mnist_get_label(found.data());
+
+        if (found_label == expected_label) {
+            ++success;
+        } else {
+            ++errors;
+        }
+    }
+    graph.terminate();
+    std::cout << "accuracy: " << (ftype)success / (ftype)testing_set.datas.size()
+              << std::endl;
+    std::cout << "success: " << success << ", errors: " << errors << std::endl;
+
+    graph.createDotFile("train_mnist.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
 }
 
@@ -809,6 +929,7 @@ int main(int, char **) {
     // run_test(sigmoid_activation_fwd);
     // run_test(sigmoid_activation_bwd);
     // run_test(inference);
-    run_test(training);
+    // run_test(training);
+    evaluate_mnist();
     return 0;
 }
