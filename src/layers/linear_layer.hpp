@@ -7,6 +7,7 @@
 #include <cudnn.h>
 #include <cudnn_frontend/graph_interface.h>
 #include <cudnn_graph.h>
+#include <random>
 
 class LinearLayer : public Layer<ftype> {
   public:
@@ -19,10 +20,29 @@ class LinearLayer : public Layer<ftype> {
      * pass, parameters and gradiants).
      */
     void init(LayerState<ftype> &state) override {
+        std::mt19937 mt(0);
+        std::uniform_real_distribution<> dist(-0.5, 0.5);
+        std::vector<ftype> weights_host(this->dims.nb_inputs * this->dims.nb_nodes, 0);
+        std::vector<ftype> biases_host(this->dims.nb_nodes, 0);
+
+        for (size_t i = 0; i < weights_host.size(); ++i) {
+            weights_host[i] = dist(mt);
+        }
+        for (size_t i = 0; i < biases_host.size(); ++i) {
+            biases_host[i] = dist(mt);
+        }
+        DBG(biases_host);
+
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
         auto params = parameters_create_gpu<ftype>(this->dims);
         auto grads = parameters_create_gpu<ftype>(this->dims);
         state = layer_state_create_gpu(this->dims, params, grads);
+
+        CUDA_CHECK(memcpy_host_to_gpu(state.params.weights, weights_host.data(),
+                    weights_host.size()));
+        CUDA_CHECK(memcpy_host_to_gpu(state.params.biases, biases_host.data(),
+                    biases_host.size()));
+        cudaDeviceSynchronize();
     }
 
     ftype *fwd(LayerState<ftype> &state, ftype *input) override {
