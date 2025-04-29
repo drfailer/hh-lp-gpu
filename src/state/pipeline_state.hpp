@@ -71,7 +71,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
                 train_data.data_set.datas[state.data_set_idx].ground_truth,
                 nullptr, train_data.learning_rate));
         } else {
-            from_step_to(Steps::Inference, Steps::Finish);
+            from_step_to(Steps::Inference, Steps::Idle);
             this->addResult(std::make_shared<InferenceData<ftype>>(
                 data->states, data->input));
         }
@@ -92,7 +92,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
                 data->states,
                 train_data.data_set.datas[state.data_set_idx].input));
         } else {
-            from_step_to(Steps::Bwd, Steps::Finish);
+            from_step_to(Steps::Bwd, Steps::Idle);
             this->addResult(std::make_shared<TrainingData<ftype>>(
                 data->states, train_data.data_set, train_data.learning_rate,
                 train_data.epochs));
@@ -101,6 +101,15 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
   public:
     bool isDone() const { return state.step == Steps::Finish; }
+
+    void clean() override {
+        state.step = Steps::Idle;
+        state.epoch = 0;
+        state.data_set_idx = 0;
+        train_data = {0};
+    }
+
+    void terminate() { state.step = Steps::Finish; }
 
   private:
     struct {

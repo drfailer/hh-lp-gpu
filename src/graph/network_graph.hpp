@@ -17,11 +17,11 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
     NetworkGraph(size_t nb_shards = 1) : hh::Graph<NetworkGraphIO>(),
     nb_shards_(nb_shards) {
-        auto pipeline = std::make_shared<PipelineState>();
-        pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline);
+        pipeline_ = std::make_shared<PipelineState>();
+        pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline_);
         optimizer_ = std::make_shared<OptimizerState>();
         optimizer_state_ = std::make_shared<OptimizerStateManager>(
-            optimizer_, pipeline);
+            optimizer_, pipeline_);
 
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);
@@ -113,6 +113,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         this->edges(optimizer_state_, pipeline_state_);
     }
 
+    void terminate() {
+        pipeline_->terminate();
+        this->finishPushingData();
+        this->waitForTermination();
+    }
+
     void init_network_state(NetworkState<ftype> &state) {
         timer_start(graph_init);
         state.layer_states = std::vector<LayerState<ftype>>(layers_.size());
@@ -135,6 +141,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   private:
+    std::shared_ptr<PipelineState> pipeline_ = nullptr;
     std::shared_ptr<PipelineStateManager> pipeline_state_ = nullptr;
     std::shared_ptr<LossTask> loss_task_ = nullptr;
     std::shared_ptr<OptimizerTask> optimizer_task_ = nullptr;
