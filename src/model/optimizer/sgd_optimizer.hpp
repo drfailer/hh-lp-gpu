@@ -1,7 +1,7 @@
-#ifndef OPTIMIZERS_SGD_OPTIMIZER_H
-#define OPTIMIZERS_SGD_OPTIMIZER_H
-#include "../data/opt_layer_data.hpp"
-#include "../types.hpp"
+#ifndef MODEL_OPTIMIZER_SGD_OPTIMIZER_H
+#define MODEL_OPTIMIZER_SGD_OPTIMIZER_H
+#include "../../data/opt_layer_data.hpp"
+#include "../../types.hpp"
 #include "optimizer.hpp"
 
 class SGDOptimizer : public Optimizer<ftype> {

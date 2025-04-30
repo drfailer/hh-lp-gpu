@@ -2,7 +2,7 @@
 #define TASK_BWD_TASK_H
 #include "../data/bwd_data.hpp"
 #include "../data/opt_layer_data.hpp"
-#include "../layers/layer.hpp"
+#include "../model/layer/layer.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>

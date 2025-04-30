@@ -3,7 +3,7 @@
 #include "../data/bwd_data.hpp"
 #include "../data/loss_bwd_data.hpp"
 #include "../data/loss_fwd_data.hpp"
-#include "../loss/loss.hpp"
+#include "../model/loss/loss.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 

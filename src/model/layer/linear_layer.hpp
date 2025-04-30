@@ -1,7 +1,7 @@
 #ifndef LAYERS_LINEAR_LAYER_H
 #define LAYERS_LINEAR_LAYER_H
-#include "../tools/gpu.hpp"
-#include "../types.hpp"
+#include "../../tools/gpu.hpp"
+#include "../../types.hpp"
 #include "layer.hpp"
 #include "log.h/log.h"
 #include <cudnn.h>

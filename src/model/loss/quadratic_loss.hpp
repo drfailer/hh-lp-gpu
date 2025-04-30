@@ -1,9 +1,9 @@
-#ifndef LOSS_QUADRATIC_LOSS_H
-#define LOSS_QUADRATIC_LOSS_H
-#include "../types.hpp"
+#ifndef MODEL_LOSS_QUADRATIC_LOSS_H
+#define MODEL_LOSS_QUADRATIC_LOSS_H
+#include "../../types.hpp"
 #include "loss.hpp"
 #include <log.h/log.h>
-#include "../tools/gpu.hpp"
+#include "../../tools/gpu.hpp"
 
 class QuadraticLoss : public Loss<ftype> {
   public:

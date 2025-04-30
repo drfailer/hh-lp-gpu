@@ -1,6 +1,6 @@
-#ifndef LAYERS_LAYER_H
-#define LAYERS_LAYER_H
-#include "../data/layer_state.hpp"
+#ifndef MODEL_LAYER_LAYER_H
+#define MODEL_LAYER_LAYER_H
+#include "../../data/layer_state.hpp"
 
 template <typename T>
 struct Layer {

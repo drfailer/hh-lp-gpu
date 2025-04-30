@@ -1,5 +1,5 @@
-#ifndef LOSS_LOSS_H
-#define LOSS_LOSS_H
+#ifndef MODEL_LOSS_LOSS_H
+#define MODEL_LOSS_LOSS_H
 #include <cstdint>
 
 template <typename T> struct Loss {

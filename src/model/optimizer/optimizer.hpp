@@ -1,6 +1,6 @@
-#ifndef OPTIMIZERS_OPTIMIZER_H
-#define OPTIMIZERS_OPTIMIZER_H
-#include "../data/layer_state.hpp"
+#ifndef MODEL_OPTIMIZER_OPTIMIZER_H
+#define MODEL_OPTIMIZER_OPTIMIZER_H
+#include "../../data/layer_state.hpp"
 #include <memory>
 
 template <typename T>

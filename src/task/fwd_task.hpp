@@ -1,7 +1,7 @@
 #ifndef TASK_FWD_TASK_H
 #define TASK_FWD_TASK_H
 #include "../data/fwd_data.hpp"
-#include "../layers/layer.hpp"
+#include "../model/layer/layer.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>

@@ -1,7 +1,7 @@
-#ifndef LAYERS_SIGMOID_ACTIVATION_LAYER_H
-#define LAYERS_SIGMOID_ACTIVATION_LAYER_H
-#include "../tools/gpu.hpp"
-#include "../types.hpp"
+#ifndef MODEL_LAYER_SIGMOID_ACTIVATION_LAYER_H
+#define MODEL_LAYER_SIGMOID_ACTIVATION_LAYER_H
+#include "../../tools/gpu.hpp"
+#include "../../types.hpp"
 #include "layer.hpp"
 #include <log.h/log.h>
 

@@ -1,7 +1,7 @@
 #ifndef TASK_OPTIMIZER_OPTIMIZER_TASK_H
 #define TASK_OPTIMIZER_OPTIMIZER_TASK_H
 #include "../data/opt_layer_data.hpp"
-#include "../optimizers/optimizer.hpp"
+#include "../model/optimizer/optimizer.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
