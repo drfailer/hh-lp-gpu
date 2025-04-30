@@ -106,7 +106,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
     void init_network_state(NetworkState<ftype> &state) {
         timer_start(graph_init);
-        state.layer_states = std::vector<LayerState<ftype>>(layers_.size());
+        state.layers = std::vector<LayerState<ftype>>(layers_.size());
         for (auto &layer : layers_) {
             layer->init(state);
         }
@@ -117,12 +117,10 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
     void destroy_network_state(NetworkState<ftype> &state) {
-        for (auto &layer_state : state.layer_states) {
-            parameters_destroy_gpu(layer_state.params);
-            parameters_destroy_gpu(layer_state.grads);
-            layer_state_destroy_gpu(layer_state);
+        for (auto &layer_state : state.layers) {
+            destroy_layer_state(layer_state);
         }
-        cudaFree(state.loss_output);
+        cudaFree(state.loss);
     }
 
   public:

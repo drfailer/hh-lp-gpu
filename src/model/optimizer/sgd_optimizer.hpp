@@ -1,8 +1,9 @@
 #ifndef MODEL_OPTIMIZER_SGD_OPTIMIZER_H
 #define MODEL_OPTIMIZER_SGD_OPTIMIZER_H
-#include "../../data/opt_layer_data.hpp"
+#include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "optimizer.hpp"
+#include <log.h/log.h>
 
 class SGDOptimizer : public Optimizer<ftype> {
   public:
@@ -29,13 +30,13 @@ class SGDOptimizer : public Optimizer<ftype> {
             return;
         }
         auto dims = state.dims;
-        update_graphs_.update_weights = create_update_graph(
-            {1, dims.nb_nodes, dims.nb_inputs},
-            {dims.nb_nodes * dims.nb_inputs, dims.nb_inputs, 1});
+        update_graphs_.update_weights =
+            create_update_graph({1, dims.outputs, dims.inputs},
+                                {dims.outputs * dims.inputs, dims.inputs, 1});
 
         if (has_biases(state)) {
-            update_graphs_.update_biases = create_update_graph(
-                {1, dims.nb_nodes, 1}, {dims.nb_nodes, 1, 1});
+            update_graphs_.update_biases =
+                create_update_graph({1, dims.outputs, 1}, {dims.outputs, 1, 1});
         }
     }
 
@@ -47,13 +48,13 @@ class SGDOptimizer : public Optimizer<ftype> {
         }
 
         if (update_graphs_.update_weights) {
-            optimize_params(update_graphs_.update_weights, state.params.weights,
-                            state.grads.weights, learning_rate);
+            optimize_params(update_graphs_.update_weights, state.weights,
+                            state.gradiants.weights, learning_rate);
         }
 
         if (update_graphs_.update_biases) {
-            optimize_params(update_graphs_.update_biases, state.params.biases,
-                            state.grads.biases, learning_rate);
+            optimize_params(update_graphs_.update_biases, state.biases,
+                            state.gradiants.biases, learning_rate);
         }
     }
 
@@ -135,12 +136,11 @@ class SGDOptimizer : public Optimizer<ftype> {
 
   public:
     bool has_params(LayerState<ftype> const &state) {
-        return state.params.weights != nullptr &&
-               state.params.biases != nullptr;
+        return state.weights != nullptr && state.biases != nullptr;
     }
 
     bool has_biases(LayerState<ftype> const &state) {
-        return state.params.biases != nullptr && state.grads.biases != nullptr;
+        return state.biases != nullptr && state.gradiants.biases != nullptr;
     }
 
   private:

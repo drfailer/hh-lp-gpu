@@ -6,10 +6,9 @@
 #include <log.h/log.h>
 
 struct SigmoidActivationLayer : Layer<ftype> {
-    SigmoidActivationLayer(cudnnHandle_t cudnn_handle,
-                           int64_t size)
-        : Layer(LayerDimentions{.nb_nodes = size, .nb_inputs = size,
-                .kernel_size = 1}), cudnn_handle_(cudnn_handle) {
+    SigmoidActivationLayer(cudnnHandle_t cudnn_handle, int64_t size)
+        : Layer(LayerDims{.inputs = size, .outputs = size}),
+          cudnn_handle_(cudnn_handle) {
         build_fwd_graph(dims);
         build_bwd_graph(dims);
     }
@@ -25,7 +24,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
      * there no need to allocate parameters and gradiants.
      */
     void init(LayerState<ftype> &state) override {
-        state = layer_state_create_gpu<ftype>(this->dims, {}, {});
+        state = create_layer_state<ftype>(this->dims, false, false);
     }
 
     ftype *fwd(LayerState<ftype> &state, ftype *input) override {
@@ -44,15 +43,15 @@ struct SigmoidActivationLayer : Layer<ftype> {
         return state.output;
     }
 
-    void build_fwd_graph(LayerDimentions const &dims) {
+    void build_fwd_graph(LayerDims const &dims) {
         namespace fe = cudnn_frontend;
         auto &graph = fwd_.graph;
 
         fwd_.input_tensor =
             fwd_.graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("input")
-                                  .set_dim({1, dims.nb_inputs, 1})
-                                  .set_stride({dims.nb_inputs, 1, 1})
+                                  .set_dim({1, dims.inputs, 1})
+                                  .set_stride({dims.inputs, 1, 1})
                                   .set_data_type(fe::DataType_t::FLOAT));
         fwd_.output_tensor = fwd_.graph.pointwise(
             fwd_.input_tensor,
@@ -89,21 +88,21 @@ struct SigmoidActivationLayer : Layer<ftype> {
         return state.error;
     }
 
-    void build_bwd_graph(LayerDimentions const &dims) {
+    void build_bwd_graph(LayerDims const &dims) {
         namespace fe = cudnn_frontend;
         auto &graph = bwd_.graph;
 
         bwd_.err_tensor =
             bwd_.graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("input error")
-                                  .set_dim({1, dims.nb_inputs, 1})
-                                  .set_stride({dims.nb_inputs, 1, 1})
+                                  .set_dim({1, dims.inputs, 1})
+                                  .set_stride({dims.inputs, 1, 1})
                                   .set_data_type(fe::DataType_t::FLOAT));
         bwd_.fwd_input_tensor =
             bwd_.graph.tensor(fe::graph::Tensor_attributes()
                                   .set_name("fwd input")
-                                  .set_dim({1, dims.nb_inputs, 1})
-                                  .set_stride({dims.nb_inputs, 1, 1})
+                                  .set_dim({1, dims.inputs, 1})
+                                  .set_stride({dims.inputs, 1, 1})
                                   .set_data_type(fe::DataType_t::FLOAT));
         bwd_.output_tensor = bwd_.graph.pointwise(
             bwd_.err_tensor, bwd_.fwd_input_tensor,

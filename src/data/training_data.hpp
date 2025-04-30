@@ -1,7 +1,7 @@
 #ifndef DATA_TRAINING_DATA_H
 #define DATA_TRAINING_DATA_H
 #include "data_set.hpp"
-#include "layer_state.hpp"
+#include "../model/data/network_state.hpp"
 
 template <typename T>
 struct TrainingData {

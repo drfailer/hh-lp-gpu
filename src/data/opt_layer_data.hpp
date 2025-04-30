@@ -1,6 +1,6 @@
 #ifndef DATA_OPT_LAYER_DATA_H
 #define DATA_OPT_LAYER_DATA_H
-#include "layer_state.hpp"
+#include "../model/data/network_state.hpp"
 
 template <typename T> struct OptLayerData {
     NetworkState<T> &state;

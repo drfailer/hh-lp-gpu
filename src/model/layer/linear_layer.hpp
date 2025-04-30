@@ -13,9 +13,7 @@ class LinearLayer : public Layer<ftype> {
   public:
     LinearLayer(cublasHandle_t cublas_handle, int64_t input_dim,
                 int64_t output_dim)
-        : Layer(LayerDimentions{.nb_nodes = output_dim,
-                                .nb_inputs = input_dim,
-                                .kernel_size = 1}),
+        : Layer(LayerDims{.inputs = input_dim, .outputs = output_dim}),
           cublas_handle_(cublas_handle) {}
 
   public:
@@ -26,9 +24,9 @@ class LinearLayer : public Layer<ftype> {
     void init(LayerState<ftype> &state) override {
         std::mt19937 mt(0);
         std::uniform_real_distribution<> dist(-0.5, 0.5);
-        std::vector<ftype> weights_host(
-            this->dims.nb_inputs * this->dims.nb_nodes, 0);
-        std::vector<ftype> biases_host(this->dims.nb_nodes, 0);
+        std::vector<ftype> weights_host(this->dims.inputs * this->dims.outputs,
+                                        0);
+        std::vector<ftype> biases_host(this->dims.outputs, 0);
 
         for (size_t i = 0; i < weights_host.size(); ++i) {
             weights_host[i] = dist(mt);
@@ -38,13 +36,10 @@ class LinearLayer : public Layer<ftype> {
         }
 
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
-        auto params = parameters_create_gpu<ftype>(this->dims);
-        auto grads = parameters_create_gpu<ftype>(this->dims);
-        state = layer_state_create_gpu(this->dims, params, grads);
-
-        CUDA_CHECK(memcpy_host_to_gpu(state.params.weights, weights_host.data(),
+        state = create_layer_state<ftype>(this->dims, true, true);
+        CUDA_CHECK(memcpy_host_to_gpu(state.weights, weights_host.data(),
                                       weights_host.size()));
-        CUDA_CHECK(memcpy_host_to_gpu(state.params.biases, biases_host.data(),
+        CUDA_CHECK(memcpy_host_to_gpu(state.biases, biases_host.data(),
                                       biases_host.size()));
         cudaDeviceSynchronize();
     }
@@ -55,10 +50,10 @@ class LinearLayer : public Layer<ftype> {
         // save input (used for the backwards pass)
         state.input = input;
 
-        CUDA_CHECK(memcpy_gpu_to_gpu(state.output, state.params.biases,
-                                     state.dims.nb_nodes));
-        CUBLAS_CHECK(matvecmul(cublas_handle_, false, state.dims.nb_nodes,
-                               state.dims.nb_inputs, 1.f, state.params.weights,
+        CUDA_CHECK(
+            memcpy_gpu_to_gpu(state.output, state.biases, state.dims.outputs));
+        CUBLAS_CHECK(matvecmul(cublas_handle_, false, state.dims.outputs,
+                               state.dims.inputs, 1.f, state.weights,
                                state.input, 1.f, state.output));
         return state.output;
     }
@@ -66,16 +61,16 @@ class LinearLayer : public Layer<ftype> {
     ftype *bwd(LayerState<ftype> &state, ftype *error) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
         // grads_b = biases
-        CUDA_CHECK(
-            memcpy_gpu_to_gpu(state.grads.biases, error, state.dims.nb_nodes));
+        CUDA_CHECK(memcpy_gpu_to_gpu(state.gradiants.biases, error,
+                                     state.dims.outputs));
         // w_grad = err * update_inputT
-        CUBLAS_CHECK(matmul(cublas_handle_, false, true, state.dims.nb_nodes,
-                            state.dims.nb_inputs, 1, 1.f, error, state.input,
-                            0.f, state.grads.weights));
+        CUBLAS_CHECK(matmul(cublas_handle_, false, true, state.dims.outputs,
+                            state.dims.inputs, 1, 1.f, error, state.input, 0.f,
+                            state.gradiants.weights));
         // output_err = errT * weights
-        CUBLAS_CHECK(matmul(cublas_handle_, true, false, 1,
-                            state.dims.nb_inputs, state.dims.nb_nodes, 1.f,
-                            error, state.params.weights, 0.f, state.error));
+        CUBLAS_CHECK(matmul(cublas_handle_, true, false, 1, state.dims.inputs,
+                            state.dims.outputs, 1.f, error,
+                            state.weights, 0.f, state.error));
         return state.error;
     }
 

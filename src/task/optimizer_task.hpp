@@ -25,16 +25,16 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
 
     void init(NetworkState<ftype> const &state) {
         optimizers_ = std::make_shared<OptimizerList>();
-        for (size_t i = 0; i < state.layer_states.size(); ++i) {
+        for (size_t i = 0; i < state.layers.size(); ++i) {
             auto optimizer_layer_i = optimizer_->copy();
-            optimizer_layer_i->init(state.layer_states[i]);
+            optimizer_layer_i->init(state.layers[i]);
             optimizers_->push_back(std::move(optimizer_layer_i));
         }
     }
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         optimizers_->operator[](data->idx)->optimize(
-            data->state.layer_states[data->idx], data->learning_rate);
+            data->state.layers[data->idx], data->learning_rate);
         this->addResult(data);
     }
 
