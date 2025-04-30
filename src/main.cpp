@@ -702,10 +702,8 @@ UTest(inference) {
     graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
     graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
 
-    graph.add_layer(
-        std::make_shared<LinearLayer>(CUBLAS_HANDLE, nb_inputs, nb_nodes));
-    graph.add_layer(
-        std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes));
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, nb_inputs, nb_nodes);
+    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes);
     graph.build();
 
     graph.init_network_state(state);
@@ -750,16 +748,14 @@ UTest(training) {
     graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
     graph.set_optimizer<SGDOptimizer>(2, CUDNN_HANDLE);
 
-    graph.add_layer(
-        std::make_shared<LinearLayer>(CUBLAS_HANDLE, nb_inputs, 32));
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 32));
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, nb_inputs, 32);
+    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 32);
     graph.cut_layer();
-    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 32, 32));
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 32));
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 32, 32);
+    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 32);
     graph.cut_layer();
-    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 32, 10));
-    graph.add_layer(
-        std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes));
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 32, 10);
+    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes);
     graph.build();
 
     graph.init_network_state(state);
@@ -793,8 +789,8 @@ UTest(evaluate_mnist) {
     graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
     graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
 
-    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 28 * 28, 10));
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 10));
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 28 * 28, 10);
+    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 10);
 
     graph.build();
 

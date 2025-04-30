@@ -30,11 +30,17 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         bwds_.push_back(std::make_shared<BwdTask>());
     }
 
+  public:
     void add_layer(std::shared_ptr<Layer<ftype>> layer) {
         layer->idx = layer_idx++;
         fwds_.back()->add_layer(layer);
         bwds_.back()->add_layer(layer);
         layers_.push_back(layer);
+    }
+
+    template <typename LayerType, typename... Types>
+    void add_layer(Types... args) {
+        add_layer(std::make_shared<LayerType>(std::forward<Types>(args)...));
     }
 
     void cut_layer() {
