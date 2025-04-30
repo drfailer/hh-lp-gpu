@@ -736,7 +736,7 @@ UTest(training) {
     constexpr size_t nb_inputs = 28 * 28;
     constexpr ftype learning_rate = 0.1;
     constexpr ftype epochs = 1;
-    NetworkGraph graph(3);
+    NetworkGraph graph;
     NetworkState<ftype> state;
     MNISTLoader loader;
 
@@ -750,16 +750,16 @@ UTest(training) {
     graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
     graph.set_optimizer<SGDOptimizer>(2, CUDNN_HANDLE);
 
-    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, nb_inputs, 32),
-                    0);
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 32),
-                    0);
-    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 32, 32), 1);
-    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 32),
-                    1);
-    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 32, 10), 2);
     graph.add_layer(
-        std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes), 2);
+        std::make_shared<LinearLayer>(CUBLAS_HANDLE, nb_inputs, 32));
+    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 32));
+    graph.cut_layer();
+    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 32, 32));
+    graph.add_layer(std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, 32));
+    graph.cut_layer();
+    graph.add_layer(std::make_shared<LinearLayer>(CUBLAS_HANDLE, 32, 10));
+    graph.add_layer(
+        std::make_shared<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes));
     graph.build();
 
     graph.init_network_state(state);

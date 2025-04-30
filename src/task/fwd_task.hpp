@@ -33,6 +33,10 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
         throw std::logic_error("error: FwdTask should not be copied.");
     }
 
+    std::vector<std::shared_ptr<Layer<ftype>>> const &layers() const {
+        return layers_;
+    }
+
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
 };

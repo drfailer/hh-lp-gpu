@@ -8,6 +8,7 @@
 #include "../task/optimizer_task.hpp"
 #include "../tools/timer.hpp"
 #include <hedgehog/hedgehog.h>
+#include <stdexcept>
 
 #define NetworkGraphIn InferenceData<ftype>, TrainingData<ftype>
 #define NetworkGraphOut InferenceData<ftype>, TrainingData<ftype>
@@ -15,8 +16,7 @@
 
 class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
-    NetworkGraph(size_t nb_shards = 1)
-        : hh::Graph<NetworkGraphIO>(), nb_shards_(nb_shards) {
+    NetworkGraph() : hh::Graph<NetworkGraphIO>() {
         pipeline_ = std::make_shared<PipelineState>();
         pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline_);
         optimizer_ = std::make_shared<OptimizerState>();
@@ -26,18 +26,24 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);
 
-        // add the task for the shards
-        for (size_t i = 0; i < nb_shards_; ++i) {
-            fwds_.push_back(std::make_shared<FwdTask>());
-            bwds_.push_back(std::make_shared<BwdTask>());
-        }
+        fwds_.push_back(std::make_shared<FwdTask>());
+        bwds_.push_back(std::make_shared<BwdTask>());
     }
 
-    void add_layer(std::shared_ptr<Layer<ftype>> layer, size_t shard_idx = 0) {
+    void add_layer(std::shared_ptr<Layer<ftype>> layer) {
         layer->idx = layer_idx++;
-        fwds_[shard_idx]->add_layer(layer);
-        bwds_[shard_idx]->add_layer(layer);
+        fwds_.back()->add_layer(layer);
+        bwds_.back()->add_layer(layer);
         layers_.push_back(layer);
+    }
+
+    void cut_layer() {
+        if (fwds_.back()->layers().size() == 0) {
+            throw std::logic_error(
+                "error: cannot add a cut layer after in an empty shard.");
+        }
+        fwds_.push_back(std::make_shared<FwdTask>());
+        bwds_.push_back(std::make_shared<BwdTask>());
     }
 
     void set_loss(std::shared_ptr<LossTask> loss_task) {
@@ -128,7 +134,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     std::vector<std::shared_ptr<FwdTask>> fwds_ = {};
     std::vector<std::shared_ptr<BwdTask>> bwds_ = {};
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    size_t nb_shards_ = 0;
     size_t layer_idx = 0;
 };
 
