@@ -1,11 +1,11 @@
 #ifndef GRAPH_NETWORK_GRAPH_H
 #define GRAPH_NETWORK_GRAPH_H
-#include "../state/pipeline_state_manager.hpp"
 #include "../state/optimizer_state_manager.hpp"
-#include "../task/optimizer_task.hpp"
-#include "../task/fwd_task.hpp"
+#include "../state/pipeline_state_manager.hpp"
 #include "../task/bwd_task.hpp"
+#include "../task/fwd_task.hpp"
 #include "../task/loss_task.hpp"
+#include "../task/optimizer_task.hpp"
 #include "../tools/timer.hpp"
 #include <hedgehog/hedgehog.h>
 
@@ -15,13 +15,13 @@
 
 class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
-    NetworkGraph(size_t nb_shards = 1) : hh::Graph<NetworkGraphIO>(),
-    nb_shards_(nb_shards) {
+    NetworkGraph(size_t nb_shards = 1)
+        : hh::Graph<NetworkGraphIO>(), nb_shards_(nb_shards) {
         pipeline_ = std::make_shared<PipelineState>();
         pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline_);
         optimizer_ = std::make_shared<OptimizerState>();
-        optimizer_state_ = std::make_shared<OptimizerStateManager>(
-            optimizer_, pipeline_);
+        optimizer_state_ =
+            std::make_shared<OptimizerStateManager>(optimizer_, pipeline_);
 
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);
@@ -100,6 +100,11 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
             layer_state_destroy_gpu(layer_state);
         }
         cudaFree(state.loss_output);
+    }
+
+  public:
+    template <typename OutType> std::shared_ptr<OutType> get() {
+        return std::get<std::shared_ptr<OutType>>(*this->getBlockingResult());
     }
 
   private:

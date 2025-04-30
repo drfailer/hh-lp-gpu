@@ -85,10 +85,6 @@ ftype *create_test_gpu_array(ftype *host, size_t size) {
     return gpu;
 }
 
-template <typename T> std::shared_ptr<T> hh_get_result(auto &graph) {
-    return std::get<std::shared_ptr<T>>(*graph.getBlockingResult());
-}
-
 void init(ftype *A, ftype *B, ftype *C, ftype *V, int64_t m, int64_t n,
           int64_t k) {
     // init A
@@ -722,7 +718,7 @@ UTest(inference) {
 
     graph.executeGraph(true);
     graph.pushData(std::make_shared<InferenceData<ftype>>(state, input_gpu));
-    ftype *output_gpu = hh_get_result<InferenceData<ftype>>(graph)->input;
+    ftype *output_gpu = graph.get<InferenceData<ftype>>()->input;
     graph.terminate();
 
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu, nb_nodes));
@@ -821,7 +817,7 @@ UTest(evaluate_mnist) {
     for (auto data : testing_set.datas) {
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(network, data.input));
-        auto *output = hh_get_result<InferenceData<ftype>>(graph)->input;
+        auto *output = graph.get<InferenceData<ftype>>()->input;
         graph.cleanGraph();
         CUDA_CHECK(memcpy_gpu_to_host(expected.data(), data.ground_truth, 10));
         CUDA_CHECK(memcpy_gpu_to_host(found.data(), output, 10));
@@ -842,7 +838,7 @@ UTest(evaluate_mnist) {
                                             << ", epochs = " << epochs << ")");
     graph.pushData(std::make_shared<TrainingData<ftype>>(
         network, training_set, learning_rate, epochs));
-    (void)hh_get_result<TrainingData<ftype>>(graph);
+    (void)graph.get<TrainingData<ftype>>();
     graph.cleanGraph();
 
     success = 0;
@@ -850,7 +846,7 @@ UTest(evaluate_mnist) {
     for (auto data : testing_set.datas) {
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(network, data.input));
-        auto *output = hh_get_result<InferenceData<ftype>>(graph)->input;
+        auto *output = graph.get<InferenceData<ftype>>()->input;
         graph.cleanGraph();
         CUDA_CHECK(memcpy_gpu_to_host(expected.data(), data.ground_truth, 10));
         CUDA_CHECK(memcpy_gpu_to_host(found.data(), output, 10));
