@@ -40,14 +40,25 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         layers_.push_back(layer);
     }
 
-    // TODO: the loss should be a functor
     void set_loss(std::shared_ptr<LossTask> loss_task) {
         this->loss_task_ = loss_task;
     }
 
-    // TODO: the optimizer should be a functor
+    template <typename LossType, typename... Types>
+    void set_loss(Types... args) {
+        this->loss_task_ = std::make_shared<LossTask>(
+            std::make_shared<LossType>(std::forward<Types>(args)...));
+    }
+
     void set_optimizer(std::shared_ptr<OptimizerTask> optimizer_task) {
         this->optimizer_task_ = optimizer_task;
+    }
+
+    template <typename OptimizerType, typename... Types>
+    void set_optimizer(size_t nb_threads, Types... args) {
+        this->optimizer_task_ = std::make_shared<OptimizerTask>(
+            nb_threads,
+            std::make_shared<OptimizerType>(std::forward<Types>(args)...));
     }
 
     void build() {

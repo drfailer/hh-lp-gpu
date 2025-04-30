@@ -14,8 +14,8 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
     using OptimizerList = std::vector<std::shared_ptr<Optimizer<ftype>>>;
 
   public:
-    OptimizerTask(std::shared_ptr<Optimizer<ftype>> optimizer,
-                  size_t nb_threads)
+    OptimizerTask(size_t nb_threads,
+                  std::shared_ptr<Optimizer<ftype>> optimizer)
         : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
           optimizer_(optimizer) {}
 
