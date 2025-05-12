@@ -794,9 +794,7 @@ UTest(evaluate_mnist) {
 
     std::vector<ftype> expected(10), found(10);
     size_t success = 0, errors = 0;
-    // for (auto data : testing_set.datas) {
-    for (size_t i = 0; i < 10; ++i) {
-        auto data = testing_set.datas[i];
+    for (auto data : testing_set.datas) {
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(network, data.input));
         auto *output = graph.get<InferenceData<ftype>>()->input;
@@ -825,9 +823,7 @@ UTest(evaluate_mnist) {
 
     success = 0;
     errors = 0;
-    // for (auto data : testing_set.datas) {
-    for (size_t i = 0; i < 10; ++i) {
-        auto data = testing_set.datas[i];
+    for (auto data : testing_set.datas) {
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(network, data.input));
         auto *output = graph.get<InferenceData<ftype>>()->input;
@@ -861,21 +857,21 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(matvecmul_n);
-    // run_test(matvecmul_t);
-    // run_test(matmul_n_n);
-    // run_test(matmul_t_n);
-    // run_test(matmul_n_t);
-    // run_test(matmul_t_t);
-    //
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
-    // run_test(sgd_optimizer);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
 
-    // run_test(inference);
-    // run_test(training);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
+    run_test(sgd_optimizer);
+
+    run_test(inference);
+    run_test(training);
 
     run_test(evaluate_mnist);
     return 0;
