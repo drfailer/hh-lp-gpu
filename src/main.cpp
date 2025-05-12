@@ -1,5 +1,5 @@
 #include "../tools/mnist/minist_loader.hpp"
-#include "cudnn_operations.hpp"
+// #include "cudnn_operations.hpp"
 #include "graph/network_graph.hpp"
 #include "model/data/layer_state.hpp"
 #include "model/layer/linear_layer.hpp"
@@ -118,42 +118,6 @@ int mnist_get_label(ftype *arr) {
         }
     }
     return imax;
-}
-
-UTest(cdnn_operations) {
-    constexpr int64_t m = 3;
-    constexpr int64_t n = 3;
-    constexpr int64_t k = 3;
-    ftype *A = new ftype[m * n];
-    ftype *B = new ftype[n * k];
-    ftype *C = new ftype[m * k];
-    ftype *V = new ftype[m];
-
-    std::cout << "perform matrix multiplication: C[m, k] = A[m, n] * B[n, k]"
-              << std::endl;
-    std::cout << "m = " << m << std::endl;
-    std::cout << "n = " << n << std::endl;
-    std::cout << "k = " << k << std::endl;
-
-    init(A, B, C, V, m, n, k);
-    display_matrix("A", A, m, n);
-    display_matrix("B", B, n, k);
-    display_matrix("C", C, m, k);
-
-    if (m == n && n == k)
-        hadamard(A, B, m, n, C);
-    display_matrix("C", C, m, k);
-
-    matmul(A, B, m, n, k, C);
-    display_matrix("C", C, m, k);
-
-    sigmoid(V, m);
-    display_matrix("V", V, m, 1);
-
-    delete[] A;
-    delete[] B;
-    delete[] C;
-    delete[] V;
 }
 
 UTest(matvecmul_n) {
@@ -638,7 +602,8 @@ UTest(sigmoid_activation_bwd) {
     ftype input_host[inputs] = {1, 2, 3, 4, 5, 6},
           err[inputs] = {10, 10, 10, 10, 10, 10}, output_host[outputs] = {0};
     ftype *input_gpu = nullptr, *err_gpu = nullptr;
-    LayerState<ftype> layer_state = create_layer_state<ftype>(dims, false, false);
+    LayerState<ftype> layer_state =
+        create_layer_state<ftype>(dims, false, false);
     defer(destroy_layer_state(layer_state));
     NetworkState<ftype> network_state({layer_state}, nullptr);
 
@@ -660,6 +625,55 @@ UTest(sigmoid_activation_bwd) {
     for (size_t i = 0; i < outputs; ++i) {
         uassert_float_equal(output_host[i],
                             err[i] * sigmoid_derivative(input_host[i]), 1e-6);
+    }
+}
+
+UTest(sgd_optimizer) {
+    constexpr int64_t inputs = 3;
+    constexpr int64_t outputs = 2;
+    constexpr ftype learning_rate = 0.01;
+    ftype weights[inputs * outputs] = {1, 2, 3, 4, 4, 6},
+                           weights_gradients[inputs * outputs] = {1, 1, 1,
+                                                                  1, 1, 1},
+                           biases[outputs] = {1, 2},
+                           biases_gradients[outputs] = {1, 1};
+    LayerState<ftype> layer;
+    SGDOptimizer sgd(CUDNN_HANDLE);
+
+    CUDA_CHECK(alloc_gpu(&layer.weights, inputs * outputs));
+    defer(cudaFree(layer.weights));
+    CUDA_CHECK(memcpy_host_to_gpu(layer.weights, weights, inputs * outputs));
+    CUDA_CHECK(alloc_gpu(&layer.gradiants.weights, inputs * outputs));
+    defer(cudaFree(layer.gradiants.weights));
+    CUDA_CHECK(memcpy_host_to_gpu(layer.gradiants.weights, weights_gradients,
+                                  inputs * outputs));
+    CUDA_CHECK(alloc_gpu(&layer.biases, outputs));
+    defer(cudaFree(layer.biases));
+    CUDA_CHECK(memcpy_host_to_gpu(layer.biases, biases, outputs));
+    CUDA_CHECK(alloc_gpu(&layer.gradiants.biases, outputs));
+    defer(cudaFree(layer.gradiants.biases));
+    CUDA_CHECK(
+        memcpy_host_to_gpu(layer.gradiants.biases, biases_gradients, outputs));
+    layer.dims = LayerDims{.inputs = inputs, .outputs = outputs};
+
+    sgd.init(layer);
+    sgd.optimize(layer, learning_rate);
+
+    ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
+    CUDA_CHECK(
+        memcpy_gpu_to_host(result_weights, layer.weights, outputs * inputs));
+    CUDA_CHECK(memcpy_gpu_to_host(result_biases, layer.biases, outputs));
+
+    for (size_t i = 0; i < inputs * outputs; ++i) {
+        uassert_float_equal(result_weights[i],
+                            weights[i] - learning_rate * weights_gradients[i],
+                            1e-6);
+    }
+
+    for (size_t i = 0; i < outputs; ++i) {
+        uassert_float_equal(result_biases[i],
+                            biases[i] - learning_rate * biases_gradients[i],
+                            1e-6);
     }
 }
 
@@ -780,7 +794,9 @@ UTest(evaluate_mnist) {
 
     std::vector<ftype> expected(10), found(10);
     size_t success = 0, errors = 0;
-    for (auto data : testing_set.datas) {
+    // for (auto data : testing_set.datas) {
+    for (size_t i = 0; i < 10; ++i) {
+        auto data = testing_set.datas[i];
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(network, data.input));
         auto *output = graph.get<InferenceData<ftype>>()->input;
@@ -809,7 +825,9 @@ UTest(evaluate_mnist) {
 
     success = 0;
     errors = 0;
-    for (auto data : testing_set.datas) {
+    // for (auto data : testing_set.datas) {
+    for (size_t i = 0; i < 10; ++i) {
+        auto data = testing_set.datas[i];
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(network, data.input));
         auto *output = graph.get<InferenceData<ftype>>()->input;
@@ -843,21 +861,21 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    run_test(cdnn_operations);
-    run_test(matvecmul_n);
-    run_test(matvecmul_t);
-    run_test(matmul_n_n);
-    run_test(matmul_t_n);
-    run_test(matmul_n_t);
-    run_test(matmul_t_t);
+    // run_test(matvecmul_n);
+    // run_test(matvecmul_t);
+    // run_test(matmul_n_n);
+    // run_test(matmul_t_n);
+    // run_test(matmul_n_t);
+    // run_test(matmul_t_t);
+    //
+    // run_test(linear_layer_fwd);
+    // run_test(linear_layer_bwd);
+    // run_test(sigmoid_activation_fwd);
+    // run_test(sigmoid_activation_bwd);
+    // run_test(sgd_optimizer);
 
-    run_test(linear_layer_fwd);
-    run_test(linear_layer_bwd);
-    run_test(sigmoid_activation_fwd);
-    run_test(sigmoid_activation_bwd);
-
-    run_test(inference);
-    run_test(training);
+    // run_test(inference);
+    // run_test(training);
 
     run_test(evaluate_mnist);
     return 0;

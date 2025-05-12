@@ -1,6 +1,7 @@
 #ifndef DATA_DATA_SET_H
 #define DATA_DATA_SET_H
 #include <vector>
+#include <cuda_runtime_api.h>
 
 template <typename T>
 struct Data {

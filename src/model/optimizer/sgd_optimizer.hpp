@@ -3,18 +3,28 @@
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "optimizer.hpp"
+#include <cudnn.h>
+#include <cudnn_graph.h>
+#include <cudnn_ops.h>
 #include <log.h/log.h>
+#include <vector>
 
 class SGDOptimizer : public Optimizer<ftype> {
   public:
     struct UpdateGraph {
-        cudnn_frontend::graph::Graph graph;
         ftype *workspace = nullptr;
-        tensor_attr_t tensor;
-        tensor_attr_t gradiant_tensor;
-        tensor_attr_t scaled_gradiant_tensor;
-        tensor_attr_t result_tensor;
-        tensor_attr_t scale_tensor;
+        cudnnTensorDescriptor_t parameter_tensor;
+        cudnnTensorDescriptor_t gradiant_tensor;
+
+        UpdateGraph() {
+            cudnnCreateTensorDescriptor(&parameter_tensor);
+            cudnnCreateTensorDescriptor(&gradiant_tensor);
+        }
+
+        ~UpdateGraph() {
+            cudnnDestroyTensorDescriptor(parameter_tensor);
+            cudnnDestroyTensorDescriptor(gradiant_tensor);
+        }
     };
 
     struct LayerUpdateData {
@@ -30,14 +40,30 @@ class SGDOptimizer : public Optimizer<ftype> {
             return;
         }
         auto dims = state.dims;
-        update_graphs_.update_weights =
-            create_update_graph({1, dims.outputs, dims.inputs},
-                                {dims.outputs * dims.inputs, dims.inputs, 1});
+        update_data_.update_weights = create_update_graph(
+            {1, 1, dims.outputs, dims.inputs},
+            {1, dims.outputs * dims.inputs, dims.inputs, 1});
 
         if (has_biases(state)) {
-            update_graphs_.update_biases =
-                create_update_graph({1, dims.outputs, 1}, {dims.outputs, 1, 1});
+            update_data_.update_biases = create_update_graph(
+                {1, 1, dims.outputs, 1}, {1, dims.outputs, 1, 1});
         }
+    }
+
+    std::shared_ptr<UpdateGraph>
+    create_update_graph(std::vector<int64_t> const &dims,
+                        std::vector<int64_t> const &strides) {
+        auto data = std::make_shared<UpdateGraph>();
+
+        // param = param - learning_rate * gradiant
+        // TODO: add the batch size
+        cudnnSetTensor4dDescriptorEx(
+            data->parameter_tensor, CUDNN_DATA_FLOAT, dims[0], dims[1], dims[2],
+            dims[3], strides[0], strides[1], strides[2], strides[3]);
+        cudnnSetTensor4dDescriptorEx(
+            data->gradiant_tensor, CUDNN_DATA_FLOAT, dims[0], dims[1], dims[2],
+            dims[3], strides[0], strides[1], strides[2], strides[3]);
+        return data;
     }
 
     void optimize(LayerState<ftype> const &state,
@@ -47,87 +73,23 @@ class SGDOptimizer : public Optimizer<ftype> {
             return;
         }
 
-        if (update_graphs_.update_weights) {
-            optimize_params(update_graphs_.update_weights, state.weights,
+        if (update_data_.update_weights) {
+            optimize_params(update_data_.update_weights, state.weights,
                             state.gradiants.weights, learning_rate);
         }
 
-        if (update_graphs_.update_biases) {
-            optimize_params(update_graphs_.update_biases, state.biases,
+        if (update_data_.update_biases) {
+            optimize_params(update_data_.update_biases, state.biases,
                             state.gradiants.biases, learning_rate);
         }
     }
 
     void optimize_params(auto opt, ftype *parameter, ftype *gradiant,
                          ftype learning_rate) {
-        MemoryMap mem = {
-            {opt->scale_tensor, &learning_rate},
-            {opt->tensor, parameter},
-            {opt->gradiant_tensor, gradiant},
-            {opt->scaled_gradiant_tensor, gradiant},
-            {opt->result_tensor, parameter},
-        };
-
-        CUDNN_CHECK(opt->graph.execute(cudnn_handle_, mem, opt->workspace));
-    }
-
-    std::shared_ptr<UpdateGraph>
-    create_update_graph(std::vector<int64_t> const &dims,
-                        std::vector<int64_t> const &strides) {
-        namespace fe = cudnn_frontend;
-        auto data = std::make_shared<UpdateGraph>();
-        data->graph.set_io_data_type(fe::DataType_t::FLOAT)
-            .set_intermediate_data_type(fe::DataType_t::FLOAT)
-            .set_compute_data_type(fe::DataType_t::FLOAT);
-
-        // tenors attributes
-        auto learning_rate_attributes = fe::graph::Tensor_attributes()
-                                            .set_name("learning rate")
-                                            .set_dim({1, 1, 1})
-                                            .set_stride({1, 1, 1});
-        auto param_attributes = fe::graph::Tensor_attributes()
-                                    .set_name("parameter")
-                                    .set_dim(dims)
-                                    .set_stride(strides);
-        auto grad_attributes = fe::graph::Tensor_attributes()
-                                   .set_name("parameter gradiant")
-                                   .set_dim(dims)
-                                   .set_stride(strides);
-        auto scale_attributes = fe::graph::Pointwise_attributes()
-                                    .set_name("learning_rate * gradiant")
-                                    .set_mode(fe::PointwiseMode_t::MUL);
-        auto substract_attributes =
-            fe::graph::Pointwise_attributes()
-                .set_name("parameters - learning_rate * gradiant")
-                .set_mode(fe::PointwiseMode_t::SUB);
-
-        // graph inputs:
-
-        data->tensor = data->graph.tensor(param_attributes);
-        data->gradiant_tensor = data->graph.tensor(grad_attributes);
-        data->scale_tensor = data->graph.tensor(learning_rate_attributes);
-
-        // operations:
-
-        // scaled_gradiant = gradiants * learning_rate
-        data->scaled_gradiant_tensor = data->graph.pointwise(
-            data->scale_tensor, data->gradiant_tensor, scale_attributes);
-        // parameters -= scaled_gradiant
-        data->result_tensor = data->graph.pointwise(
-            data->tensor, data->scaled_gradiant_tensor, substract_attributes);
-
-        // result:
-
-        data->result_tensor->set_output(true);
-
-        CUDNN_CHECK(data->graph.validate());
-        CUDNN_CHECK(data->graph.build(cudnn_handle_, {fe::HeurMode_t::A}));
-
-        int64_t workspace_size;
-        CUDNN_CHECK(data->graph.get_workspace_size(workspace_size));
-        CUDA_CHECK(alloc_gpu(&data->workspace, workspace_size));
-
-        return data;
+        ftype beta = 1;
+        learning_rate *= -1;
+        cudnnAddTensor(cudnn_handle_, &learning_rate, opt->gradiant_tensor,
+                       gradiant, &beta, opt->parameter_tensor, parameter);
     }
 
     std::shared_ptr<Optimizer<ftype>> copy() const override {
@@ -144,7 +106,7 @@ class SGDOptimizer : public Optimizer<ftype> {
     }
 
   private:
-    LayerUpdateData update_graphs_;
+    LayerUpdateData update_data_;
     cudnnHandle_t cudnn_handle_ = nullptr;
 };
 

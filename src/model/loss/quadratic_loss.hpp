@@ -2,15 +2,46 @@
 #define MODEL_LOSS_QUADRATIC_LOSS_H
 #include "../../types.hpp"
 #include "loss.hpp"
+#include <cudnn_ops.h>
 #include <log.h/log.h>
-#include "../../tools/gpu.hpp"
+#include <cudnn.h>
+#include <cudnn_graph.h>
 
 class QuadraticLoss : public Loss<ftype> {
   public:
     QuadraticLoss(cudnnHandle_t cudnn_handle) : cudnn_handle_(cudnn_handle) {}
 
+    ~QuadraticLoss() {
+        cudnnDestroyOpTensorDescriptor(addition_);
+        cudnnDestroyTensorDescriptor(bwd_graph.model_output_tensor);
+        cudnnDestroyTensorDescriptor(bwd_graph.ground_truth_tensor);
+        cudnnDestroyTensorDescriptor(bwd_graph.error_tensor);
+    }
+
   public:
-    void init(int64_t size) override { create_bwd_graph_graph(size); }
+    void init(int64_t size) override {
+        // model output tensor
+        cudnnCreateTensorDescriptor(&bwd_graph.model_output_tensor);
+        cudnnSetTensor4dDescriptor(bwd_graph.model_output_tensor,
+                                   CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, 1, 1,
+                                   size, 1);
+
+        // ground truth tensor
+        cudnnCreateTensorDescriptor(&bwd_graph.ground_truth_tensor);
+        cudnnSetTensor4dDescriptor(bwd_graph.ground_truth_tensor,
+                                   CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, 1, 1,
+                                   size, 1);
+        // result tensor (error)
+        cudnnCreateTensorDescriptor(&bwd_graph.error_tensor);
+        cudnnSetTensor4dDescriptor(bwd_graph.error_tensor,
+                                   CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT, 1, 1,
+                                   size, 1);
+
+        // operation tensor
+        cudnnCreateOpTensorDescriptor(&addition_);
+        cudnnSetOpTensorDescriptor(addition_, CUDNN_OP_TENSOR_ADD,
+                                   CUDNN_DATA_FLOAT, CUDNN_NOT_PROPAGATE_NAN);
+    }
 
     void fwd(ftype *model_output, ftype *ground_truth, ftype *result) override {
         INFO_GRP("QuadraticLossTask FWD", INFO_GRP_LAYER_TASK);
@@ -23,58 +54,23 @@ class QuadraticLoss : public Loss<ftype> {
     void bwd(ftype *model_output, ftype *ground_truth, ftype *result) override {
         INFO_GRP("QuadraticLossTask BWD", INFO_GRP_LAYER_TASK);
         // return output - ground_truth;
+        ftype alpha1 = 1, alpha2 = -1, beta = 0;
 
-        MemoryMap mem_map = {
-            {bwd_graph.error_tensor, result},
-            {bwd_graph.model_output_tensor, model_output},
-            {bwd_graph.ground_truth_tensor, ground_truth},
-        };
-        CUDNN_CHECK(bwd_graph.graph.execute(cudnn_handle_, mem_map,
-                                            bwd_graph.workspace));
-    }
-
-    void create_bwd_graph_graph(int64_t size) {
-        namespace fe = cudnn_frontend;
-        std::vector<int64_t> dims = {1, size, 1}, strides = {size, 1, 1};
-
-        bwd_graph.graph.set_io_data_type(fe::DataType_t::FLOAT)
-            .set_intermediate_data_type(fe::DataType_t::FLOAT)
-            .set_compute_data_type(fe::DataType_t::FLOAT);
-
-        bwd_graph.model_output_tensor =
-            bwd_graph.graph.tensor(fe::graph::Tensor_attributes()
-                                       .set_name("mode output")
-                                       .set_dim(dims)
-                                       .set_stride(strides));
-        bwd_graph.ground_truth_tensor =
-            bwd_graph.graph.tensor(fe::graph::Tensor_attributes()
-                                       .set_name("ground truth")
-                                       .set_dim(dims)
-                                       .set_stride(strides));
-        bwd_graph.error_tensor = bwd_graph.graph.pointwise(
-            bwd_graph.model_output_tensor, bwd_graph.ground_truth_tensor,
-            fe::graph::Pointwise_attributes().set_mode(
-                fe::PointwiseMode_t::SUB));
-
-        bwd_graph.error_tensor->set_output(true);
-
-        CUDNN_CHECK(bwd_graph.graph.validate());
-        CUDNN_CHECK(bwd_graph.graph.build(cudnn_handle_, {fe::HeurMode_t::A}));
-
-        int64_t workspace_size;
-        CUDNN_CHECK(bwd_graph.graph.get_workspace_size(workspace_size));
-        CUDA_CHECK(alloc_gpu(&bwd_graph.workspace, workspace_size));
+        // TODO: add CUDNN_CHECK
+        cudnnOpTensor(cudnn_handle_, addition_, &alpha1,
+                      bwd_graph.model_output_tensor, model_output, &alpha2,
+                      bwd_graph.ground_truth_tensor, ground_truth, &beta,
+                      bwd_graph.error_tensor, result);
     }
 
   private:
     struct {
-        cudnn_frontend::graph::Graph graph;
-        tensor_attr_t model_output_tensor;
-        tensor_attr_t ground_truth_tensor;
-        tensor_attr_t error_tensor;
-        ftype *workspace = nullptr;
+        cudnnTensorDescriptor_t model_output_tensor;
+        cudnnTensorDescriptor_t ground_truth_tensor;
+        cudnnTensorDescriptor_t error_tensor;
     } bwd_graph;
     cudnnHandle_t cudnn_handle_ = nullptr;
+    cudnnOpTensorDescriptor_t addition_;
 };
 
 #endif

@@ -5,7 +5,6 @@
 #include "layer.hpp"
 #include "log.h/log.h"
 #include <cudnn.h>
-#include <cudnn_frontend/graph_interface.h>
 #include <cudnn_graph.h>
 #include <random>
 

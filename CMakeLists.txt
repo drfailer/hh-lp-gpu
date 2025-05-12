@@ -16,11 +16,10 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 # add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
-add_compile_options(-g -O3)
+add_compile_options(-O3 -g)
 
 add_executable(hh-lp-gpu
     src/main.cpp
-    src/cudnn_operations.cpp
 )
 target_link_directories(hh-lp-gpu
     PUBLIC
@@ -30,7 +29,6 @@ target_include_directories(hh-lp-gpu
     PUBLIC
     lib
     ~/Programming/usr/include/
-    lib/cudnn-frontend/include/
     lib/hedgehog/
     ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )

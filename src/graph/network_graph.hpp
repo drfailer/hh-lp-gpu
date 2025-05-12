@@ -69,8 +69,8 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     template <typename OptimizerType, typename... Types>
     void set_optimizer(size_t nb_threads, Types... args) {
         this->optimizer_task_ = std::make_shared<OptimizerTask>(
-            nb_threads,
-            std::make_shared<OptimizerType>(std::forward<Types>(args)...));
+            std::make_shared<OptimizerType>(std::forward<Types>(args)...),
+            nb_threads);
     }
 
     void build() {
