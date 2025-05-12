@@ -112,4 +112,20 @@ auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
                           &alpha, B, ldb, A, lda, &beta, C, ldc);
 }
 
+template <typename T>
+auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
+            size_t n, size_t k, T alpha, T const *const *A, T const *const *B,
+            T beta, T *const *C, size_t batch_count) {
+    cublasOperation_t cublas_trans_A = B_trans ? cublasOperation_t::CUBLAS_OP_T
+                                               : cublasOperation_t::CUBLAS_OP_N;
+    cublasOperation_t cublas_trans_B = A_trans ? cublasOperation_t::CUBLAS_OP_T
+                                               : cublasOperation_t::CUBLAS_OP_N;
+    size_t lda = A_trans ? m : k;
+    size_t ldb = B_trans ? k : n;
+    size_t ldc = n;
+
+    return cublasSgemmBatched(handle, cublas_trans_A, cublas_trans_B, n, m, k,
+                              &alpha, B, ldb, A, lda, &beta, C, ldc, batch_count);
+}
+
 #endif

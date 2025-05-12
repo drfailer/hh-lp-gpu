@@ -295,8 +295,8 @@ UTest(matvecmul_batch_n) {
         }
         CUDA_CHECK(memcpy_host_to_gpu(mat_gpu[b], mat_host[b], m * n));
         CUDA_CHECK(memcpy_host_to_gpu(vec_gpu[b], vec_host[b], n));
-        cudaDeviceSynchronize();
     }
+    cudaDeviceSynchronize();
 
     // matrix vector multiplication on host
     for (size_t b = 0; b < batch_count; ++b) {
@@ -585,6 +585,97 @@ UTest(matmul_t_t) {
     for (size_t i = 0; i < m; ++i) {
         for (size_t j = 0; j < n; ++j) {
             uassert_float_equal(GT_host[i * n + j], C_host[i * n + j], 1e-1);
+        }
+    }
+}
+
+UTest(matmul_batch_n_n) {
+    constexpr size_t m = 10;
+    constexpr size_t n = 10'000;
+    constexpr size_t k = 100;
+    constexpr size_t batch_count = 2;
+    ftype *A_host[batch_count] = {0}, *B_host[batch_count] = {0},
+          *GT_host[batch_count] = {0}, *C_host[batch_count] = {0};
+    ftype *A_gpu[batch_count] = {0}, *B_gpu[batch_count] = {0},
+          *C_gpu[batch_count] = {0};
+    std::mt19937 rand(0);
+    std::uniform_real_distribution<ftype> dist(0, 1);
+    auto init_matrix = [&dist, &rand](ftype **mat, size_t rows, size_t cols) {
+        for (size_t b = 0; b < batch_count; ++b) {
+            for (size_t i = 0; i < rows; ++i) {
+                for (size_t j = 0; j < cols; ++j) {
+                    mat[b][i * cols + j] = dist(rand);
+                }
+            }
+        }
+    };
+
+    // allocate on host
+    for (size_t b = 0; b < batch_count; ++b) {
+        A_host[b] = new ftype[m * k];
+        B_host[b] = new ftype[k * n];
+        C_host[b] = new ftype[m * n];
+        GT_host[b] = new ftype[m * n];
+    }
+    defer({
+        for (size_t b = 0; b < batch_count; ++b) {
+            defer(delete[] A_host[b]);
+            defer(delete[] B_host[b]);
+            defer(delete[] C_host[b]);
+            defer(delete[] GT_host[b]);
+        }
+    });
+
+    // allocate on gpu
+    for (size_t b = 0; b < batch_count; ++b) {
+        CUDA_CHECK(alloc_gpu(&A_gpu[b], m * k));
+        CUDA_CHECK(alloc_gpu(&B_gpu[b], k * n));
+        CUDA_CHECK(alloc_gpu(&C_gpu[b], m * n));
+    }
+    defer({
+        for (size_t b = 0; b < batch_count; ++b) {
+            defer(cudaFree(A_gpu[b]));
+            defer(cudaFree(B_gpu[b]));
+            defer(cudaFree(C_gpu[b]));
+        }
+    });
+
+    // init
+    init_matrix(A_host, m, k);
+    init_matrix(B_host, k, n);
+    for (size_t b = 0; b < batch_count; ++b) {
+        CUDA_CHECK(memcpy_host_to_gpu(A_gpu[b], A_host[b], m * k));
+        CUDA_CHECK(memcpy_host_to_gpu(B_gpu[b], B_host[b], k * n));
+    }
+    cudaDeviceSynchronize();
+
+    // matrix multiplication on host
+    for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t i = 0; i < m; ++i) {
+            for (size_t j = 0; j < n; ++j) {
+                GT_host[b][i * n + j] = 0;
+                for (size_t e = 0; e < k; ++e) {
+                    GT_host[b][i * n + j] +=
+                        A_host[b][i * k + e] * B_host[b][e * n + j];
+                }
+            }
+        }
+    }
+
+    // matrix multiplication on the gpu
+    matmul(CUBLAS_HANDLE, false, false, m, n, k, (ftype)1, A_gpu, B_gpu,
+           (ftype)0, C_gpu, batch_count);
+    for (size_t b = 0; b < batch_count; ++b) {
+        CUDA_CHECK(memcpy_gpu_to_host(C_host[b], C_gpu[b], m * n));
+    }
+
+    // verify the results
+    for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t i = 0; i < m; ++i) {
+            for (size_t j = 0; j < n; ++j) {
+                uassert_float_equal(GT_host[b][i * n + j], C_host[b][i * n + j],
+                                    1e-1);
+            }
         }
     }
 }
@@ -942,10 +1033,12 @@ int main(int, char **) {
 
     run_test(matvecmul_n);
     run_test(matvecmul_t);
+    run_test(matvecmul_batch_n);
     run_test(matmul_n_n);
     run_test(matmul_t_n);
     run_test(matmul_n_t);
     run_test(matmul_t_t);
+    run_test(matmul_batch_n_n);
 
     run_test(linear_layer_fwd);
     run_test(linear_layer_bwd);
@@ -957,6 +1050,5 @@ int main(int, char **) {
     run_test(training);
 
     run_test(evaluate_mnist);
-    run_test(matvecmul_batch_n);
     return 0;
 }
