@@ -78,6 +78,21 @@ auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
 }
 
 template <typename T>
+auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
+               T alpha, T const *const *Aarray, T const *const *xarray, T beta,
+               T *const *yarray, size_t batch_count) {
+    cublasOperation_t cublas_trans =
+        trans ? cublasOperation_t::CUBLAS_OP_N : cublasOperation_t::CUBLAS_OP_T;
+    size_t lda = cols;
+    int m = cols;
+    int n = rows;
+
+    // we will only use float in this program, but there is still the
+    return cublasSgemvBatched(handle, cublas_trans, m, n, &alpha, Aarray, lda,
+                              xarray, 1, &beta, yarray, 1, batch_count);
+}
+
+template <typename T>
 auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
             size_t n, size_t k, T alpha, T const *A, T const *B, T beta, T *C) {
     cublasOperation_t cublas_trans_A = B_trans ? cublasOperation_t::CUBLAS_OP_T
