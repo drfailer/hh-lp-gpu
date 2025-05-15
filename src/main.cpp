@@ -696,7 +696,10 @@ UTest(linear_layer_fwd) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, inputs));
     cudaDeviceSynchronize();
 
+    LayerState<ftype> state = { .dims = dims };
     LinearLayer linear_layer(CUBLAS_HANDLE, inputs, outputs);
+    linear_layer.init(state);
+    defer(destroy_layer_state(state));
 
     ftype *output_gpu = linear_layer.fwd(layer_state, input_gpu);
 
@@ -727,7 +730,11 @@ UTest(linear_layer_bwd) {
     defer(destroy_layer_state(layer_state));
     init_test_parameters(layer_state);
 
+    LayerState<ftype> state = { .dims = dims };
     LinearLayer linear_layer(CUBLAS_HANDLE, inputs, outputs);
+    linear_layer.init(state);
+    defer(destroy_layer_state(state));
+
     linear_layer.fwd(layer_state, input_gpu);
     ftype *output_err_gpu = linear_layer.bwd(layer_state, err_gpu);
 
