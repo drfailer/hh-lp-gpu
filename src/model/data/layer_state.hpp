@@ -12,7 +12,7 @@ template <typename T> struct LayerState {
     struct {
         T *weights = nullptr;
         T *biases = nullptr;
-    } gradiants;
+    } gradients;
     LayerDims dims;
 };
 
@@ -26,11 +26,11 @@ LayerState<T> create_layer_state(LayerDims dims, bool use_weights, bool use_bias
     CUDA_CHECK(alloc_gpu(&state.error, dims.inputs));
     if (use_weights) {
         CUDA_CHECK(alloc_gpu(&state.weights, weights_size));
-        CUDA_CHECK(alloc_gpu(&state.gradiants.weights, weights_size));
+        CUDA_CHECK(alloc_gpu(&state.gradients.weights, weights_size));
     }
     if (use_biases) {
         CUDA_CHECK(alloc_gpu(&state.biases, dims.outputs));
-        CUDA_CHECK(alloc_gpu(&state.gradiants.biases, dims.outputs));
+        CUDA_CHECK(alloc_gpu(&state.gradients.biases, dims.outputs));
     }
     state.dims = dims;
     return state;
@@ -44,12 +44,12 @@ void destroy_layer_state(LayerState<T> &state) {
     state.error = nullptr;
     cudaFree(state.weights);
     state.weights = nullptr;
-    cudaFree(state.gradiants.weights);
-    state.gradiants.weights = nullptr;
+    cudaFree(state.gradients.weights);
+    state.gradients.weights = nullptr;
     cudaFree(state.biases);
     state.biases = nullptr;
-    cudaFree(state.gradiants.biases);
-    state.gradiants.biases = nullptr;
+    cudaFree(state.gradients.biases);
+    state.gradients.biases = nullptr;
 }
 
 #endif
