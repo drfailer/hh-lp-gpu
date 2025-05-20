@@ -858,21 +858,16 @@ UTest(sgd_optimizer) {
     }
 }
 
-/*
- * There are precisions issues on this test. The function that is called under
- * the hood is cudnnReduceTensor with the AVG reduce operation instead of
- * cudnnAddTensor (used when the batch size is 1). The precision is set to float
- * but there is still a big error on the results.
- */
 UTest(sgd_optimizer_batch) {
     constexpr int64_t inputs = 3;
     constexpr int64_t outputs = 2;
     constexpr int64_t batch_count = 2;
     constexpr ftype learning_rate = 0.01;
     ftype weights[inputs * outputs] = {1, 2, 3, 4, 4, 6},
-          weights_gradients[batch_count * inputs * outputs] = {0},
-          biases[outputs] = {1, 2},
-          biases_gradients[batch_count * outputs] = {0};
+                           weights_gradients[batch_count * inputs * outputs] =
+                               {0},
+                           biases[outputs] = {1, 2},
+                           biases_gradients[batch_count * outputs] = {0};
     LayerState<ftype> layer;
     SGDOptimizer sgd(CUDNN_HANDLE);
 
@@ -899,7 +894,11 @@ UTest(sgd_optimizer_batch) {
     defer(cudaFree(layer.gradients.biases));
     CUDA_CHECK(memcpy_host_to_gpu(layer.gradients.biases, biases_gradients,
                                   batch_count * outputs));
-    layer.dims = LayerDims{.inputs = inputs, .outputs = outputs};
+    layer.dims = LayerDims{
+        .inputs = inputs,
+        .outputs = outputs,
+        .batch_count = batch_count,
+    };
 
     sgd.init(layer);
     sgd.optimize(layer, learning_rate);
@@ -914,14 +913,14 @@ UTest(sgd_optimizer_batch) {
             (weights_gradients[i] + weights_gradients[inputs * outputs + i]) /
             2;
         uassert_float_equal(result_weights[i],
-                            weights[i] - learning_rate * avg_gradient, 1e-2);
+                            weights[i] - learning_rate * avg_gradient, 1e-6);
     }
 
     for (size_t i = 0; i < outputs; ++i) {
         ftype avg_gradient =
             (weights_gradients[i] + weights_gradients[outputs + i]) / 2;
         uassert_float_equal(result_biases[i],
-                            biases[i] - learning_rate * avg_gradient, 1e-2);
+                            biases[i] - learning_rate * avg_gradient, 1e-6);
     }
 }
 

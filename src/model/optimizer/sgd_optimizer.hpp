@@ -117,7 +117,6 @@ class SGDOptimizer : public Optimizer<ftype> {
         //                   void *beta, const cudnnTensorDescriptor_t cDesc,
         //                   void *C);
         if (batch_count > 1) {
-            std::cout << "cudnnReduceTensor" << std::endl;
             CUDNN_CHECK(cudnnReduceTensor(
                 cudnn_handle_, reduce_tensor, nullptr, 0, opt->workspace,
                 opt->workspace_size, &alpha, opt->gradient_tensor, gradient,
