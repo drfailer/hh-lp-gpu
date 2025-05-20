@@ -1,5 +1,6 @@
 #ifndef MODEL_LAYER_SIGMOID_ACTIVATION_LAYER_H
 #define MODEL_LAYER_SIGMOID_ACTIVATION_LAYER_H
+#include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "layer.hpp"
 #include <cudnn.h>
@@ -12,29 +13,29 @@ struct SigmoidActivationLayer : Layer<ftype> {
         : Layer(LayerDims{.inputs = size, .outputs = size}),
           cudnn_handle_(cudnn_handle) {
         // sigmoid activation tensor
-        cudnnCreateActivationDescriptor(&sigmoid_);
-        cudnnSetActivationDescriptor(sigmoid_, CUDNN_ACTIVATION_SIGMOID,
-                                     CUDNN_NOT_PROPAGATE_NAN, 0);
+        CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));
+        CUDNN_CHECK(cudnnSetActivationDescriptor(
+            sigmoid_, CUDNN_ACTIVATION_SIGMOID, CUDNN_NOT_PROPAGATE_NAN, 0));
         // input tensor
-        cudnnCreateTensorDescriptor(&fwd_.input_tensor);
-        cudnnSetTensor4dDescriptor(fwd_.input_tensor, CUDNN_TENSOR_NCHW,
-                                   CUDNN_DATA_FLOAT, dims.batch_count, 1,
-                                   dims.inputs, 1);
+        CUDNN_CHECK(cudnnCreateTensorDescriptor(&fwd_.input_tensor));
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            fwd_.input_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            dims.batch_count, 1, dims.inputs, 1));
         // output tensor
-        cudnnCreateTensorDescriptor(&fwd_.output_tensor);
-        cudnnSetTensor4dDescriptor(fwd_.output_tensor, CUDNN_TENSOR_NCHW,
-                                   CUDNN_DATA_FLOAT, dims.batch_count, 1,
-                                   dims.inputs, 1);
+        CUDNN_CHECK(cudnnCreateTensorDescriptor(&fwd_.output_tensor));
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            fwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            dims.batch_count, 1, dims.inputs, 1));
         // input error tensor
-        cudnnCreateTensorDescriptor(&bwd_.err_tensor);
-        cudnnSetTensor4dDescriptor(bwd_.err_tensor, CUDNN_TENSOR_NCHW,
-                                   CUDNN_DATA_FLOAT, dims.batch_count, 1,
-                                   dims.inputs, 1);
+        CUDNN_CHECK(cudnnCreateTensorDescriptor(&bwd_.err_tensor));
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            bwd_.err_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            dims.batch_count, 1, dims.inputs, 1));
         // output error tensor
-        cudnnCreateTensorDescriptor(&bwd_.output_tensor);
-        cudnnSetTensor4dDescriptor(bwd_.output_tensor, CUDNN_TENSOR_NCHW,
-                                   CUDNN_DATA_FLOAT, dims.batch_count, 1,
-                                   dims.inputs, 1);
+        CUDNN_CHECK(cudnnCreateTensorDescriptor(&bwd_.output_tensor));
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            bwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            dims.batch_count, 1, dims.inputs, 1));
     }
 
     ~SigmoidActivationLayer() {
@@ -61,9 +62,9 @@ struct SigmoidActivationLayer : Layer<ftype> {
         // save the input for the backwards pass
         state.input = input;
 
-        cudnnActivationForward(cudnn_handle_, sigmoid_, &alpha,
-                               fwd_.input_tensor, state.input, &beta,
-                               fwd_.output_tensor, state.output);
+        CUDNN_CHECK(cudnnActivationForward(
+            cudnn_handle_, sigmoid_, &alpha, fwd_.input_tensor, state.input,
+            &beta, fwd_.output_tensor, state.output));
         return state.output;
     }
 
@@ -71,10 +72,10 @@ struct SigmoidActivationLayer : Layer<ftype> {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
-        cudnnActivationBackward(
+        CUDNN_CHECK(cudnnActivationBackward(
             cudnn_handle_, sigmoid_, &alpha, fwd_.output_tensor, state.output,
             bwd_.err_tensor, error, fwd_.input_tensor, state.input, &beta,
-            bwd_.output_tensor, state.error);
+            bwd_.output_tensor, state.error));
         return state.error;
     }
 

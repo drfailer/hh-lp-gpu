@@ -8,9 +8,9 @@
 #define CUDNN_CHECK(expr)                                                      \
     {                                                                          \
         auto result = expr;                                                    \
-        if (result.is_bad()) {                                                 \
-            std::cerr << "[CUDNN_ERROR]: " __FILE__ ":" << __LINE__ << ": "    \
-                      << result.get_message() << std::endl;                    \
+        if (result != CUDNN_STATUS_SUCCESS) {                                  \
+            std::cerr << "[CUDA_ERROR]: " __FILE__ ":" << __LINE__ << ": "     \
+                      << cudnnGetErrorString(result) << std::endl;              \
         }                                                                      \
     }
 
@@ -125,7 +125,8 @@ auto matmul(cublasHandle_t handle, bool A_trans, bool B_trans, size_t m,
     size_t ldc = n;
 
     return cublasSgemmBatched(handle, cublas_trans_A, cublas_trans_B, n, m, k,
-                              &alpha, B, ldb, A, lda, &beta, C, ldc, batch_count);
+                              &alpha, B, ldb, A, lda, &beta, C, ldc,
+                              batch_count);
 }
 
 #endif
