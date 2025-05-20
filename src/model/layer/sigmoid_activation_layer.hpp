@@ -9,8 +9,13 @@
 #include <log.h/log.h>
 
 struct SigmoidActivationLayer : Layer<ftype> {
-    SigmoidActivationLayer(cudnnHandle_t cudnn_handle, int64_t size)
-        : Layer(LayerDims{.inputs = size, .outputs = size}),
+    SigmoidActivationLayer(cudnnHandle_t cudnn_handle, int64_t size,
+                           int64_t batch_count = 1)
+        : Layer(LayerDims{
+              .inputs = size,
+              .outputs = size,
+              .batch_count = batch_count,
+          }),
           cudnn_handle_(cudnn_handle) {
         // sigmoid activation tensor
         CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));
