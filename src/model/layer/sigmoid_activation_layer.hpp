@@ -9,13 +9,8 @@
 #include <log.h/log.h>
 
 struct SigmoidActivationLayer : Layer<ftype> {
-    SigmoidActivationLayer(cudnnHandle_t cudnn_handle, int64_t size,
-                           int64_t batch_count = 1)
-        : Layer(LayerDims{
-              .inputs = size,
-              .outputs = size,
-              .batch_count = batch_count,
-          }),
+    SigmoidActivationLayer(cudnnHandle_t cudnn_handle, int64_t size)
+        : Layer(dims_t{.inputs = size, .outputs = size}, {}),
           cudnn_handle_(cudnn_handle) {
         // sigmoid activation tensor
         CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));
@@ -23,24 +18,12 @@ struct SigmoidActivationLayer : Layer<ftype> {
             sigmoid_, CUDNN_ACTIVATION_SIGMOID, CUDNN_NOT_PROPAGATE_NAN, 0));
         // input tensor
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&fwd_.input_tensor));
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            fwd_.input_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            dims.batch_count, 1, dims.inputs, 1));
         // output tensor
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&fwd_.output_tensor));
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            fwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            dims.batch_count, 1, dims.inputs, 1));
         // input error tensor
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&bwd_.err_tensor));
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            bwd_.err_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            dims.batch_count, 1, dims.inputs, 1));
         // output error tensor
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&bwd_.output_tensor));
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            bwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            dims.batch_count, 1, dims.inputs, 1));
     }
 
     ~SigmoidActivationLayer() {
@@ -56,8 +39,27 @@ struct SigmoidActivationLayer : Layer<ftype> {
      * pass, parameters and gradients). Since this layer is an activation one,
      * there no need to allocate parameters and gradients.
      */
-    void init(LayerState<ftype> &state) override {
-        state = create_layer_state<ftype>(this->dims, false, false);
+    LayerState<ftype> create_state() const override {
+        return create_layer_state<ftype>(this->dims, false, false);
+    }
+
+    void init() override {
+        // input tensor
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            fwd_.input_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            this->dims.batch_count, 1, dims.inputs, 1));
+        // output tensor
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            fwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            this->dims.batch_count, 1, dims.inputs, 1));
+        // input error tensor
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            bwd_.err_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            this->dims.batch_count, 1, dims.inputs, 1));
+        // output error tensor
+        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
+            bwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
+            this->dims.batch_count, 1, dims.inputs, 1));
     }
 
     ftype *fwd(LayerState<ftype> &state, ftype *input) override {
