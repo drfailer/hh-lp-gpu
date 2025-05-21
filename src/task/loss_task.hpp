@@ -16,11 +16,11 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
   public:
     LossTask(std::shared_ptr<Loss<ftype>> loss) : loss_(loss) {}
 
-    void init(NetworkState<ftype> &state) {
-        loss_->init(state.layers.back().dims.outputs);
-        CUDA_CHECK(
-            alloc_gpu(&state.loss, (size_t)state.layers.back().dims.outputs));
+    void create_state(ftype **mem, int64_t output_size) {
+        CUDA_CHECK(alloc_gpu(mem, (size_t)output_size));
     }
+
+    void init(int64_t output_size) { loss_->init(output_size); }
 
     void execute(std::shared_ptr<LossFwdData<ftype>> data) override {
         loss_->fwd(data->input, data->ground_truth, data->states.loss);

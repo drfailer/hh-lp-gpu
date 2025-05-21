@@ -16,23 +16,40 @@ class SGDOptimizer : public Optimizer<ftype> {
         cudnnTensorDescriptor_t gradient_tensor = nullptr;
         ftype *workspace = nullptr;
         size_t workspace_size = 0;
-
-        UpdateGraph() {
-            cudnnCreateTensorDescriptor(&parameter_tensor);
-            cudnnCreateTensorDescriptor(&gradient_tensor);
-        }
-
-        ~UpdateGraph() {
-            CUDA_CHECK(cudaFree(workspace));
-            cudnnDestroyTensorDescriptor(parameter_tensor);
-            cudnnDestroyTensorDescriptor(gradient_tensor);
-        }
     };
 
     struct LayerUpdateData {
-        std::shared_ptr<UpdateGraph> update_weights = nullptr;
-        std::shared_ptr<UpdateGraph> update_biases = nullptr;
+        UpdateGraph update_weights;
+        UpdateGraph update_biases;
     };
+
+    UpdateGraph create_update_graph(cudnnHandle_t handle,
+                                    cudnnReduceTensorDescriptor_t reduce_tensor,
+                                    std::vector<int64_t> const &dims,
+                                    std::vector<int64_t> const &strides) const {
+        UpdateGraph graph;
+
+        cudnnCreateTensorDescriptor(&graph.parameter_tensor);
+        cudnnCreateTensorDescriptor(&graph.gradient_tensor);
+        CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(
+            graph.parameter_tensor, CUDNN_DATA_FLOAT, 1, dims[1], dims[2],
+            dims[3], strides[0], strides[1], strides[2], strides[3]));
+        CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(
+            graph.gradient_tensor, CUDNN_DATA_FLOAT, dims[0], dims[1], dims[2],
+            dims[3], strides[0], strides[1], strides[2], strides[3]));
+        CUDNN_CHECK(cudnnGetReductionWorkspaceSize(
+            handle, reduce_tensor, graph.gradient_tensor,
+            graph.parameter_tensor, &graph.workspace_size));
+        CUDA_CHECK(alloc_gpu(&graph.workspace, graph.workspace_size));
+        return graph;
+    }
+
+    void destroy_update_graph(UpdateGraph &graph) {
+        CUDA_CHECK(cudaFree(graph.workspace));
+        cudnnDestroyTensorDescriptor(graph.parameter_tensor);
+        cudnnDestroyTensorDescriptor(graph.gradient_tensor);
+        graph = {0};
+    }
 
   public:
     SGDOptimizer(cudnnHandle_t cudnn_handle) : cudnn_handle_(cudnn_handle) {
@@ -43,108 +60,70 @@ class SGDOptimizer : public Optimizer<ftype> {
             CUDNN_32BIT_INDICES));
     }
 
-    ~SGDOptimizer() { cudnnDestroyReduceTensorDescriptor(reduce_tensor); }
-
-    void init(LayerState<ftype> const &state) override {
-        if (!has_params(state)) {
-            return;
-        }
-
-        auto dims = state.dims;
-        update_data_.update_weights = create_update_graph(
-            {dims.batch_count, 1, dims.outputs, dims.inputs},
-            {dims.outputs * dims.inputs, dims.outputs * dims.inputs,
-             dims.inputs, 1});
-
-        if (has_biases(state)) {
-            update_data_.update_biases =
-                create_update_graph({dims.batch_count, 1, dims.outputs, 1},
-                                    {dims.outputs, dims.outputs, 1, 1});
-        }
-    }
-
-    std::shared_ptr<UpdateGraph>
-    create_update_graph(std::vector<int64_t> const &dims,
-                        std::vector<int64_t> const &strides) {
-        auto data = std::make_shared<UpdateGraph>();
-
-        // param = param - learning_rate * gradient
-        // NOTE: the parameter is not batched so the first dimension is always 1
-        CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(
-            data->parameter_tensor, CUDNN_DATA_FLOAT, 1, dims[1], dims[2],
-            dims[3], strides[0], strides[1], strides[2], strides[3]));
-        CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(
-            data->gradient_tensor, CUDNN_DATA_FLOAT, dims[0], dims[1], dims[2],
-            dims[3], strides[0], strides[1], strides[2], strides[3]));
-        CUDNN_CHECK(cudnnGetReductionWorkspaceSize(
-            cudnn_handle_, reduce_tensor, data->gradient_tensor,
-            data->parameter_tensor, &data->workspace_size));
-        CUDA_CHECK(alloc_gpu(&data->workspace, data->workspace_size));
-        return data;
+    ~SGDOptimizer() {
+        cudnnDestroyReduceTensorDescriptor(reduce_tensor);
+        destroy_update_graph(update_data_.update_weights);
+        destroy_update_graph(update_data_.update_biases);
     }
 
     void optimize(LayerState<ftype> const &state,
                   ftype learning_rate) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
-        if (!has_params(state)) {
-            return;
-        }
-
-        if (update_data_.update_weights) {
+        if (update_data_.update_weights.parameter_tensor) {
             optimize_params(update_data_.update_weights, state.weights,
-                            state.gradients.weights, learning_rate,
-                            state.dims.batch_count);
+                            state.gradients.weights, learning_rate);
         }
 
-        if (update_data_.update_biases) {
+        if (update_data_.update_biases.parameter_tensor) {
             optimize_params(update_data_.update_biases, state.biases,
-                            state.gradients.biases, learning_rate,
-                            state.dims.batch_count);
+                            state.gradients.biases, learning_rate);
         }
     }
 
-    void optimize_params(auto opt, ftype *parameter, ftype *gradient,
-                         ftype learning_rate, size_t batch_count) {
+    void optimize_params(auto &opt, ftype *parameter, ftype *gradient,
+                         ftype learning_rate) {
         ftype alpha = -learning_rate, beta = 1;
 
-        /* Tensor operation : C = reduce op( alpha * A ) + beta * C */
-        // cudnnReduceTensor(cudnnHandle_t handle,
-        //                   const cudnnReduceTensorDescriptor_t
-        //                   reduceTensorDesc, void *indices, size_t
-        //                   indicesSizeInBytes, void *workspace, size_t
-        //                   workspaceSizeInBytes, const void *alpha, const
-        //                   cudnnTensorDescriptor_t aDesc, const void *A, const
-        //                   void *beta, const cudnnTensorDescriptor_t cDesc,
-        //                   void *C);
-        if (batch_count > 1) {
+        // param = param - learning_rate * gradient
+
+        if (has_batch_) {
+            /* Tensor operation : C = reduce op( alpha * A ) + beta * C */
             CUDNN_CHECK(cudnnReduceTensor(
-                cudnn_handle_, reduce_tensor, nullptr, 0, opt->workspace,
-                opt->workspace_size, &alpha, opt->gradient_tensor, gradient,
-                &beta, opt->parameter_tensor, parameter));
+                cudnn_handle_, reduce_tensor, nullptr, 0, opt.workspace,
+                opt.workspace_size, &alpha, opt.gradient_tensor, gradient,
+                &beta, opt.parameter_tensor, parameter));
         } else {
             CUDNN_CHECK(cudnnAddTensor(cudnn_handle_, &alpha,
-                                       opt->gradient_tensor, gradient, &beta,
-                                       opt->parameter_tensor, parameter));
+                                       opt.gradient_tensor, gradient, &beta,
+                                       opt.parameter_tensor, parameter));
         }
     }
 
-    std::shared_ptr<Optimizer<ftype>> copy() const override {
-        return std::make_shared<SGDOptimizer>(cudnn_handle_);
-    }
+    std::shared_ptr<Optimizer<ftype>>
+    create(shape_t const &shape) const override {
+        auto result = std::make_shared<SGDOptimizer>(cudnn_handle_);
 
-  public:
-    bool has_params(LayerState<ftype> const &state) {
-        return state.weights != nullptr && state.biases != nullptr;
-    }
+        if (shape.dims.weights.size() > 0) {
+            result->has_batch_ = shape.dims.weights[0] > 1;
+            result->update_data_.update_weights =
+                create_update_graph(cudnn_handle_, reduce_tensor,
+                                    shape.dims.weights, shape.strides.weights);
+        }
 
-    bool has_biases(LayerState<ftype> const &state) {
-        return state.biases != nullptr && state.gradients.biases != nullptr;
+        if (shape.dims.biases.size() > 0) {
+            result->has_batch_ = shape.dims.biases[0] > 1;
+            result->update_data_.update_biases =
+                create_update_graph(cudnn_handle_, reduce_tensor,
+                                    shape.dims.biases, shape.strides.biases);
+        }
+        return result;
     }
 
   private:
-    LayerUpdateData update_data_;
-    cudnnReduceTensorDescriptor_t reduce_tensor = nullptr;
     cudnnHandle_t cudnn_handle_ = nullptr;
+    cudnnReduceTensorDescriptor_t reduce_tensor = nullptr;
+    LayerUpdateData update_data_;
+    bool has_batch_ = false;
 };
 
 #endif

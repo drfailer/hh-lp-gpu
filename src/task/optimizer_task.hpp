@@ -14,23 +14,13 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
     using OptimizerList = std::vector<std::shared_ptr<Optimizer<ftype>>>;
 
   public:
-    OptimizerTask(std::shared_ptr<Optimizer<ftype>> optimizer,
-                  size_t nb_threads)
+    OptimizerTask(size_t nb_threads)
         : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
-          optimizer_factory_(optimizer) {}
+          optimizers_(std::make_shared<OptimizerList>()) {}
 
     OptimizerTask(std::shared_ptr<OptimizerList> optimizers, size_t nb_threads)
         : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
           optimizers_(optimizers) {}
-
-    void init(NetworkState<ftype> const &state) {
-        optimizers_ = std::make_shared<OptimizerList>();
-        for (size_t i = 0; i < state.layers.size(); ++i) {
-            auto optimizer_layer_i = optimizer_factory_->copy();
-            optimizer_layer_i->init(state.layers[i]);
-            optimizers_->push_back(std::move(optimizer_layer_i));
-        }
-    }
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         optimizers_->operator[](data->idx)->optimize(
@@ -43,8 +33,11 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
                                                this->numberThreads());
     }
 
+    void add_layer(std::shared_ptr<Optimizer<ftype>> layer_optimizer) {
+        optimizers_->push_back(layer_optimizer);
+    }
+
   private:
-    std::shared_ptr<Optimizer<ftype>> optimizer_factory_ = nullptr;
     std::shared_ptr<OptimizerList> optimizers_ = nullptr;
 };
 

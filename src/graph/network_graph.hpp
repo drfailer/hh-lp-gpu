@@ -16,13 +16,14 @@
 
 class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
-    NetworkGraph() : hh::Graph<NetworkGraphIO>() {
-        pipeline_ = std::make_shared<PipelineState>();
-        pipeline_state_ = std::make_shared<PipelineStateManager>(pipeline_);
-        optimizer_ = std::make_shared<OptimizerState>();
-        optimizer_state_ =
-            std::make_shared<OptimizerStateManager>(optimizer_, pipeline_);
-
+    NetworkGraph()
+        : hh::Graph<NetworkGraphIO>(),
+          pipeline_(std::make_shared<PipelineState>()),
+          pipeline_state_(std::make_shared<PipelineStateManager>(pipeline_)),
+          optimizer_(std::make_shared<OptimizerState>()),
+          optimizer_state_(
+              std::make_shared<OptimizerStateManager>(optimizer_, pipeline_)) {
+        // TODO: we might want a minibatch generator as input
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);
 
@@ -32,7 +33,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
   public:
     void add_layer(std::shared_ptr<Layer<ftype>> layer) {
-        layer->idx = layer_idx++;
+        layer->idx = layer_idx_++;
         fwds_.back()->add_layer(layer);
         bwds_.back()->add_layer(layer);
         layers_.push_back(layer);
@@ -52,25 +53,21 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         bwds_.push_back(std::make_shared<BwdTask>());
     }
 
-    void set_loss(std::shared_ptr<LossTask> loss_task) {
-        this->loss_task_ = loss_task;
-    }
-
     template <typename LossType, typename... Types>
     void set_loss(Types... args) {
         this->loss_task_ = std::make_shared<LossTask>(
             std::make_shared<LossType>(std::forward<Types>(args)...));
     }
 
-    void set_optimizer(std::shared_ptr<OptimizerTask> optimizer_task) {
-        this->optimizer_task_ = optimizer_task;
-    }
-
     template <typename OptimizerType, typename... Types>
     void set_optimizer(size_t nb_threads, Types... args) {
-        this->optimizer_task_ = std::make_shared<OptimizerTask>(
-            std::make_shared<OptimizerType>(std::forward<Types>(args)...),
-            nb_threads);
+        this->optimizer_task_ = std::make_shared<OptimizerTask>(nb_threads);
+        this->optimizer_factory_ =
+            std::make_shared<OptimizerType>(std::forward<Types>(args)...);
+    }
+
+    void set_batch_count(int64_t batch_count) {
+        this->batch_count_ = batch_count;
     }
 
     void build() {
@@ -84,18 +81,31 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         this->edges(fwds_.back(), pipeline_state_);
 
         // connect loss and bwds tasks
-        this->edges(pipeline_state_, loss_task_);
-        this->edges(loss_task_, bwds_.back());
-        for (size_t i = bwds_.size() - 1; i >= 1; --i) {
-            this->edges(bwds_[i], bwds_[i - 1]);
+        if (loss_task_) {
+            this->edges(pipeline_state_, loss_task_);
+            this->edges(loss_task_, bwds_.back());
+            for (size_t i = bwds_.size() - 1; i >= 1; --i) {
+                this->edges(bwds_[i], bwds_[i - 1]);
+            }
         }
 
         // connect optimizer
-        for (size_t i = 0; i < bwds_.size(); ++i) {
-            this->edges(bwds_[i], optimizer_task_);
+        if (optimizer_task_) {
+            for (size_t i = 0; i < bwds_.size(); ++i) {
+                this->edges(bwds_[i], optimizer_task_);
+            }
+            this->edges(optimizer_task_, optimizer_state_);
+            this->edges(optimizer_state_, pipeline_state_);
         }
-        this->edges(optimizer_task_, optimizer_state_);
-        this->edges(optimizer_state_, pipeline_state_);
+    }
+
+    void init() {
+        for (auto layer : layers_) {
+            layer->init(batch_count_);
+            optimizer_task_->add_layer(
+                optimizer_factory_->create(layer->parameter_shape));
+        }
+        loss_task_->init(layers_.back()->dims.outputs);
     }
 
     void terminate() {
@@ -104,19 +114,22 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         this->waitForTermination();
     }
 
-    void init_network_state(NetworkState<ftype> &state) {
-        timer_start(graph_init);
+  public:
+    NetworkState<ftype> create_state() {
+        NetworkState<ftype> state;
+
+        timer_start(create_state);
         state.layers = std::vector<LayerState<ftype>>(layers_.size());
         for (auto &layer : layers_) {
-            layer->init(state);
+            layer->create_state(state);
         }
-        optimizer_task_->init(state);
-        loss_task_->init(state);
-        timer_end(graph_init);
-        timer_report_prec(graph_init, milliseconds);
+        loss_task_->create_state(&state.loss, layers_.back()->dims.outputs);
+        timer_end(create_state);
+        timer_report_prec(create_state, milliseconds);
+        return state;
     }
 
-    void destroy_network_state(NetworkState<ftype> &state) {
+    void destroy_state(NetworkState<ftype> &state) {
         for (auto &layer_state : state.layers) {
             destroy_layer_state(layer_state);
         }
@@ -132,13 +145,16 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     std::shared_ptr<PipelineState> pipeline_ = nullptr;
     std::shared_ptr<PipelineStateManager> pipeline_state_ = nullptr;
     std::shared_ptr<LossTask> loss_task_ = nullptr;
+    std::shared_ptr<Loss<ftype>> loss_ = nullptr;
     std::shared_ptr<OptimizerTask> optimizer_task_ = nullptr;
     std::shared_ptr<OptimizerState> optimizer_ = nullptr;
     std::shared_ptr<OptimizerStateManager> optimizer_state_ = nullptr;
+    std::shared_ptr<Optimizer<ftype>> optimizer_factory_ = nullptr;
     std::vector<std::shared_ptr<FwdTask>> fwds_ = {};
     std::vector<std::shared_ptr<BwdTask>> bwds_ = {};
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    size_t layer_idx = 0;
+    size_t layer_idx_ = 0;
+    int64_t batch_count_ = 1;
 };
 
 #endif
