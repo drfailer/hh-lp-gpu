@@ -7,28 +7,28 @@
 
 #define CUDNN_CHECK(expr)                                                      \
     {                                                                          \
-        auto result = expr;                                                    \
-        if (result != CUDNN_STATUS_SUCCESS) {                                  \
+        auto _result = expr;                                                   \
+        if (_result != CUDNN_STATUS_SUCCESS) {                                 \
             std::cerr << "[CUDA_ERROR]: " __FILE__ ":" << __LINE__ << ": "     \
-                      << cudnnGetErrorString(result) << std::endl;              \
+                      << cudnnGetErrorString(_result) << std::endl;            \
         }                                                                      \
     }
 
 #define CUDA_CHECK(expr)                                                       \
     {                                                                          \
-        auto result = expr;                                                    \
-        if (result != cudaSuccess) {                                           \
+        auto _result = expr;                                                   \
+        if (_result != cudaSuccess) {                                          \
             std::cerr << "[CUDA_ERROR]: " __FILE__ ":" << __LINE__ << ": "     \
-                      << cudaGetErrorString(result) << std::endl;              \
+                      << cudaGetErrorString(_result) << std::endl;             \
         }                                                                      \
     }
 
 #define CUBLAS_CHECK(expr)                                                     \
     {                                                                          \
-        auto result = expr;                                                    \
-        if (result != CUBLAS_STATUS_SUCCESS) {                                 \
+        auto _result = expr;                                                   \
+        if (_result != CUBLAS_STATUS_SUCCESS) {                                \
             std::cerr << "[CUBLAS_ERROR]: " __FILE__ ":" << __LINE__ << ": "   \
-                      << cublasGetStatusName(result) << std::endl;             \
+                      << cublasGetStatusName(_result) << std::endl;            \
         }                                                                      \
     }
 
