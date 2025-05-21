@@ -7,7 +7,6 @@ template <typename T>
 struct Data {
     T *input = nullptr;
     T *ground_truth = nullptr;
-    size_t batch_size = 0;
 };
 
 template <typename T>
