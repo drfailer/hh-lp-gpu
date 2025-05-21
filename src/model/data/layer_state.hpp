@@ -1,7 +1,7 @@
 #ifndef MODEL_DATA_LAYER_STATE_H
 #define MODEL_DATA_LAYER_STATE_H
+#include "dims.hpp"
 #include <cstddef>
-#include "layer_dims.hpp"
 
 template <typename T> struct LayerState {
     T *input = nullptr;  // input of the forward pass (gpu)
@@ -13,31 +13,31 @@ template <typename T> struct LayerState {
         T *weights = nullptr;
         T *biases = nullptr;
     } gradients;
-    LayerDims dims;
 };
 
 template <typename T>
-LayerState<T> create_layer_state(LayerDims dims, bool use_weights, bool use_biases) {
+LayerState<T> create_layer_state(dims_t dims, bool use_weights,
+                                 bool use_biases) {
     LayerState<T> state;
     size_t weights_size = dims.inputs * dims.outputs * dims.kernel_height *
                           dims.kernel_width * dims.channels;
 
-    CUDA_CHECK(alloc_gpu(&state.output, dims.outputs));
-    CUDA_CHECK(alloc_gpu(&state.error, dims.inputs));
+    CUDA_CHECK(alloc_gpu(&state.output, dims.batch_count * dims.outputs));
+    CUDA_CHECK(alloc_gpu(&state.error, dims.batch_count * dims.inputs));
     if (use_weights) {
         CUDA_CHECK(alloc_gpu(&state.weights, weights_size));
-        CUDA_CHECK(alloc_gpu(&state.gradients.weights, weights_size));
+        CUDA_CHECK(alloc_gpu(&state.gradients.weights,
+                             dims.batch_count * weights_size));
     }
     if (use_biases) {
         CUDA_CHECK(alloc_gpu(&state.biases, dims.outputs));
-        CUDA_CHECK(alloc_gpu(&state.gradients.biases, dims.outputs));
+        CUDA_CHECK(alloc_gpu(&state.gradients.biases,
+                             dims.batch_count * dims.outputs));
     }
-    state.dims = dims;
     return state;
 }
 
-template <typename T>
-void destroy_layer_state(LayerState<T> &state) {
+template <typename T> void destroy_layer_state(LayerState<T> &state) {
     cudaFree(state.output);
     state.output = nullptr;
     cudaFree(state.error);
