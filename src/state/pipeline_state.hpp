@@ -78,6 +78,8 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         ++state.data_set_idx;
+        // TODO: add a log rate and compute the loss
+        // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx << std::endl;
         if (state.data_set_idx >= train_data.data_set.datas.size()) {
             INFO_GRP("new epoch", INFO_GRP_PIPELINE_STEP);
             state.data_set_idx = 0;
