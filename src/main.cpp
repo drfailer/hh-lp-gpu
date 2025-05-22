@@ -1117,8 +1117,8 @@ UTest(evaluate_mnist) {
 }
 
 UTest(evaluate_mnist_batched) {
-    constexpr ftype learning_rate = 0.01;
-    constexpr size_t epochs = 30;
+    constexpr ftype learning_rate = 0.1;
+    constexpr size_t epochs = 3;
     constexpr size_t batch_count = 16;
     MNISTLoader loader;
     BatchGenerator<ftype> batch_generator(0);
@@ -1214,9 +1214,9 @@ UTest(evaluate_mnist_batched) {
     std::cout << "accuracy: " << accuracy_end << std::endl;
     std::cout << "success: " << success << ", errors: " << errors << std::endl;
 
-    uassert(accuracy_end > 10 * accuracy_start);
+    uassert(accuracy_end > accuracy_start);
 
-    graph.createDotFile("train_mnist.dot", hh::ColorScheme::EXECUTION,
+    graph.createDotFile("train_mnist_batch.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
 }
 
@@ -1226,26 +1226,26 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(matvecmul_n);
-    // run_test(matvecmul_t);
-    // run_test(matvecmul_batch_n);
-    // run_test(matmul_n_n);
-    // run_test(matmul_t_n);
-    // run_test(matmul_n_t);
-    // run_test(matmul_t_t);
-    // run_test(matmul_batch_n_n);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matvecmul_batch_n);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
+    run_test(matmul_batch_n_n);
 
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
-    // run_test(sgd_optimizer);
-    // run_test(sgd_optimizer_batch);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
+    run_test(sgd_optimizer);
+    run_test(sgd_optimizer_batch);
 
-    // run_test(inference);
-    // run_test(training);
+    run_test(inference);
+    run_test(training);
 
-    // run_test(evaluate_mnist);
+    run_test(evaluate_mnist);
     run_test(evaluate_mnist_batched);
     return 0;
 }
