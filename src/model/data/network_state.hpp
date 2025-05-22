@@ -5,7 +5,7 @@
 
 template <typename T>
 struct NetworkState {
-    std::vector<LayerState<T>> layers;
+    std::vector<layer_state_t<T>> layers;
     T *loss;
 };
 

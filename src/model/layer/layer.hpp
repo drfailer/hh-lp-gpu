@@ -34,10 +34,10 @@ template <typename T> struct Layer {
         // maybe we should init the optimizer functor here
     }
 
-    virtual LayerState<T> create_state() const = 0;
+    virtual layer_state_t<T> create_state() const = 0;
     virtual void init() = 0;
-    virtual T *fwd(LayerState<T> &states, T *input) = 0;
-    virtual T *bwd(LayerState<T> &states, T *error) = 0;
+    virtual T *fwd(layer_state_t<T> &states, T *input) = 0;
+    virtual T *bwd(layer_state_t<T> &states, T *error) = 0;
 };
 
 #endif

@@ -39,7 +39,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
      * pass, parameters and gradients). Since this layer is an activation one,
      * there no need to allocate parameters and gradients.
      */
-    LayerState<ftype> create_state() const override {
+    layer_state_t<ftype> create_state() const override {
         return create_layer_state<ftype>(this->dims, false, false);
     }
 
@@ -62,7 +62,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
             this->dims.batch_count, 1, dims.inputs, 1));
     }
 
-    ftype *fwd(LayerState<ftype> &state, ftype *input) override {
+    ftype *fwd(layer_state_t<ftype> &state, ftype *input) override {
         INFO_GRP("SigmoidActivationLayer FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
@@ -75,7 +75,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
         return state.output;
     }
 
-    ftype *bwd(LayerState<ftype> &state, ftype *error) override {
+    ftype *bwd(layer_state_t<ftype> &state, ftype *error) override {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 

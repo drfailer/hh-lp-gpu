@@ -66,16 +66,17 @@ class SGDOptimizer : public Optimizer<ftype> {
         destroy_update_graph(update_data_.update_biases);
     }
 
-    void optimize(LayerState<ftype> const &state,
+    void optimize(layer_state_t<ftype> const &state,
                   ftype learning_rate) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
         if (update_data_.update_weights.parameter_tensor) {
-            optimize_params(update_data_.update_weights, state.weights,
-                            state.gradients.weights, learning_rate);
+            optimize_params(update_data_.update_weights,
+                            state.parameters.weights, state.gradients.weights,
+                            learning_rate);
         }
 
         if (update_data_.update_biases.parameter_tensor) {
-            optimize_params(update_data_.update_biases, state.biases,
+            optimize_params(update_data_.update_biases, state.parameters.biases,
                             state.gradients.biases, learning_rate);
         }
     }

@@ -119,7 +119,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         NetworkState<ftype> state;
 
         timer_start(create_state);
-        state.layers = std::vector<LayerState<ftype>>(layers_.size());
+        state.layers = std::vector<layer_state_t<ftype>>(layers_.size());
         for (auto &layer : layers_) {
             layer->create_state(state);
         }

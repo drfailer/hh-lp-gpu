@@ -25,7 +25,8 @@ ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
 
-void init_test_parameters(LayerState<ftype> &state, dims_t dims, ftype value) {
+void init_test_parameters(layer_state_t<ftype> &state, dims_t dims,
+                          ftype value) {
     int64_t weights_size = dims.inputs * dims.outputs;
     ftype *weights = new ftype[weights_size];
     defer(delete[] weights);
@@ -38,11 +39,13 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims, ftype value) {
     for (int64_t i = 0; i < dims.outputs; ++i) {
         biases[i] = value;
     }
-    CUDA_CHECK(memcpy_host_to_gpu(state.weights, weights, weights_size));
-    CUDA_CHECK(memcpy_host_to_gpu(state.biases, biases, dims.outputs));
+    CUDA_CHECK(
+        memcpy_host_to_gpu(state.parameters.weights, weights, weights_size));
+    CUDA_CHECK(
+        memcpy_host_to_gpu(state.parameters.biases, biases, dims.outputs));
 }
 
-void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
+void init_test_parameters(layer_state_t<ftype> &state, dims_t dims) {
     ftype *weights = new ftype[dims.inputs * dims.outputs];
     defer(delete[] weights);
     ftype *biases = new ftype[dims.outputs];
@@ -58,9 +61,10 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
     for (int64_t i = 0; i < dims.outputs; ++i) {
         biases[i] = i + 1;
     }
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights, weights,
+                                  dims.inputs * dims.outputs));
     CUDA_CHECK(
-        memcpy_host_to_gpu(state.weights, weights, dims.inputs * dims.outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.biases, biases, dims.outputs));
+        memcpy_host_to_gpu(state.parameters.biases, biases, dims.outputs));
 }
 
 ftype *create_test_gpu_array(ftype *host, size_t size) {
@@ -686,7 +690,8 @@ UTest(linear_layer_fwd) {
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
     ftype *input_gpu = nullptr;
 
-    LayerState<ftype> layer_state = create_layer_state<ftype>(dims, true, true);
+    layer_state_t<ftype> layer_state =
+        create_layer_state<ftype>(dims, true, true);
     defer(destroy_layer_state(layer_state));
     init_test_parameters(layer_state, dims, 1);
 
@@ -697,7 +702,7 @@ UTest(linear_layer_fwd) {
 
     LinearLayer linear_layer(CUBLAS_HANDLE, inputs, outputs);
     linear_layer.init();
-    LayerState<ftype> state = linear_layer.create_state();
+    layer_state_t<ftype> state = linear_layer.create_state();
     defer(destroy_layer_state(state));
 
     ftype *output_gpu = linear_layer.fwd(layer_state, input_gpu);
@@ -725,13 +730,14 @@ UTest(linear_layer_bwd) {
     err_gpu = create_test_gpu_array(input_err_host, inputs);
     defer(cudaFree(err_gpu));
 
-    LayerState<ftype> layer_state = create_layer_state<ftype>(dims, true, true);
+    layer_state_t<ftype> layer_state =
+        create_layer_state<ftype>(dims, true, true);
     defer(destroy_layer_state(layer_state));
     init_test_parameters(layer_state, dims);
 
     LinearLayer linear_layer(CUBLAS_HANDLE, inputs, outputs);
     linear_layer.init();
-    LayerState<ftype> state = linear_layer.create_state();
+    layer_state_t<ftype> state = linear_layer.create_state();
     defer(destroy_layer_state(state));
 
     linear_layer.fwd(layer_state, input_gpu);
@@ -759,7 +765,7 @@ UTest(sigmoid_activation_fwd) {
     cudaDeviceSynchronize();
 
     SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
-    LayerState<ftype> layer_state = sigmoid_layer.create_state();
+    layer_state_t<ftype> layer_state = sigmoid_layer.create_state();
     defer(destroy_layer_state(layer_state));
     sigmoid_layer.init();
     ftype *output_gpu = sigmoid_layer.fwd(layer_state, input_gpu);
@@ -790,7 +796,7 @@ UTest(sigmoid_activation_bwd) {
 
     SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
     sigmoid_layer.init();
-    LayerState<ftype> layer_state = sigmoid_layer.create_state();
+    layer_state_t<ftype> layer_state = sigmoid_layer.create_state();
     defer(destroy_layer_state(layer_state));
     sigmoid_layer.fwd(layer_state, input_gpu);
     ftype *output_gpu = sigmoid_layer.bwd(layer_state, err_gpu);
@@ -813,19 +819,20 @@ UTest(sgd_optimizer) {
                                                                   1, 1, 1},
                            biases[outputs] = {1, 2},
                            biases_gradients[outputs] = {1, 1};
-    LayerState<ftype> state;
+    layer_state_t<ftype> state;
     SGDOptimizer optimizer_factory(CUDNN_HANDLE);
 
-    CUDA_CHECK(alloc_gpu(&state.weights, inputs * outputs));
-    defer(cudaFree(state.weights));
-    CUDA_CHECK(memcpy_host_to_gpu(state.weights, weights, inputs * outputs));
+    CUDA_CHECK(alloc_gpu(&state.parameters.weights, inputs * outputs));
+    defer(cudaFree(state.parameters.weights));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights, weights,
+                                  inputs * outputs));
     CUDA_CHECK(alloc_gpu(&state.gradients.weights, inputs * outputs));
     defer(cudaFree(state.gradients.weights));
     CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights, weights_gradients,
                                   inputs * outputs));
-    CUDA_CHECK(alloc_gpu(&state.biases, outputs));
-    defer(cudaFree(state.biases));
-    CUDA_CHECK(memcpy_host_to_gpu(state.biases, biases, outputs));
+    CUDA_CHECK(alloc_gpu(&state.parameters.biases, outputs));
+    defer(cudaFree(state.parameters.biases));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases, biases, outputs));
     CUDA_CHECK(alloc_gpu(&state.gradients.biases, outputs));
     defer(cudaFree(state.gradients.biases));
     CUDA_CHECK(
@@ -846,9 +853,10 @@ UTest(sgd_optimizer) {
     sgd->optimize(state, learning_rate);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
+    CUDA_CHECK(memcpy_gpu_to_host(result_weights, state.parameters.weights,
+                                  outputs * inputs));
     CUDA_CHECK(
-        memcpy_gpu_to_host(result_weights, state.weights, outputs * inputs));
-    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.biases, outputs));
+        memcpy_gpu_to_host(result_biases, state.parameters.biases, outputs));
 
     for (size_t i = 0; i < inputs * outputs; ++i) {
         uassert_float_equal(result_weights[i],
@@ -873,7 +881,7 @@ UTest(sgd_optimizer_batch) {
                                {0},
                            biases[outputs] = {1, 2},
                            biases_gradients[batch_count * outputs] = {0};
-    LayerState<ftype> state;
+    layer_state_t<ftype> state;
     SGDOptimizer optimizer_factory(CUDNN_HANDLE);
 
     // intialize gradients with dummy values
@@ -884,17 +892,18 @@ UTest(sgd_optimizer_batch) {
         biases_gradients[i] = i / 10.;
     }
 
-    CUDA_CHECK(alloc_gpu(&state.weights, inputs * outputs));
-    defer(cudaFree(state.weights));
-    CUDA_CHECK(memcpy_host_to_gpu(state.weights, weights, inputs * outputs));
+    CUDA_CHECK(alloc_gpu(&state.parameters.weights, inputs * outputs));
+    defer(cudaFree(state.parameters.weights));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights, weights,
+                                  inputs * outputs));
     CUDA_CHECK(
         alloc_gpu(&state.gradients.weights, batch_count * inputs * outputs));
     defer(cudaFree(state.gradients.weights));
     CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights, weights_gradients,
                                   batch_count * inputs * outputs));
-    CUDA_CHECK(alloc_gpu(&state.biases, outputs));
-    defer(cudaFree(state.biases));
-    CUDA_CHECK(memcpy_host_to_gpu(state.biases, biases, outputs));
+    CUDA_CHECK(alloc_gpu(&state.parameters.biases, outputs));
+    defer(cudaFree(state.parameters.biases));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases, biases, outputs));
     CUDA_CHECK(alloc_gpu(&state.gradients.biases, batch_count * outputs));
     defer(cudaFree(state.gradients.biases));
     CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases, biases_gradients,
@@ -915,9 +924,10 @@ UTest(sgd_optimizer_batch) {
     sgd->optimize(state, learning_rate);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
+    CUDA_CHECK(memcpy_gpu_to_host(result_weights, state.parameters.weights,
+                                  outputs * inputs));
     CUDA_CHECK(
-        memcpy_gpu_to_host(result_weights, state.weights, outputs * inputs));
-    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.biases, outputs));
+        memcpy_gpu_to_host(result_biases, state.parameters.biases, outputs));
 
     for (size_t i = 0; i < inputs * outputs; ++i) {
         ftype avg_gradient =

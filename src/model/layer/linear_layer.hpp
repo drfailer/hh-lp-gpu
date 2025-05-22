@@ -6,7 +6,6 @@
 #include "log.h/log.h"
 #include <cudnn.h>
 #include <cudnn_graph.h>
-#include <random>
 
 class LinearLayer : public Layer<ftype> {
   public:
@@ -36,16 +35,16 @@ class LinearLayer : public Layer<ftype> {
      * Allocates memory for a layer state (output memory for the fwd pass, bwd
      * pass, parameters and gradients).
      */
-    LayerState<ftype> create_state() const override {
+    layer_state_t<ftype> create_state() const override {
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
-        LayerState<ftype> state;
+        layer_state_t<ftype> state;
 
         state = create_layer_state<ftype>(this->dims, true, true);
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            state.weights, this->dims.inputs * this->dims.outputs, -0.5, 0.5,
+            state.parameters.weights, this->dims.inputs * this->dims.outputs, -0.5, 0.5,
             0));
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            state.biases, this->dims.inputs * this->dims.outputs, -0.5, 0.5,
+            state.parameters.biases, this->dims.inputs * this->dims.outputs, -0.5, 0.5,
             0));
         cudaDeviceSynchronize();
         return state;
@@ -60,7 +59,7 @@ class LinearLayer : public Layer<ftype> {
         weights_gradients_array.resize(this->dims.batch_count, nullptr);
     }
 
-    ftype *fwd(LayerState<ftype> &state, ftype *input) override {
+    ftype *fwd(layer_state_t<ftype> &state, ftype *input) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
         // save input (used for the backwards pass)
@@ -68,10 +67,10 @@ class LinearLayer : public Layer<ftype> {
 
         // TODO: should be done in init
         for (int64_t b = 0; b < this->dims.batch_count; ++b) {
-            weights_array[b] = state.weights;
+            weights_array[b] = state.parameters.weights;
             inputs_array[b] = &state.input[b * this->dims.inputs];
             outputs_array[b] = &state.output[b * this->dims.outputs];
-            CUDA_CHECK(memcpy_gpu_to_gpu(outputs_array[b], state.biases,
+            CUDA_CHECK(memcpy_gpu_to_gpu(outputs_array[b], state.parameters.biases,
                                          this->dims.outputs));
         }
 
@@ -82,11 +81,11 @@ class LinearLayer : public Layer<ftype> {
         return state.output;
     }
 
-    ftype *bwd(LayerState<ftype> &state, ftype *error) override {
+    ftype *bwd(layer_state_t<ftype> &state, ftype *error) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
 
         for (int64_t b = 0; b < this->dims.batch_count; ++b) {
-            weights_array[b] = state.weights;
+            weights_array[b] = state.parameters.weights;
             inputs_array[b] = &state.input[b * this->dims.inputs];
             errors_array[b] = &error[b * this->dims.outputs];
             weights_gradients_array[b] =
