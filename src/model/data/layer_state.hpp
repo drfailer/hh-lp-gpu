@@ -1,6 +1,7 @@
 #ifndef MODEL_DATA_LAYER_STATE_H
 #define MODEL_DATA_LAYER_STATE_H
 #include "dims.hpp"
+#include "layer_data.hpp"
 #include "parameters.hpp"
 #include <cstddef>
 
@@ -13,6 +14,7 @@ template <typename T> struct layer_state_t {
         T *weights = nullptr;
         T *biases = nullptr;
     } gradients;
+    layer_data_t *layer_data; // data used by layers
 };
 
 template <typename T>
