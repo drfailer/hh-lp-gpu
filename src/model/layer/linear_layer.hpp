@@ -37,27 +37,16 @@ class LinearLayer : public Layer<ftype> {
      * pass, parameters and gradients).
      */
     LayerState<ftype> create_state() const override {
-        // TODO: we should have helper functions to initialize parameters
-        LayerState<ftype> state;
-        std::mt19937 mt(0);
-        std::uniform_real_distribution<> dist(-0.5, 0.5);
-        std::vector<ftype> weights_host(this->dims.inputs * this->dims.outputs,
-                                        0);
-        std::vector<ftype> biases_host(this->dims.outputs, 0);
-
-        for (size_t i = 0; i < weights_host.size(); ++i) {
-            weights_host[i] = dist(mt);
-        }
-        for (size_t i = 0; i < biases_host.size(); ++i) {
-            biases_host[i] = dist(mt);
-        }
-
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
+        LayerState<ftype> state;
+
         state = create_layer_state<ftype>(this->dims, true, true);
-        CUDA_CHECK(memcpy_host_to_gpu(state.weights, weights_host.data(),
-                                      weights_host.size()));
-        CUDA_CHECK(memcpy_host_to_gpu(state.biases, biases_host.data(),
-                                      biases_host.size()));
+        CUDA_CHECK(memset_random_uniform_gpu<ftype>(
+            state.weights, this->dims.inputs * this->dims.outputs, -0.5, 0.5,
+            0));
+        CUDA_CHECK(memset_random_uniform_gpu<ftype>(
+            state.biases, this->dims.inputs * this->dims.outputs, -0.5, 0.5,
+            0));
         cudaDeviceSynchronize();
         return state;
     }

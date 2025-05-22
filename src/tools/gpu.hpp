@@ -4,6 +4,8 @@
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
 #include <iostream>
+#include <random>
+#include <vector>
 
 #define CUDNN_CHECK(expr)                                                      \
     {                                                                          \
@@ -52,6 +54,23 @@ auto memcpy_gpu_to_gpu(T *dest_gpu, T *src_gpu, size_t size) {
 
 template <typename T> auto alloc_gpu(T **dest, size_t size) {
     return cudaMalloc((void **)dest, size * sizeof(T));
+}
+
+template <typename T>
+auto memset_random_uniform_gpu(T *dest, size_t size, T lower_bound,
+                               T higher_bound, int32_t seed = 0) {
+    std::vector<T> mem_host(size);
+    std::mt19937 mt(seed); // should be static?
+    std::uniform_real_distribution<T> dist(lower_bound, higher_bound);
+
+    for (size_t i = 0; i < size; ++i) {
+        mem_host[i] = dist(mt);
+    }
+    return memcpy_host_to_gpu(dest, mem_host.data(), size);
+}
+
+template <typename T> auto memset_gpu(T *dest, size_t size, T value) {
+    return cudaMemset(dest, value, size * sizeof(T));
 }
 
 template <typename T>
