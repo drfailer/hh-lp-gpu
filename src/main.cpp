@@ -1086,6 +1086,8 @@ UTest(evaluate_mnist) {
     (void)graph.get<TrainingData<ftype>>();
     graph.cleanGraph();
 
+    INFO("Evaluate the model...");
+
     success = 0;
     errors = 0;
     for (auto data : testing_set.datas) {
@@ -1187,7 +1189,7 @@ UTest(evaluate_mnist_batched) {
     (void)graph.get<TrainingData<ftype>>();
     graph.cleanGraph();
 
-
+    INFO("Evaluate the model...");
     graph.set_batch_count(1);
 
     success = 0;
