@@ -700,7 +700,7 @@ UTest(linear_layer_fwd) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu, input_host, inputs));
     cudaDeviceSynchronize();
 
-    LinearLayer linear_layer(CUBLAS_HANDLE, inputs, outputs);
+    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     linear_layer.init();
     layer_state_t<ftype> state = linear_layer.create_state();
     defer(destroy_layer_state(state));
@@ -735,7 +735,7 @@ UTest(linear_layer_bwd) {
     defer(destroy_layer_state(layer_state));
     init_test_parameters(layer_state, dims);
 
-    LinearLayer linear_layer(CUBLAS_HANDLE, inputs, outputs);
+    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     linear_layer.init();
     layer_state_t<ftype> state = linear_layer.create_state();
     defer(destroy_layer_state(state));
@@ -871,80 +871,6 @@ UTest(sgd_optimizer) {
     }
 }
 
-UTest(sgd_optimizer_batch) {
-    constexpr int64_t inputs = 3;
-    constexpr int64_t outputs = 2;
-    constexpr int64_t batch_count = 2;
-    constexpr ftype learning_rate = 0.01;
-    ftype weights[inputs * outputs] = {1, 2, 3, 4, 4, 6},
-                           weights_gradients[batch_count * inputs * outputs] =
-                               {0},
-                           biases[outputs] = {1, 2},
-                           biases_gradients[batch_count * outputs] = {0};
-    layer_state_t<ftype> state;
-    SGDOptimizer optimizer_factory(CUDNN_HANDLE);
-
-    // intialize gradients with dummy values
-    for (size_t i = 0; i < batch_count * inputs * outputs; ++i) {
-        weights_gradients[i] = i / 10.;
-    }
-    for (size_t i = 0; i < batch_count * outputs; ++i) {
-        biases_gradients[i] = i / 10.;
-    }
-
-    CUDA_CHECK(alloc_gpu(&state.parameters.weights, inputs * outputs));
-    defer(cudaFree(state.parameters.weights));
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights, weights,
-                                  inputs * outputs));
-    CUDA_CHECK(
-        alloc_gpu(&state.gradients.weights, batch_count * inputs * outputs));
-    defer(cudaFree(state.gradients.weights));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights, weights_gradients,
-                                  batch_count * inputs * outputs));
-    CUDA_CHECK(alloc_gpu(&state.parameters.biases, outputs));
-    defer(cudaFree(state.parameters.biases));
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases, biases, outputs));
-    CUDA_CHECK(alloc_gpu(&state.gradients.biases, batch_count * outputs));
-    defer(cudaFree(state.gradients.biases));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases, biases_gradients,
-                                  batch_count * outputs));
-
-    auto sgd = optimizer_factory.create(shape_t{
-        .dims =
-            {
-                .weights = {batch_count, 1, inputs, outputs},
-                .biases = {batch_count, 1, outputs, 1},
-            },
-        .strides =
-            {
-                .weights = {inputs * outputs, inputs * outputs, outputs, 1},
-                .biases = {outputs, outputs, 1, 1},
-            },
-    });
-    sgd->optimize(state, learning_rate);
-
-    ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
-    CUDA_CHECK(memcpy_gpu_to_host(result_weights, state.parameters.weights,
-                                  outputs * inputs));
-    CUDA_CHECK(
-        memcpy_gpu_to_host(result_biases, state.parameters.biases, outputs));
-
-    for (size_t i = 0; i < inputs * outputs; ++i) {
-        ftype avg_gradient =
-            (weights_gradients[i] + weights_gradients[inputs * outputs + i]) /
-            2;
-        uassert_float_equal(result_weights[i],
-                            weights[i] - learning_rate * avg_gradient, 1e-6);
-    }
-
-    for (size_t i = 0; i < outputs; ++i) {
-        ftype avg_gradient =
-            (weights_gradients[i] + weights_gradients[outputs + i]) / 2;
-        uassert_float_equal(result_biases[i],
-                            biases[i] - learning_rate * avg_gradient, 1e-6);
-    }
-}
-
 UTest(inference) {
     constexpr size_t outputs = 3;
     constexpr size_t inputs = 3;
@@ -962,7 +888,7 @@ UTest(inference) {
     graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
     graph.set_batch_count(1);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, inputs, outputs);
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, outputs);
     graph.build();
     graph.init();
@@ -1010,13 +936,13 @@ UTest(training) {
     graph.set_optimizer<SGDOptimizer>(2, CUDNN_HANDLE);
     graph.set_batch_count(1);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, nb_inputs, 32);
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, nb_inputs, 32);
     graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 32);
     graph.cut_layer();
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 32, 32);
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 32, 32);
     graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 32);
     graph.cut_layer();
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 32, 10);
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 32, 10);
     graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes);
 
     graph.build();
@@ -1054,7 +980,7 @@ UTest(evaluate_mnist) {
     graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
     graph.set_batch_count(1);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 28 * 28, 10);
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 28 * 28, 10);
     graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 10);
 
     graph.build();
@@ -1151,7 +1077,7 @@ UTest(evaluate_mnist_batched) {
     graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
     graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, 28 * 28, 10);
+    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 28 * 28, 10);
     graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 10);
 
     graph.build();
@@ -1252,7 +1178,6 @@ int main(int, char **) {
     run_test(sigmoid_activation_fwd);
     run_test(sigmoid_activation_bwd);
     run_test(sgd_optimizer);
-    run_test(sgd_optimizer_batch);
 
     run_test(inference);
     run_test(training);
