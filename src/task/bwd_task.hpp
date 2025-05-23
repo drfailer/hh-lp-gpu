@@ -16,7 +16,7 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
     BwdTask() : hh::AbstractCUDATask<BwdTaskIO>("BwdTask", 1) {}
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        ftype *error = data->error;
+        auto *error = data->error;
         auto &states = data->states;
 
         for (int i = layers_.size() - 1; i >= 0; --i) {

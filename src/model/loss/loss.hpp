@@ -1,11 +1,12 @@
 #ifndef MODEL_LOSS_LOSS_H
 #define MODEL_LOSS_LOSS_H
-#include <cstdint>
+#include "../data/tensor.hpp"
 
 template <typename T> struct Loss {
-    virtual void init(int64_t size) = 0;
-    virtual void fwd(T *model_output, T *ground_truth, T *result) = 0;
-    virtual void bwd(T *model_output, T *ground_truth, T *result) = 0;
+    virtual Tensor<T> *fwd(Tensor<T> *model_output, Tensor<T> *ground_truth,
+                           Tensor<T> *result) = 0;
+    virtual Tensor<T> *bwd(Tensor<T> *model_output, Tensor<T> *ground_truth,
+                           Tensor<T> *result) = 0;
 };
 
 #endif

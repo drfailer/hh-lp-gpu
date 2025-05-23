@@ -16,23 +16,9 @@ struct SigmoidActivationLayer : Layer<ftype> {
         CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));
         CUDNN_CHECK(cudnnSetActivationDescriptor(
             sigmoid_, CUDNN_ACTIVATION_SIGMOID, CUDNN_NOT_PROPAGATE_NAN, 0));
-        // input tensor
-        CUDNN_CHECK(cudnnCreateTensorDescriptor(&fwd_.input_tensor));
-        // output tensor
-        CUDNN_CHECK(cudnnCreateTensorDescriptor(&fwd_.output_tensor));
-        // input error tensor
-        CUDNN_CHECK(cudnnCreateTensorDescriptor(&bwd_.err_tensor));
-        // output error tensor
-        CUDNN_CHECK(cudnnCreateTensorDescriptor(&bwd_.output_tensor));
     }
 
-    ~SigmoidActivationLayer() {
-        cudnnDestroyTensorDescriptor(fwd_.input_tensor);
-        cudnnDestroyTensorDescriptor(fwd_.output_tensor);
-        cudnnDestroyTensorDescriptor(bwd_.err_tensor);
-        cudnnDestroyTensorDescriptor(bwd_.output_tensor);
-        cudnnDestroyActivationDescriptor(sigmoid_);
-    }
+    ~SigmoidActivationLayer() { cudnnDestroyActivationDescriptor(sigmoid_); }
 
     /*
      * Allocates memory for a layer state (output memory for the fwd pass, bwd
@@ -40,29 +26,24 @@ struct SigmoidActivationLayer : Layer<ftype> {
      * there no need to allocate parameters and gradients.
      */
     layer_state_t<ftype> create_state() const override {
-        return create_layer_state<ftype>(this->dims, false, false);
+        layer_state_t<ftype> state;
+        return state;
     }
 
-    void init() override {
-        // input tensor
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            fwd_.input_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            this->dims.batch_count, 1, dims.inputs, 1));
-        // output tensor
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            fwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            this->dims.batch_count, 1, dims.inputs, 1));
-        // input error tensor
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            bwd_.err_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            this->dims.batch_count, 1, dims.inputs, 1));
-        // output error tensor
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            bwd_.output_tensor, CUDNN_TENSOR_NCHW, CUDNN_DATA_FLOAT,
-            this->dims.batch_count, 1, dims.inputs, 1));
+    void init(layer_state_t<ftype> &state, int64_t batch_count) override {
+        vec_t output_dims = {this->dims.batch_count, 1, this->dims.outputs, 1};
+        vec_t output_strides = {this->dims.outputs, this->dims.outputs, 1, 1};
+        vec_t error_dims = {this->dims.batch_count, 1, this->dims.inputs, 1};
+        vec_t error_strides = {this->dims.outputs, this->dims.inputs, 1, 1};
+
+        delete state.output;
+        state.output = new Tensor<ftype>(output_dims, output_strides);
+        delete state.error;
+        state.error = new Tensor<ftype>(error_dims, error_strides);
     }
 
-    ftype *fwd(layer_state_t<ftype> &state, ftype *input) override {
+    Tensor<ftype> *fwd(layer_state_t<ftype> &state,
+                       Tensor<ftype> *input) override {
         INFO_GRP("SigmoidActivationLayer FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
@@ -70,31 +51,26 @@ struct SigmoidActivationLayer : Layer<ftype> {
         state.input = input;
 
         CUDNN_CHECK(cudnnActivationForward(
-            cudnn_handle_, sigmoid_, &alpha, fwd_.input_tensor, state.input,
-            &beta, fwd_.output_tensor, state.output));
+            cudnn_handle_, sigmoid_, &alpha, input->descriptor(),
+            state.input->data(), &beta, state.output->descriptor(),
+            state.output->data()));
         return state.output;
     }
 
-    ftype *bwd(layer_state_t<ftype> &state, ftype *error) override {
+    Tensor<ftype> *bwd(layer_state_t<ftype> &state,
+                       Tensor<ftype> *error) override {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnActivationBackward(
-            cudnn_handle_, sigmoid_, &alpha, fwd_.output_tensor, state.output,
-            bwd_.err_tensor, error, fwd_.input_tensor, state.input, &beta,
-            bwd_.output_tensor, state.error));
+            cudnn_handle_, sigmoid_, &alpha, state.output->descriptor(),
+            state.output->data(), error->descriptor(), error->data(),
+            state.input->descriptor(), state.input->data(), &beta,
+            state.error->descriptor(), state.error->data()));
         return state.error;
     }
 
   private:
-    struct {
-        cudnnTensorDescriptor_t input_tensor;
-        cudnnTensorDescriptor_t output_tensor;
-    } fwd_;
-    struct {
-        cudnnTensorDescriptor_t err_tensor;
-        cudnnTensorDescriptor_t output_tensor;
-    } bwd_;
     cudnnActivationDescriptor_t sigmoid_;
     cudnnHandle_t cudnn_handle_ = nullptr;
 };

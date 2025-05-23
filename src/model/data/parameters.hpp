@@ -1,10 +1,11 @@
 #ifndef MODEL_DATA_PARAMETERS
 #define MODEL_DATA_PARAMETERS
+#include "tensor.hpp"
 
 template <typename T>
-struct parameter_t {
-    T *weights = nullptr;
-    T *biases = nullptr;
+struct Parameter {
+    Tensor<T> *weights = nullptr;
+    Tensor<T> *biases = nullptr;
 };
 
 #endif

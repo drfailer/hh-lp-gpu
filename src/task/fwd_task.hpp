@@ -15,7 +15,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
     FwdTask() : hh::AbstractCUDATask<FwdTaskIO>("FwdTask", 1) {}
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
-        ftype *input = data->input;
+        auto *input = data->input;
         auto &states = data->states;
 
         for (auto layer : layers_) {

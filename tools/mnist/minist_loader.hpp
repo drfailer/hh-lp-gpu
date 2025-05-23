@@ -51,13 +51,13 @@ public:
     return labels;
   }
 
-  std::vector<ftype *> load_imgages(std::string const &path) {
+  auto load_imgages(std::string const &path) {
     ifstream_type fs(path, std::ios::binary);
     [[maybe_unused]] unsigned int magic = 0, size = 0, rows = 0, cols = 0;
 
     if (!fs.is_open()) {
       std::cerr << "error: can't open image file " << path << std::endl;
-      return {};
+      exit(1);
     }
     std::cout << "loading images " << path << "..." << std::endl;
 
@@ -69,7 +69,7 @@ public:
     std::cout << "magic = " << magic << "; size = " << size << std::endl;
     std::cout << "row & cols = " << rows << "x" << cols << std::endl;
 
-    std::vector<ftype *> images(size);
+    std::vector<Tensor<ftype> *> images(size);
 
     for (size_t i = 0; i < size; ++i) {
       std::vector<ftype> image(rows * cols);
@@ -79,9 +79,10 @@ public:
         assert(0 <= px_value && px_value <= 255);
         image[px] = (ftype)px_value / 255.;
       }
-      ftype *image_gpu = nullptr;
-      CUDA_CHECK(alloc_gpu(&image_gpu, rows * cols));
-      CUDA_CHECK(memcpy_host_to_gpu(image_gpu, image.data(), rows * cols));
+      auto *image_gpu = new Tensor<ftype>({1, 1, rows * cols, 1},
+                                          {rows * cols, rows * cols, 1, 1});
+      CUDA_CHECK(
+          memcpy_host_to_gpu(image_gpu->data(), image.data(), rows * cols));
       cudaDeviceSynchronize();
       images[i] = image_gpu;
     }
@@ -89,13 +90,12 @@ public:
     return images;
   }
 
-  ftype *create_output_vector(int label) {
-    ftype *result_gpu = nullptr;
+  auto create_output_vector(int label) {
+    auto *result_gpu = new Tensor<ftype>({1, 1, 10, 1}, {10, 10, 1, 1});
     std::vector<ftype> result_host(10, 0);
 
     result_host[label] = 1;
-    CUDA_CHECK(alloc_gpu(&result_gpu, 10));
-    CUDA_CHECK(memcpy_host_to_gpu(result_gpu, result_host.data(), 10));
+    CUDA_CHECK(memcpy_host_to_gpu(result_gpu->data(), result_host.data(), 10));
 
     return result_gpu;
   }
@@ -112,19 +112,6 @@ public:
     }
     return ds;
   }
-
-  // static void print_image(Vector const &image, size_t rows, size_t cols) {
-  //     for (size_t i = 0; i < rows; ++i) {
-  //         for (size_t j = 0; j < cols; ++j) {
-  //             if (image[i * cols + j] == 0) {
-  //                 std::cout << "  ";
-  //             } else {
-  //                 std::cout << "##";
-  //             }
-  //         }
-  //         std::cout << std::endl;
-  //     }
-  // }
 };
 
 #endif

@@ -2,11 +2,12 @@
 #define DATA_DATA_SET_H
 #include <vector>
 #include <cuda_runtime_api.h>
+#include "../model/data/tensor.hpp"
 
 template <typename T>
 struct Data {
-    T *input = nullptr;
-    T *ground_truth = nullptr;
+    Tensor<T> *input = nullptr;
+    Tensor<T> *ground_truth = nullptr;
 };
 
 template <typename T>
@@ -17,8 +18,8 @@ struct DataSet {
 template <typename T>
 void destroy_data_set(DataSet<T> &data_set) {
     for (auto &data : data_set.datas) {
-        cudaFree(data.input);
-        cudaFree(data.ground_truth);
+        delete data.input;
+        delete data.ground_truth;
     }
 }
 

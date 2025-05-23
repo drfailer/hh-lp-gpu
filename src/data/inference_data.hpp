@@ -5,9 +5,7 @@
 template <typename T>
 struct InferenceData {
     NetworkState<T> &states;
-    T *input;
+    Tensor<T> *input;
 };
-
-#warning "we should have the input and the result here (will facilitate the evaluation)"
 
 #endif

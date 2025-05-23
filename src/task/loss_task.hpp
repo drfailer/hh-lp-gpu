@@ -4,7 +4,6 @@
 #include "../data/loss_bwd_data.hpp"
 #include "../data/loss_fwd_data.hpp"
 #include "../model/loss/loss.hpp"
-#include "../tools/gpu.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
@@ -16,11 +15,10 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
   public:
     LossTask(std::shared_ptr<Loss<ftype>> loss) : loss_(loss) {}
 
-    void create_state(ftype **mem, int64_t output_size) {
-        CUDA_CHECK(alloc_gpu(mem, (size_t)output_size));
+    void init(NetworkState<ftype> &state) {
+        auto model_output = state.layers.back().output;
+        state.loss = new Tensor<ftype>(model_output->dims(), model_output->strides());
     }
-
-    void init(int64_t output_size) { loss_->init(output_size); }
 
     void execute(std::shared_ptr<LossFwdData<ftype>> data) override {
         loss_->fwd(data->input, data->ground_truth, data->states.loss);

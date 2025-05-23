@@ -66,10 +66,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
             std::make_shared<OptimizerType>(std::forward<Types>(args)...);
     }
 
-    void set_batch_count(int64_t batch_count) {
-        this->batch_count_ = batch_count;
-    }
-
     void build() {
         optimizer_->nb_layers(layers_.size());
 
@@ -99,13 +95,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         }
     }
 
-    void init() {
+    void init(NetworkState<ftype> &state, int64_t batch_count) {
         for (auto layer : layers_) {
-            layer->init(batch_count_);
-            optimizer_task_->add_layer(
-                optimizer_factory_->create(layer->parameter_shape));
+            layer->init(state, batch_count);
+            optimizer_task_->add_layer(optimizer_factory_->create());
         }
-        loss_task_->init(layers_.back()->dims.outputs);
+         loss_task_->init(state);
     }
 
     void terminate() {
@@ -123,7 +118,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         for (auto &layer : layers_) {
             layer->create_state(state);
         }
-        loss_task_->create_state(&state.loss, layers_.back()->dims.outputs);
         timer_end(create_state);
         timer_report_prec(create_state, milliseconds);
         return state;
@@ -133,7 +127,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         for (auto &layer_state : state.layers) {
             destroy_layer_state(layer_state);
         }
-        cudaFree(state.loss);
+        delete state.loss;
     }
 
   public:
@@ -154,7 +148,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     std::vector<std::shared_ptr<BwdTask>> bwds_ = {};
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
     size_t layer_idx_ = 0;
-    int64_t batch_count_ = 1;
 };
 
 #endif

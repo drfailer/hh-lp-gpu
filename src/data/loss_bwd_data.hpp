@@ -4,9 +4,9 @@
 
 template <typename T> struct LossBwdData {
     NetworkState<T> &states;
-    T *input;
-    T *ground_truth;
-    T *error;
+    Tensor<T> *input;
+    Tensor<T> *ground_truth;
+    Tensor<T> *error;
     T learning_rate;
 };
 

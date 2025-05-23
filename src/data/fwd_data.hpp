@@ -4,7 +4,7 @@
 
 template <typename T> struct FwdData {
     NetworkState<T> &states;
-    T *input;
+    Tensor<T> *input;
 };
 
 #endif
