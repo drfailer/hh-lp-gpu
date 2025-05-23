@@ -34,7 +34,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
         vec_t output_dims = {this->dims.batch_count, 1, this->dims.outputs, 1};
         vec_t output_strides = {this->dims.outputs, this->dims.outputs, 1, 1};
         vec_t error_dims = {this->dims.batch_count, 1, this->dims.inputs, 1};
-        vec_t error_strides = {this->dims.outputs, this->dims.inputs, 1, 1};
+        vec_t error_strides = {this->dims.inputs, this->dims.inputs, 1, 1};
 
         delete state.output;
         state.output = new Tensor<ftype>(output_dims, output_strides);

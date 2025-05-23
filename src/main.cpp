@@ -1159,7 +1159,7 @@ int main(int, char **) {
     // run_test(inference);
     // run_test(training);
 
-    run_test(evaluate_mnist);
-    // run_test(evaluate_mnist_batched);
+    // run_test(evaluate_mnist);
+    run_test(evaluate_mnist_batched);
     return 0;
 }
