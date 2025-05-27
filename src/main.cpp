@@ -743,6 +743,124 @@ UTest(linear_layer_bwd) {
     uassert_equal(output_err_host[3], 456);
 }
 
+UTest(linear_layer_fwd_batched) {
+    constexpr int64_t inputs = 3;
+    constexpr int64_t outputs = 3;
+    constexpr int64_t batch_count = 4;
+    dims_t dims = {.inputs = inputs, .outputs = outputs};
+    ftype input_host[batch_count * inputs] = {0},
+                                   output_host[batch_count * outputs] = {0};
+    Tensor<ftype> input_gpu({batch_count, 1, inputs, 1},
+                            {inputs, inputs, 1, 1});
+
+    for (size_t i = 0; i < batch_count * inputs; ++i) {
+        input_host[i] = i + 1;
+    }
+
+    CUDA_CHECK(
+        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_count * inputs));
+    cudaDeviceSynchronize();
+
+    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
+    layer_state_t<ftype> state = linear_layer.create_state();
+    defer(destroy_layer_state(state));
+    init_test_parameters(state, dims, 1);
+    linear_layer.init(state, batch_count);
+
+    Tensor<ftype> *output_gpu = linear_layer.fwd(state, &input_gpu);
+
+    urequire(output_gpu == state.output);
+    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(),
+                                  batch_count * outputs));
+    cudaDeviceSynchronize();
+
+    for (size_t i = 0; i < outputs; ++i) {
+        uassert_equal(output_host[i], 7);
+    }
+    for (size_t i = 0; i < outputs; ++i) {
+        uassert_equal(output_host[i + outputs], 16);
+    }
+    for (size_t i = 0; i < outputs; ++i) {
+        uassert_equal(output_host[i + 2 * outputs], 25);
+    }
+    for (size_t i = 0; i < outputs; ++i) {
+        uassert_equal(output_host[i + 3 * outputs], 34);
+    }
+}
+
+UTest(linear_layer_bwd_batched) {
+    constexpr int64_t inputs = 4;
+    constexpr int64_t outputs = 3;
+    constexpr int64_t batch_count = 2;
+    dims_t dims = {
+        .inputs = inputs, .outputs = outputs, .batch_count = batch_count};
+    ftype input_host[batch_count * inputs] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ftype input_err_host[batch_count * outputs] = {1, 10, 100, 100, 10, 1};
+    ftype output_err_host[batch_count * inputs] = {0};
+    ftype biases_gradient_host[outputs] = {0};
+    ftype weights_gradient_host[outputs * outputs] = {0};
+    Tensor<ftype> input_gpu({batch_count, 1, inputs, 1},
+                            {inputs, inputs, 1, 1});
+    Tensor<ftype> input_err_gpu({batch_count, 1, outputs, 1},
+                                {outputs, outputs, 1, 1});
+
+    // init input and output gpu buffers
+    CUDA_CHECK(
+        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_count * inputs));
+    CUDA_CHECK(memcpy_host_to_gpu(input_err_gpu.data(), input_err_host,
+                                  batch_count * outputs));
+
+    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
+    layer_state_t<ftype> state = linear_layer.create_state();
+    init_test_parameters(state, dims);
+    defer(destroy_layer_state(state));
+    linear_layer.init(state, batch_count);
+
+    linear_layer.fwd(state, &input_gpu);
+    Tensor<ftype> *output_err_gpu = linear_layer.bwd(state, &input_err_gpu);
+
+    urequire(output_err_gpu == state.error);
+    CUDA_CHECK(memcpy_gpu_to_host(output_err_host, output_err_gpu->data(),
+                                  batch_count * inputs));
+    cudaDeviceSynchronize();
+
+    uassert_equal(output_err_host[0], 321);
+    uassert_equal(output_err_host[1], 432);
+    uassert_equal(output_err_host[2], 543);
+    uassert_equal(output_err_host[3], 654);
+
+    uassert_equal(output_err_host[4], 123);
+    uassert_equal(output_err_host[5], 234);
+    uassert_equal(output_err_host[6], 345);
+    uassert_equal(output_err_host[7], 456);
+
+    CUDA_CHECK(memcpy_gpu_to_host(biases_gradient_host,
+                                  state.gradients->biases->data(), outputs));
+    for (size_t i = 0; i < outputs; ++i) {
+        ftype sum = 0;
+        for (size_t b = 0; b < batch_count; ++b) {
+            sum += input_err_host[b * outputs + i];
+        }
+        ftype expected = sum / batch_count;
+        uassert_float_equal(biases_gradient_host[i], expected, 1e-6);
+    }
+    CUDA_CHECK(memcpy_gpu_to_host(weights_gradient_host,
+                                  state.gradients->weights->data(),
+                                  inputs * outputs));
+    for (size_t i = 0; i < outputs; ++i) {
+        for (size_t j = 0; j < inputs; ++j) {
+            ftype sum = 0;
+            for (size_t b = 0; b < batch_count; ++b) {
+                sum += input_err_host[b * outputs + i] *
+                       input_host[b * inputs + j];
+            }
+            ftype expected = sum / batch_count;
+            uassert_float_equal(weights_gradient_host[i * inputs + j], expected,
+                                1e-6);
+        }
+    }
+}
+
 UTest(sigmoid_activation_fwd) {
     constexpr int64_t outputs = 3;
     constexpr int64_t inputs = 3;
@@ -821,11 +939,11 @@ UTest(sgd_optimizer) {
 
     CUDA_CHECK(
         memcpy_host_to_gpu(weights_gpu.data(), weights, inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(gradient_weights_gpu.data(), weights_gradients,
-                                  inputs * outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(gradient_weights_gpu.data(),
+                                  weights_gradients, inputs * outputs));
     CUDA_CHECK(memcpy_host_to_gpu(biases_gpu.data(), biases, outputs));
-    CUDA_CHECK(
-        memcpy_host_to_gpu(gradient_biases_gpu.data(), biases_gradients, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(gradient_biases_gpu.data(), biases_gradients,
+                                  outputs));
 
     auto sgd = optimizer_factory.create();
     sgd->optimize(state, learning_rate);
@@ -1032,7 +1150,7 @@ UTest(evaluate_mnist) {
 }
 
 UTest(evaluate_mnist_batched) {
-    constexpr ftype learning_rate = 0.1;
+    constexpr ftype learning_rate = 0.01;
     constexpr size_t epochs = 3;
     constexpr size_t batch_count = 16;
     MNISTLoader loader;
@@ -1141,25 +1259,27 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(matvecmul_n);
-    // run_test(matvecmul_t);
-    // run_test(matvecmul_batch_n);
-    // run_test(matmul_n_n);
-    // run_test(matmul_t_n);
-    // run_test(matmul_n_t);
-    // run_test(matmul_t_t);
-    // run_test(matmul_batch_n_n);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matvecmul_batch_n);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
+    run_test(matmul_batch_n_n);
 
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
-    // run_test(sgd_optimizer);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(linear_layer_fwd_batched);
+    run_test(linear_layer_bwd_batched);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
+    run_test(sgd_optimizer);
 
-    // run_test(inference);
-    // run_test(training);
+    run_test(inference);
+    run_test(training);
 
-    // run_test(evaluate_mnist);
+    run_test(evaluate_mnist);
     run_test(evaluate_mnist_batched);
     return 0;
 }
