@@ -10,7 +10,7 @@
 
 struct SigmoidActivationLayer : Layer<ftype> {
     SigmoidActivationLayer(cudnnHandle_t cudnn_handle, int64_t size)
-        : Layer(dims_t{.inputs = size, .outputs = size}, {}),
+        : Layer(dims_t{.inputs = size, .outputs = size}),
           cudnn_handle_(cudnn_handle) {
         // sigmoid activation tensor
         CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));

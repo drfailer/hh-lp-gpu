@@ -7,10 +7,9 @@
 
 template <typename T> struct Layer {
     Layer(dims_t dims, shape_t shape = {})
-        : dims(dims), parameter_shape(shape) {}
+        : dims(dims) {}
     size_t idx = 0;
     dims_t dims;
-    shape_t parameter_shape;
 
     void create_state(NetworkState<T> &states) const {
         states.layers[idx] = create_state();
@@ -26,14 +25,7 @@ template <typename T> struct Layer {
 
     virtual void init(NetworkState<T> &state, int64_t batch_count) {
         dims.batch_count = batch_count;
-        if (parameter_shape.dims.weights.size() > 0) {
-            parameter_shape.dims.weights[0] = batch_count;
-        }
-        if (parameter_shape.dims.biases.size() > 0) {
-            parameter_shape.dims.biases[0] = batch_count;
-        }
         init(state.layers[idx], batch_count);
-        // maybe we should init the optimizer functor here
     }
 
     virtual layer_state_t<T> create_state() const = 0;

@@ -12,22 +12,7 @@ class LinearLayer : public Layer<ftype> {
   public:
     LinearLayer(cublasHandle_t cublas_handle, cudnnHandle_t cudnn_handle,
                 int64_t input_dim, int64_t output_dim)
-        : Layer(
-              dims_t{
-                  .inputs = input_dim,
-                  .outputs = output_dim,
-              },
-              shape_t{.dims =
-                          {
-                              .weights = {1, 1, input_dim, output_dim},
-                              .biases = {1, 1, output_dim, 1},
-                          },
-                      .strides =
-                          {
-                              .weights{input_dim * output_dim,
-                                       input_dim * output_dim, output_dim, 1},
-                              .biases = {output_dim, output_dim, 1, 1},
-                          }}),
+        : Layer(dims_t{.inputs = input_dim, .outputs = output_dim}),
           cublas_handle_(cublas_handle), cudnn_handle_(cudnn_handle) {
         CUDNN_CHECK(cudnnCreateReduceTensorDescriptor(&reduce_avg_desc));
         CUDNN_CHECK(cudnnSetReduceTensorDescriptor(
