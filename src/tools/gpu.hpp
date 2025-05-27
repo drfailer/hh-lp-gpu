@@ -35,19 +35,19 @@
     }
 
 template <typename T>
-auto memcpy_host_to_gpu(T *dest_gpu, T *src_host, size_t size) {
+auto memcpy_host_to_gpu(T *dest_gpu, T const *src_host, size_t size) {
     return cudaMemcpy(dest_gpu, src_host, size * sizeof(T),
                       cudaMemcpyHostToDevice);
 }
 
 template <typename T>
-auto memcpy_gpu_to_host(T *dest_host, T *src_gpu, size_t size) {
+auto memcpy_gpu_to_host(T *dest_host, T const *src_gpu, size_t size) {
     return cudaMemcpy(dest_host, src_gpu, size * sizeof(T),
                       cudaMemcpyDeviceToHost);
 }
 
 template <typename T>
-auto memcpy_gpu_to_gpu(T *dest_gpu, T *src_gpu, size_t size) {
+auto memcpy_gpu_to_gpu(T *dest_gpu, T const *src_gpu, size_t size) {
     return cudaMemcpy(dest_gpu, src_gpu, size * sizeof(T),
                       cudaMemcpyDeviceToDevice);
 }
@@ -75,7 +75,7 @@ template <typename T> auto memset_gpu(T *dest, size_t size, T value) {
 
 template <typename T>
 auto matvecmul(cublasHandle_t handle, bool trans, size_t rows, size_t cols,
-               T alpha, T *mat, T *vec, T beta, T *out) {
+               T alpha, T const *mat, T const *vec, T beta, T *out) {
     cublasOperation_t cublas_trans =
         trans ? cublasOperation_t::CUBLAS_OP_N : cublasOperation_t::CUBLAS_OP_T;
     size_t ldmat = cols;
