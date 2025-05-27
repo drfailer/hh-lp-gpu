@@ -26,14 +26,14 @@ struct SigmoidActivationLayer : Layer<ftype> {
      * there no need to allocate parameters and gradients.
      */
     layer_state_t<ftype> create_state() const override {
-        layer_state_t<ftype> state;
+        layer_state_t<ftype> state = {0};
         return state;
     }
 
-    void init(layer_state_t<ftype> &state, int64_t batch_count) override {
-        vec_t output_dims = {this->dims.batch_count, 1, this->dims.outputs, 1};
+    void init(layer_state_t<ftype> &state, int64_t batch_size) override {
+        vec_t output_dims = {this->dims.batch_size, 1, this->dims.outputs, 1};
         vec_t output_strides = {this->dims.outputs, this->dims.outputs, 1, 1};
-        vec_t error_dims = {this->dims.batch_count, 1, this->dims.inputs, 1};
+        vec_t error_dims = {this->dims.batch_size, 1, this->dims.inputs, 1};
         vec_t error_strides = {this->dims.inputs, this->dims.inputs, 1, 1};
 
         delete state.output;

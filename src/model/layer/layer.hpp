@@ -23,13 +23,13 @@ template <typename T> struct Layer {
         return bwd(states.layers[idx], error);
     }
 
-    virtual void init(NetworkState<T> &state, int64_t batch_count) {
-        dims.batch_count = batch_count;
-        init(state.layers[idx], batch_count);
+    virtual void init(NetworkState<T> &state, int64_t batch_size) {
+        dims.batch_size = batch_size;
+        init(state.layers[idx], batch_size);
     }
 
     virtual layer_state_t<T> create_state() const = 0;
-    virtual void init(layer_state_t<T> &state, int64_t batch_count) = 0;
+    virtual void init(layer_state_t<T> &state, int64_t batch_size) = 0;
     virtual Tensor<T> *fwd(layer_state_t<T> &states, Tensor<T> *input) = 0;
     virtual Tensor<T> *bwd(layer_state_t<T> &states, Tensor<T> *error) = 0;
 };

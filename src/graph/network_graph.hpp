@@ -95,9 +95,9 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         }
     }
 
-    void init(NetworkState<ftype> &state, int64_t batch_count) {
+    void init(NetworkState<ftype> &state, int64_t batch_size) {
         for (auto layer : layers_) {
-            layer->init(state, batch_count);
+            layer->init(state, batch_size);
             optimizer_task_->add_layer(optimizer_factory_->create());
         }
          loss_task_->init(state);

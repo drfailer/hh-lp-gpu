@@ -248,23 +248,23 @@ UTest(matvecmul_t) {
 UTest(matvecmul_batch_n) {
     constexpr size_t m = 10;
     constexpr size_t n = 10'000;
-    constexpr size_t batch_count = 2;
-    ftype *mat_host[batch_count] = {0}, *vec_host[batch_count] = {0},
-          *gt_host[batch_count] = {0}, *out_host[batch_count] = {0};
-    ftype *mat_gpu[batch_count] = {0}, *vec_gpu[batch_count] = {0},
-          *out_gpu[batch_count] = {0};
+    constexpr size_t batch_size = 2;
+    ftype *mat_host[batch_size] = {0}, *vec_host[batch_size] = {0},
+          *gt_host[batch_size] = {0}, *out_host[batch_size] = {0};
+    ftype *mat_gpu[batch_size] = {0}, *vec_gpu[batch_size] = {0},
+          *out_gpu[batch_size] = {0};
     std::mt19937 rand(0);
     std::uniform_real_distribution<ftype> dist(0, 1);
 
     // allocate on host
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         mat_host[b] = new ftype[m * n];
         vec_host[b] = new ftype[n];
         gt_host[b] = new ftype[m];
         out_host[b] = new ftype[m];
     }
     defer({
-        for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t b = 0; b < batch_size; ++b) {
             delete[] mat_host[b];
             delete[] vec_host[b];
             delete[] gt_host[b];
@@ -273,13 +273,13 @@ UTest(matvecmul_batch_n) {
     });
 
     // allocate on gpu
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         CUDA_CHECK(alloc_gpu(&mat_gpu[b], m * n));
         CUDA_CHECK(alloc_gpu(&vec_gpu[b], n));
         CUDA_CHECK(alloc_gpu(&out_gpu[b], m));
     }
     defer({
-        for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t b = 0; b < batch_size; ++b) {
             defer(cudaFree(mat_gpu[b]));
             defer(cudaFree(vec_gpu[b]));
             defer(cudaFree(out_gpu[b]));
@@ -287,7 +287,7 @@ UTest(matvecmul_batch_n) {
     });
 
     // init
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         for (size_t i = 0; i < m; ++i) {
             for (size_t j = 0; j < n; ++j) {
                 mat_host[b][i * n + j] = dist(rand);
@@ -302,7 +302,7 @@ UTest(matvecmul_batch_n) {
     cudaDeviceSynchronize();
 
     // matrix vector multiplication on host
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         for (size_t i = 0; i < m; ++i) {
             ftype sum = 0;
             for (size_t j = 0; j < n; ++j) {
@@ -314,14 +314,14 @@ UTest(matvecmul_batch_n) {
 
     // matrix vector multiplication on the gpu
     CUBLAS_CHECK(matvecmul(CUBLAS_HANDLE, false, m, n, 1.f, mat_gpu, vec_gpu,
-                           0.f, out_gpu, batch_count));
-    for (size_t b = 0; b < batch_count; ++b) {
+                           0.f, out_gpu, batch_size));
+    for (size_t b = 0; b < batch_size; ++b) {
         CUDA_CHECK(memcpy_gpu_to_host(out_host[b], out_gpu[b], m));
     }
     cudaDeviceSynchronize();
 
     // verify the result
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         for (size_t i = 0; i < m; ++i) {
             uassert_float_equal(gt_host[b][i], out_host[b][i], 1e-2);
         }
@@ -596,15 +596,15 @@ UTest(matmul_batch_n_n) {
     constexpr size_t m = 10;
     constexpr size_t n = 10'000;
     constexpr size_t k = 100;
-    constexpr size_t batch_count = 2;
-    ftype *A_host[batch_count] = {0}, *B_host[batch_count] = {0},
-          *GT_host[batch_count] = {0}, *C_host[batch_count] = {0};
-    ftype *A_gpu[batch_count] = {0}, *B_gpu[batch_count] = {0},
-          *C_gpu[batch_count] = {0};
+    constexpr size_t batch_size = 2;
+    ftype *A_host[batch_size] = {0}, *B_host[batch_size] = {0},
+          *GT_host[batch_size] = {0}, *C_host[batch_size] = {0};
+    ftype *A_gpu[batch_size] = {0}, *B_gpu[batch_size] = {0},
+          *C_gpu[batch_size] = {0};
     std::mt19937 rand(0);
     std::uniform_real_distribution<ftype> dist(0, 1);
     auto init_matrix = [&dist, &rand](ftype **mat, size_t rows, size_t cols) {
-        for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t b = 0; b < batch_size; ++b) {
             for (size_t i = 0; i < rows; ++i) {
                 for (size_t j = 0; j < cols; ++j) {
                     mat[b][i * cols + j] = dist(rand);
@@ -614,14 +614,14 @@ UTest(matmul_batch_n_n) {
     };
 
     // allocate on host
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         A_host[b] = new ftype[m * k];
         B_host[b] = new ftype[k * n];
         C_host[b] = new ftype[m * n];
         GT_host[b] = new ftype[m * n];
     }
     defer({
-        for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t b = 0; b < batch_size; ++b) {
             defer(delete[] A_host[b]);
             defer(delete[] B_host[b]);
             defer(delete[] C_host[b]);
@@ -630,13 +630,13 @@ UTest(matmul_batch_n_n) {
     });
 
     // allocate on gpu
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         CUDA_CHECK(alloc_gpu(&A_gpu[b], m * k));
         CUDA_CHECK(alloc_gpu(&B_gpu[b], k * n));
         CUDA_CHECK(alloc_gpu(&C_gpu[b], m * n));
     }
     defer({
-        for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t b = 0; b < batch_size; ++b) {
             defer(cudaFree(A_gpu[b]));
             defer(cudaFree(B_gpu[b]));
             defer(cudaFree(C_gpu[b]));
@@ -646,14 +646,14 @@ UTest(matmul_batch_n_n) {
     // init
     init_matrix(A_host, m, k);
     init_matrix(B_host, k, n);
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         CUDA_CHECK(memcpy_host_to_gpu(A_gpu[b], A_host[b], m * k));
         CUDA_CHECK(memcpy_host_to_gpu(B_gpu[b], B_host[b], k * n));
     }
     cudaDeviceSynchronize();
 
     // matrix multiplication on host
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         for (size_t i = 0; i < m; ++i) {
             for (size_t j = 0; j < n; ++j) {
                 GT_host[b][i * n + j] = 0;
@@ -667,13 +667,13 @@ UTest(matmul_batch_n_n) {
 
     // matrix multiplication on the gpu
     matmul(CUBLAS_HANDLE, false, false, m, n, k, (ftype)1, A_gpu, B_gpu,
-           (ftype)0, C_gpu, batch_count);
-    for (size_t b = 0; b < batch_count; ++b) {
+           (ftype)0, C_gpu, batch_size);
+    for (size_t b = 0; b < batch_size; ++b) {
         CUDA_CHECK(memcpy_gpu_to_host(C_host[b], C_gpu[b], m * n));
     }
 
     // verify the results
-    for (size_t b = 0; b < batch_count; ++b) {
+    for (size_t b = 0; b < batch_size; ++b) {
         for (size_t i = 0; i < m; ++i) {
             for (size_t j = 0; j < n; ++j) {
                 uassert_float_equal(GT_host[b][i * n + j], C_host[b][i * n + j],
@@ -746,32 +746,32 @@ UTest(linear_layer_bwd) {
 UTest(linear_layer_fwd_batched) {
     constexpr int64_t inputs = 3;
     constexpr int64_t outputs = 3;
-    constexpr int64_t batch_count = 4;
+    constexpr int64_t batch_size = 4;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
-    ftype input_host[batch_count * inputs] = {0},
-                                   output_host[batch_count * outputs] = {0};
-    Tensor<ftype> input_gpu({batch_count, 1, inputs, 1},
+    ftype input_host[batch_size * inputs] = {0},
+                                   output_host[batch_size * outputs] = {0};
+    Tensor<ftype> input_gpu({batch_size, 1, inputs, 1},
                             {inputs, inputs, 1, 1});
 
-    for (size_t i = 0; i < batch_count * inputs; ++i) {
+    for (size_t i = 0; i < batch_size * inputs; ++i) {
         input_host[i] = i + 1;
     }
 
     CUDA_CHECK(
-        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_count * inputs));
+        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_size * inputs));
     cudaDeviceSynchronize();
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     layer_state_t<ftype> state = linear_layer.create_state();
     defer(destroy_layer_state(state));
     init_test_parameters(state, dims, 1);
-    linear_layer.init(state, batch_count);
+    linear_layer.init(state, batch_size);
 
     Tensor<ftype> *output_gpu = linear_layer.fwd(state, &input_gpu);
 
     urequire(output_gpu == state.output);
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(),
-                                  batch_count * outputs));
+                                  batch_size * outputs));
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -791,37 +791,37 @@ UTest(linear_layer_fwd_batched) {
 UTest(linear_layer_bwd_batched) {
     constexpr int64_t inputs = 4;
     constexpr int64_t outputs = 3;
-    constexpr int64_t batch_count = 2;
+    constexpr int64_t batch_size = 2;
     dims_t dims = {
-        .inputs = inputs, .outputs = outputs, .batch_count = batch_count};
-    ftype input_host[batch_count * inputs] = {1, 2, 3, 4, 5, 6, 7, 8};
-    ftype input_err_host[batch_count * outputs] = {1, 10, 100, 100, 10, 1};
-    ftype output_err_host[batch_count * inputs] = {0};
+        .inputs = inputs, .outputs = outputs, .batch_size = batch_size};
+    ftype input_host[batch_size * inputs] = {1, 2, 3, 4, 5, 6, 7, 8};
+    ftype input_err_host[batch_size * outputs] = {1, 10, 100, 100, 10, 1};
+    ftype output_err_host[batch_size * inputs] = {0};
     ftype biases_gradient_host[outputs] = {0};
     ftype weights_gradient_host[outputs * outputs] = {0};
-    Tensor<ftype> input_gpu({batch_count, 1, inputs, 1},
+    Tensor<ftype> input_gpu({batch_size, 1, inputs, 1},
                             {inputs, inputs, 1, 1});
-    Tensor<ftype> input_err_gpu({batch_count, 1, outputs, 1},
+    Tensor<ftype> input_err_gpu({batch_size, 1, outputs, 1},
                                 {outputs, outputs, 1, 1});
 
     // init input and output gpu buffers
     CUDA_CHECK(
-        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_count * inputs));
+        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_size * inputs));
     CUDA_CHECK(memcpy_host_to_gpu(input_err_gpu.data(), input_err_host,
-                                  batch_count * outputs));
+                                  batch_size * outputs));
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     layer_state_t<ftype> state = linear_layer.create_state();
     init_test_parameters(state, dims);
     defer(destroy_layer_state(state));
-    linear_layer.init(state, batch_count);
+    linear_layer.init(state, batch_size);
 
     linear_layer.fwd(state, &input_gpu);
     Tensor<ftype> *output_err_gpu = linear_layer.bwd(state, &input_err_gpu);
 
     urequire(output_err_gpu == state.error);
     CUDA_CHECK(memcpy_gpu_to_host(output_err_host, output_err_gpu->data(),
-                                  batch_count * inputs));
+                                  batch_size * inputs));
     cudaDeviceSynchronize();
 
     uassert_equal(output_err_host[0], 321);
@@ -838,10 +838,10 @@ UTest(linear_layer_bwd_batched) {
                                   state.gradients->biases->data(), outputs));
     for (size_t i = 0; i < outputs; ++i) {
         ftype sum = 0;
-        for (size_t b = 0; b < batch_count; ++b) {
+        for (size_t b = 0; b < batch_size; ++b) {
             sum += input_err_host[b * outputs + i];
         }
-        ftype expected = sum / batch_count;
+        ftype expected = sum / batch_size;
         uassert_float_equal(biases_gradient_host[i], expected, 1e-6);
     }
     CUDA_CHECK(memcpy_gpu_to_host(weights_gradient_host,
@@ -850,11 +850,11 @@ UTest(linear_layer_bwd_batched) {
     for (size_t i = 0; i < outputs; ++i) {
         for (size_t j = 0; j < inputs; ++j) {
             ftype sum = 0;
-            for (size_t b = 0; b < batch_count; ++b) {
+            for (size_t b = 0; b < batch_size; ++b) {
                 sum += input_err_host[b * outputs + i] *
                        input_host[b * inputs + j];
             }
-            ftype expected = sum / batch_count;
+            ftype expected = sum / batch_size;
             uassert_float_equal(weights_gradient_host[i * inputs + j], expected,
                                 1e-6);
         }
@@ -1152,7 +1152,7 @@ UTest(evaluate_mnist) {
 UTest(evaluate_mnist_batched) {
     constexpr ftype learning_rate = 0.01;
     constexpr size_t epochs = 3;
-    constexpr size_t batch_count = 16;
+    constexpr size_t batch_size = 16;
     MNISTLoader loader;
     BatchGenerator<ftype> batch_generator(0);
 
@@ -1161,7 +1161,7 @@ UTest(evaluate_mnist_batched) {
                        "../data/mnist/train-images-idx3-ubyte");
     defer(destroy_data_set(training_data));
     DataSet<ftype> training_set =
-        batch_generator.generate(training_data, 28 * 28, 10, batch_count);
+        batch_generator.generate(training_data, 28 * 28, 10, batch_size);
     DataSet<ftype> testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
                        "../data/mnist/t10k-images-idx3-ubyte");
@@ -1209,7 +1209,7 @@ UTest(evaluate_mnist_batched) {
     std::cout << "accuracy: " << accuracy_start << std::endl;
     std::cout << "success: " << success << ", errors: " << errors << std::endl;
 
-    graph.init(network, batch_count);
+    graph.init(network, batch_size);
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");

@@ -9,22 +9,22 @@ public:
   BatchGenerator(int64_t seed) : rand(seed) {}
 
   DataSet<T> generate(DataSet<T> input_data, int64_t input_size,
-                      int64_t ground_truth_size, int64_t batch_count) {
-    assert(batch_count > 1);
+                      int64_t ground_truth_size, int64_t batch_size) {
+    assert(batch_size > 1);
     DataSet<T> result;
     std::shuffle(input_data.datas.begin(), input_data.datas.end(), rand);
 
-    for (size_t b = 0; b < input_data.datas.size() / batch_count; ++b) {
+    for (size_t b = 0; b < input_data.datas.size() / batch_size; ++b) {
       Data<T> batch;
-      size_t idx = b * batch_count;
+      size_t idx = b * batch_size;
 
-      batch.input = new Tensor<T>({batch_count, 1, input_size, 1},
+      batch.input = new Tensor<T>({batch_size, 1, input_size, 1},
                                   {input_size, input_size, 1, 1});
       batch.ground_truth =
-          new Tensor<T>({batch_count, 1, ground_truth_size, 1},
+          new Tensor<T>({batch_size, 1, ground_truth_size, 1},
                         {ground_truth_size, ground_truth_size, 1, 1});
 
-      for (size_t i = 0; i < batch_count; ++i) {
+      for (size_t i = 0; i < batch_size; ++i) {
         CUDA_CHECK(memcpy_gpu_to_gpu(&batch.input->data()[i * input_size],
                                      input_data.datas[idx + i].input->data(),
                                      input_size));
