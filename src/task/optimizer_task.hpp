@@ -22,9 +22,23 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
         : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
           optimizers_(optimizers) {}
 
+    void initializeCuda() override {
+        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
+        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
+        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
+        CUBLAS_CHECK(
+            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
+    }
+
+    void shutdownCuda() override {
+        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
+        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
+    }
+
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         optimizers_->operator[](data->idx)->optimize(
-            data->state->layers[data->idx], data->learning_rate);
+            cuda_data_, data->state->layers[data->idx], data->learning_rate);
+        CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }
 
@@ -39,6 +53,7 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
 
   private:
     std::shared_ptr<OptimizerList> optimizers_ = nullptr;
+    cuda_data_t cuda_data_;
 };
 
 #endif

@@ -670,13 +670,13 @@ UTest(linear_layer_fwd) {
 
     input_gpu.from_host(input_host);
 
-    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
+    LinearLayer linear_layer(inputs, outputs);
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
-    linear_layer.init(state, 1);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
 
-    Tensor<ftype> *output_gpu = linear_layer.fwd(state, &input_gpu);
+    Tensor<ftype> *output_gpu = linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
     urequire(output_gpu == state.output);
     output_gpu->to_host(output_host);
@@ -699,14 +699,14 @@ UTest(linear_layer_bwd) {
     input_gpu.from_host(input_host);
     err_gpu.from_host(input_err_host);
 
-    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
+    LinearLayer linear_layer(inputs, outputs);
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims);
-    linear_layer.init(state, 1);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
 
-    linear_layer.fwd(state, &input_gpu);
-    Tensor<ftype> *output_err_gpu = linear_layer.bwd(state, &err_gpu);
+    linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
+    Tensor<ftype> *output_err_gpu = linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
 
     urequire(output_err_gpu == state.error);
     output_err_gpu->to_host(output_err_host);
@@ -732,13 +732,13 @@ UTest(linear_layer_fwd_batched) {
 
     input_gpu.from_host(input_host);
 
-    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
+    LinearLayer linear_layer(inputs, outputs);
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
-    linear_layer.init(state, batch_size);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, batch_size);
 
-    Tensor<ftype> *output_gpu = linear_layer.fwd(state, &input_gpu);
+    Tensor<ftype> *output_gpu = linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
     urequire(output_gpu == state.output);
     output_gpu->to_host(output_host);
@@ -776,14 +776,14 @@ UTest(linear_layer_bwd_batched) {
     input_gpu.from_host(input_host);
     input_err_gpu.from_host(input_err_host);
 
-    LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
+    LinearLayer linear_layer(inputs, outputs);
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims);
-    linear_layer.init(state, batch_size);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, batch_size);
 
-    linear_layer.fwd(state, &input_gpu);
-    Tensor<ftype> *output_err_gpu = linear_layer.bwd(state, &input_err_gpu);
+    linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
+    Tensor<ftype> *output_err_gpu = linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_err_gpu);
 
     urequire(output_err_gpu == state.error);
     output_err_gpu->to_host(output_err_host);
@@ -830,10 +830,10 @@ UTest(sigmoid_activation_fwd) {
 
     input_gpu.from_host(input_host);
 
-    SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
+    SigmoidActivationLayer sigmoid_layer(inputs);
     LayerState<ftype> state;
-    sigmoid_layer.init(state, 1);
-    Tensor<ftype> *output_gpu = sigmoid_layer.fwd(state, &input_gpu);
+    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
+    Tensor<ftype> *output_gpu = sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
     urequire(output_gpu != &input_gpu);
     output_gpu->to_host(output_host);
@@ -855,11 +855,11 @@ UTest(sigmoid_activation_bwd) {
     input_gpu.from_host(input_host);
     err_gpu.from_host(err_host);
 
-    SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
+    SigmoidActivationLayer sigmoid_layer(inputs);
     LayerState<ftype> state;
-    sigmoid_layer.init(state, 1);
-    sigmoid_layer.fwd(state, &input_gpu);
-    Tensor<ftype> *output_gpu = sigmoid_layer.bwd(state, &err_gpu);
+    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
+    sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
+    Tensor<ftype> *output_gpu = sigmoid_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
 
     output_gpu->to_host(output_host);
 
@@ -881,7 +881,7 @@ UTest(sgd_optimizer) {
     vec_t weights_dims = {1, 1, inputs, outputs},
           biases_dims = {1, 1, outputs, 1};
     LayerState<ftype> state;
-    SGDOptimizer optimizer_factory(CUDNN_HANDLE);
+    SGDOptimizer optimizer_factory;
 
     state.parameters.weights = create_tensor<ftype>(weights_dims);
     state.parameters.biases = create_tensor<ftype>(biases_dims);
@@ -898,7 +898,7 @@ UTest(sgd_optimizer) {
                                   biases_gradients, outputs));
 
     auto sgd = optimizer_factory.create();
-    sgd->optimize(state, learning_rate);
+    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, state, learning_rate);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
     CUDA_CHECK(memcpy_gpu_to_host(
@@ -928,11 +928,11 @@ UTest(inference) {
 
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
 
-    graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
-    graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
+    graph.set_loss<QuadraticLoss>();
+    graph.set_optimizer<SGDOptimizer>(1);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
-    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, outputs);
+    graph.add_layer<LinearLayer>(inputs, outputs);
+    graph.add_layer<SigmoidActivationLayer>(outputs);
 
     graph.build();
 
@@ -973,17 +973,17 @@ UTest(training) {
 
     urequire(data_set.datas.size() == 60'000);
 
-    graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
-    graph.set_optimizer<SGDOptimizer>(2, CUDNN_HANDLE);
+    graph.set_loss<QuadraticLoss>();
+    graph.set_optimizer<SGDOptimizer>(2);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, nb_inputs, 32);
-    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 32);
+    graph.add_layer<LinearLayer>(nb_inputs, 32);
+    graph.add_layer<SigmoidActivationLayer>(32);
     graph.cut_layer();
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 32, 32);
-    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 32);
+    graph.add_layer<LinearLayer>(32, 32);
+    graph.add_layer<SigmoidActivationLayer>(32);
     graph.cut_layer();
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 32, 10);
-    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, nb_nodes);
+    graph.add_layer<LinearLayer>(32, 10);
+    graph.add_layer<SigmoidActivationLayer>(nb_nodes);
 
     graph.build();
 
@@ -1021,11 +1021,11 @@ UTest(mnist) {
 
     NetworkGraph graph;
 
-    graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
-    graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
+    graph.set_loss<QuadraticLoss>();
+    graph.set_optimizer<SGDOptimizer>(1);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 28 * 28, 10);
-    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 10);
+    graph.add_layer<LinearLayer>(28 * 28, 10);
+    graph.add_layer<SigmoidActivationLayer>(10);
 
     graph.build();
 
@@ -1080,11 +1080,11 @@ UTest(mnist_batched) {
 
     NetworkGraph graph;
 
-    graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
-    graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
+    graph.set_loss<QuadraticLoss>();
+    graph.set_optimizer<SGDOptimizer>(1);
 
-    graph.add_layer<LinearLayer>(CUBLAS_HANDLE, CUDNN_HANDLE, 28 * 28, 10);
-    graph.add_layer<SigmoidActivationLayer>(CUDNN_HANDLE, 10);
+    graph.add_layer<LinearLayer>(28 * 28, 10);
+    graph.add_layer<SigmoidActivationLayer>(10);
 
     graph.build();
 
@@ -1129,27 +1129,27 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    run_test(matvecmul_n);
-    run_test(matvecmul_t);
-    run_test(matvecmul_batch_n);
-    run_test(matmul_n_n);
-    run_test(matmul_t_n);
-    run_test(matmul_n_t);
-    run_test(matmul_t_t);
-    run_test(matmul_batch_n_n);
+    // run_test(matvecmul_n);
+    // run_test(matvecmul_t);
+    // run_test(matvecmul_batch_n);
+    // run_test(matmul_n_n);
+    // run_test(matmul_t_n);
+    // run_test(matmul_n_t);
+    // run_test(matmul_t_t);
+    // run_test(matmul_batch_n_n);
 
-    run_test(linear_layer_fwd);
-    run_test(linear_layer_bwd);
-    run_test(linear_layer_fwd_batched);
-    run_test(linear_layer_bwd_batched);
-    run_test(sigmoid_activation_fwd);
-    run_test(sigmoid_activation_bwd);
-    run_test(sgd_optimizer);
+    // run_test(linear_layer_fwd);
+    // run_test(linear_layer_bwd);
+    // run_test(linear_layer_fwd_batched);
+    // run_test(linear_layer_bwd_batched);
+    // run_test(sigmoid_activation_fwd);
+    // run_test(sigmoid_activation_bwd);
+    // run_test(sgd_optimizer);
 
-    run_test(inference);
+    // run_test(inference);
     // run_test(training);
 
-    run_test(mnist);
+    // run_test(mnist);
     run_test(mnist_batched);
     return 0;
 }

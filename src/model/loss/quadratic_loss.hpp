@@ -10,7 +10,7 @@
 
 class QuadraticLoss : public Loss<ftype> {
   public:
-    QuadraticLoss(cudnnHandle_t cudnn_handle) : cudnn_handle_(cudnn_handle) {
+    QuadraticLoss() {
         CUDNN_CHECK(cudnnCreateOpTensorDescriptor(&addition_));
         CUDNN_CHECK(cudnnSetOpTensorDescriptor(addition_, CUDNN_OP_TENSOR_ADD,
                                                CUDNN_DATA_FLOAT,
@@ -20,7 +20,8 @@ class QuadraticLoss : public Loss<ftype> {
     ~QuadraticLoss() { cudnnDestroyOpTensorDescriptor(addition_); }
 
   public:
-    Tensor<ftype> *fwd(LossState<ftype> &state, Tensor<ftype> *model_output,
+    Tensor<ftype> *fwd(cuda_data_t cuda_data, LossState<ftype> &state,
+                       Tensor<ftype> *model_output,
                        Tensor<ftype> *ground_truth) override {
         INFO_GRP("QuadraticLossTask FWD", INFO_GRP_LAYER_TASK);
         ERROR("unimplemented");
@@ -30,22 +31,22 @@ class QuadraticLoss : public Loss<ftype> {
         return nullptr;
     }
 
-    Tensor<ftype> *bwd(LossState<ftype> &state, Tensor<ftype> *model_output,
+    Tensor<ftype> *bwd(cuda_data_t cuda_data, LossState<ftype> &state,
+                       Tensor<ftype> *model_output,
                        Tensor<ftype> *ground_truth) override {
         INFO_GRP("QuadraticLossTask BWD", INFO_GRP_LAYER_TASK);
         // return output - ground_truth;
         ftype alpha1 = 1, alpha2 = -1, beta = 0;
 
         CUDNN_CHECK(cudnnOpTensor(
-            cudnn_handle_, addition_, &alpha1, model_output->descriptor(),
-            model_output->data(), &alpha2, ground_truth->descriptor(),
-            ground_truth->data(), &beta, state.tensor->descriptor(),
-            state.tensor->data()));
+            cuda_data.cudnn_handle, addition_, &alpha1,
+            model_output->descriptor(), model_output->data(), &alpha2,
+            ground_truth->descriptor(), ground_truth->data(), &beta,
+            state.tensor->descriptor(), state.tensor->data()));
         return state.tensor;
     }
 
   private:
-    cudnnHandle_t cudnn_handle_ = nullptr;
     cudnnOpTensorDescriptor_t addition_;
 };
 

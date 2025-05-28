@@ -29,6 +29,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
         fwds_.push_back(std::make_shared<FwdTask>());
         bwds_.push_back(std::make_shared<BwdTask>());
+
+        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
+    }
+
+    ~NetworkGraph() {
+        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
     }
 
   public:
@@ -135,7 +141,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      */
     void init_state(std::shared_ptr<NNState<ftype>> state, int64_t batch_size) {
         for (auto layer : layers_) {
-            layer->init(state->layers[layer->idx], batch_size);
+            layer->init(cuda_data_, state->layers[layer->idx], batch_size);
             optimizer_task_->add_layer(optimizer_factory_->create());
         }
         loss_task_->init(state);
@@ -159,6 +165,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     std::vector<std::shared_ptr<BwdTask>> bwds_ = {};
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
     size_t layer_idx_ = 0;
+    cuda_data_t cuda_data_;
 };
 
 #endif

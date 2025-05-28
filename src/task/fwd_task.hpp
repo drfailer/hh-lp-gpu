@@ -14,12 +14,26 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
   public:
     FwdTask() : hh::AbstractCUDATask<FwdTaskIO>("FwdTask", 1) {}
 
+    void initializeCuda() override {
+        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
+        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
+        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
+        CUBLAS_CHECK(
+            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
+    }
+
+    void shutdownCuda() override {
+        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
+        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
+    }
+
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         auto *input = data->input;
         auto states = data->states;
 
         for (auto layer : layers_) {
-            input = layer->fwd(states->layers[layer->idx], input);
+            input = layer->fwd(cuda_data_, states->layers[layer->idx], input);
+            CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         }
         data->input = input;
         this->addResult(data);
@@ -39,6 +53,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
+    cuda_data_t cuda_data_;
 };
 
 #endif
