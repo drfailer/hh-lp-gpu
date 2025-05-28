@@ -38,10 +38,8 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims, ftype value) {
     for (int64_t i = 0; i < dims.outputs; ++i) {
         biases[i] = value;
     }
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights->data(), weights,
-                                  weights_size));
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases->data(), biases,
-                                  dims.outputs));
+    state.parameters.weights->from_host(weights);
+    state.parameters.biases->from_host(biases);
 }
 
 void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
@@ -60,55 +58,8 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
     for (int64_t i = 0; i < dims.outputs; ++i) {
         biases[i] = i + 1;
     }
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights->data(), weights,
-                                  dims.inputs * dims.outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases->data(), biases,
-                                  dims.outputs));
-}
-
-ftype *create_test_gpu_array(ftype *host, size_t size) {
-    ftype *gpu = nullptr;
-    CUDA_CHECK(alloc_gpu(&gpu, size));
-    CUDA_CHECK(memcpy_host_to_gpu(gpu, host, size));
-    cudaDeviceSynchronize();
-    return gpu;
-}
-
-void init(ftype *A, ftype *B, ftype *C, ftype *V, int64_t m, int64_t n,
-          int64_t k) {
-    // init A
-    for (int64_t i = 0; i < m; ++i) {
-        for (int64_t j = 0; j < n; ++j) {
-            A[i * n + j] = i + j;
-        }
-    }
-
-    // init B
-    for (int64_t i = 0; i < n; ++i) {
-        for (int64_t j = 0; j < k; ++j) {
-            B[i * k + j] = i * j;
-        }
-    }
-
-    // init C to zero
-    memset(C, 0, m * k * sizeof(*C));
-
-    // init V
-    for (int64_t i = 0; i < m; ++i) {
-        V[i] = i;
-    }
-}
-
-void display_matrix(std::string const &name, ftype *matrix, int64_t rows,
-                    int64_t cols) {
-    std::cout << name << " =" << std::endl;
-    for (int64_t i = 0; i < rows; ++i) {
-        std::cout << "\t";
-        for (int64_t j = 0; j < cols; ++j) {
-            std::cout << (float)matrix[i * cols + j] << " ";
-        }
-        std::cout << std::endl;
-    }
+    state.parameters.weights->from_host(weights);
+    state.parameters.biases->from_host(biases);
 }
 
 int mnist_get_label(ftype *arr) {
@@ -689,7 +640,7 @@ UTest(linear_layer_fwd) {
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
-    CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
+    input_gpu.from_host(input_host);
     cudaDeviceSynchronize();
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
@@ -701,7 +652,7 @@ UTest(linear_layer_fwd) {
     Tensor<ftype> *output_gpu = linear_layer.fwd(state, &input_gpu);
 
     urequire(output_gpu == state.output);
-    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(), outputs));
+    output_gpu->to_host(output_host);
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -719,8 +670,8 @@ UTest(linear_layer_bwd) {
     Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     // init input and output gpu buffers
-    CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
-    CUDA_CHECK(memcpy_host_to_gpu(err_gpu.data(), input_err_host, inputs));
+    input_gpu.from_host(input_host);
+    err_gpu.from_host(input_err_host);
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     LayerState<ftype> state;
@@ -732,8 +683,7 @@ UTest(linear_layer_bwd) {
     Tensor<ftype> *output_err_gpu = linear_layer.bwd(state, &err_gpu);
 
     urequire(output_err_gpu == state.error);
-    CUDA_CHECK(
-        memcpy_gpu_to_host(output_err_host, output_err_gpu->data(), inputs));
+    output_err_gpu->to_host(output_err_host);
     cudaDeviceSynchronize();
 
     uassert_equal(output_err_host[0], 123);
@@ -755,8 +705,7 @@ UTest(linear_layer_fwd_batched) {
         input_host[i] = i + 1;
     }
 
-    CUDA_CHECK(
-        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_size * inputs));
+    input_gpu.from_host(input_host);
     cudaDeviceSynchronize();
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
@@ -768,8 +717,7 @@ UTest(linear_layer_fwd_batched) {
     Tensor<ftype> *output_gpu = linear_layer.fwd(state, &input_gpu);
 
     urequire(output_gpu == state.output);
-    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(),
-                                  batch_size * outputs));
+    output_gpu->to_host(output_host);
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -802,10 +750,8 @@ UTest(linear_layer_bwd_batched) {
                                 {outputs, outputs, 1, 1});
 
     // init input and output gpu buffers
-    CUDA_CHECK(
-        memcpy_host_to_gpu(input_gpu.data(), input_host, batch_size * inputs));
-    CUDA_CHECK(memcpy_host_to_gpu(input_err_gpu.data(), input_err_host,
-                                  batch_size * outputs));
+    input_gpu.from_host(input_host);
+    input_err_gpu.from_host(input_err_host);
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     LayerState<ftype> state;
@@ -817,8 +763,7 @@ UTest(linear_layer_bwd_batched) {
     Tensor<ftype> *output_err_gpu = linear_layer.bwd(state, &input_err_gpu);
 
     urequire(output_err_gpu == state.error);
-    CUDA_CHECK(memcpy_gpu_to_host(output_err_host, output_err_gpu->data(),
-                                  batch_size * inputs));
+    output_err_gpu->to_host(output_err_host);
     cudaDeviceSynchronize();
 
     uassert_equal(output_err_host[0], 321);
@@ -831,8 +776,7 @@ UTest(linear_layer_bwd_batched) {
     uassert_equal(output_err_host[6], 345);
     uassert_equal(output_err_host[7], 456);
 
-    CUDA_CHECK(memcpy_gpu_to_host(biases_gradient_host,
-                                  state.gradients.biases->data(), outputs));
+    state.gradients.biases->to_host(biases_gradient_host);
     for (size_t i = 0; i < outputs; ++i) {
         ftype sum = 0;
         for (size_t b = 0; b < batch_size; ++b) {
@@ -841,9 +785,7 @@ UTest(linear_layer_bwd_batched) {
         ftype expected = sum / batch_size;
         uassert_float_equal(biases_gradient_host[i], expected, 1e-6);
     }
-    CUDA_CHECK(memcpy_gpu_to_host(weights_gradient_host,
-                                  state.gradients.weights->data(),
-                                  inputs * outputs));
+    state.gradients.weights->to_host(weights_gradient_host);
     for (size_t i = 0; i < outputs; ++i) {
         for (size_t j = 0; j < inputs; ++j) {
             ftype sum = 0;
@@ -864,7 +806,7 @@ UTest(sigmoid_activation_fwd) {
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
-    CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
+    input_gpu.from_host(input_host);
     cudaDeviceSynchronize();
 
     SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
@@ -873,7 +815,7 @@ UTest(sigmoid_activation_fwd) {
     Tensor<ftype> *output_gpu = sigmoid_layer.fwd(state, &input_gpu);
 
     urequire(output_gpu != &input_gpu);
-    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(), inputs));
+    output_gpu->to_host(output_host);
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -885,12 +827,13 @@ UTest(sigmoid_activation_bwd) {
     constexpr int64_t outputs = 6;
     constexpr int64_t inputs = 6;
     ftype input_host[inputs] = {1, 2, 3, 4, 5, 6},
-          err[inputs] = {10, 10, 10, 10, 10, 10}, output_host[outputs] = {0};
+          err_host[inputs] = {10, 10, 10, 10, 10, 10},
+          output_host[outputs] = {0};
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
     Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
-    CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
-    CUDA_CHECK(memcpy_host_to_gpu(err_gpu.data(), err, inputs));
+    input_gpu.from_host(input_host);
+    err_gpu.from_host(err_host);
     cudaDeviceSynchronize();
 
     SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
@@ -899,12 +842,13 @@ UTest(sigmoid_activation_bwd) {
     sigmoid_layer.fwd(state, &input_gpu);
     Tensor<ftype> *output_gpu = sigmoid_layer.bwd(state, &err_gpu);
 
-    CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(), inputs));
+    output_gpu->to_host(output_host);
     cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_float_equal(output_host[i],
-                            err[i] * sigmoid_derivative(input_host[i]), 1e-6);
+                            err_host[i] * sigmoid_derivative(input_host[i]),
+                            1e-6);
     }
 }
 
@@ -926,23 +870,17 @@ UTest(sgd_optimizer) {
     state.gradients.weights = create_tensor<ftype>(weights_dims);
     state.gradients.biases = create_tensor<ftype>(biases_dims);
 
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights->data(), weights,
-                                  inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights->data(),
-                                  weights_gradients, inputs * outputs));
-    CUDA_CHECK(
-        memcpy_host_to_gpu(state.parameters.biases->data(), biases, outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases->data(),
-                                  biases_gradients, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights->data(), weights, inputs * outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights->data(), weights_gradients, inputs * outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases->data(), biases, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases->data(), biases_gradients, outputs));
 
     auto sgd = optimizer_factory.create();
     sgd->optimize(state, learning_rate);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
-    CUDA_CHECK(memcpy_gpu_to_host(
-        result_weights, state.parameters.weights->data(), outputs * inputs));
-    CUDA_CHECK(memcpy_gpu_to_host(result_biases,
-                                  state.parameters.biases->data(), outputs));
+    CUDA_CHECK(memcpy_gpu_to_host(result_weights, state.parameters.weights->data(), outputs * inputs));
+    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.parameters.biases->data(), outputs));
 
     for (size_t i = 0; i < inputs * outputs; ++i) {
         uassert_float_equal(result_weights[i],
@@ -1078,9 +1016,8 @@ UTest(evaluate_mnist) {
             std::make_shared<InferenceData<ftype>>(state, data.input));
         Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
         graph.cleanGraph();
-        CUDA_CHECK(
-            memcpy_gpu_to_host(expected.data(), data.ground_truth->data(), 10));
-        CUDA_CHECK(memcpy_gpu_to_host(found.data(), output->data(), 10));
+        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
+        CUDA_CHECK(output->to_host(found.data()));
         int expected_label = mnist_get_label(expected.data());
         int found_label = mnist_get_label(found.data());
 
@@ -1113,9 +1050,8 @@ UTest(evaluate_mnist) {
             std::make_shared<InferenceData<ftype>>(state, data.input));
         Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
         graph.cleanGraph();
-        CUDA_CHECK(
-            memcpy_gpu_to_host(expected.data(), data.ground_truth->data(), 10));
-        CUDA_CHECK(memcpy_gpu_to_host(found.data(), output->data(), 10));
+        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
+        CUDA_CHECK(output->to_host(found.data()));
         int expected_label = mnist_get_label(expected.data());
         int found_label = mnist_get_label(found.data());
 
@@ -1180,9 +1116,8 @@ UTest(evaluate_mnist_batched) {
             std::make_shared<InferenceData<ftype>>(state, data.input));
         Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
         graph.cleanGraph();
-        CUDA_CHECK(
-            memcpy_gpu_to_host(expected.data(), data.ground_truth->data(), 10));
-        CUDA_CHECK(memcpy_gpu_to_host(found.data(), output->data(), 10));
+        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
+        CUDA_CHECK(output->to_host(found.data()));
         int expected_label = mnist_get_label(expected.data());
         int found_label = mnist_get_label(found.data());
 
@@ -1219,9 +1154,8 @@ UTest(evaluate_mnist_batched) {
             std::make_shared<InferenceData<ftype>>(state, data.input));
         Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
         graph.cleanGraph();
-        CUDA_CHECK(
-            memcpy_gpu_to_host(expected.data(), data.ground_truth->data(), 10));
-        CUDA_CHECK(memcpy_gpu_to_host(found.data(), output->data(), 10));
+        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
+        CUDA_CHECK(output->to_host(found.data()));
         int expected_label = mnist_get_label(expected.data());
         int found_label = mnist_get_label(found.data());
 
