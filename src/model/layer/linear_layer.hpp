@@ -45,7 +45,6 @@ class LinearLayer : public Layer<ftype> {
             parameters.weights->data(), outputs * inputs, -0.5, 0.5, 0));
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(parameters.biases->data(),
                                                     outputs, -0.5, 0.5, 0));
-        cudaDeviceSynchronize();
         return parameters;
     }
 

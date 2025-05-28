@@ -150,7 +150,6 @@ UTest(matvecmul_n) {
     }
     CUDA_CHECK(memcpy_host_to_gpu(mat_gpu, mat_host, m * n));
     CUDA_CHECK(memcpy_host_to_gpu(vec_gpu, vec_host, n));
-    cudaDeviceSynchronize();
 
     // matrix vector multiplication on host
     for (size_t i = 0; i < m; ++i) {
@@ -165,7 +164,6 @@ UTest(matvecmul_n) {
     CUBLAS_CHECK(matvecmul(CUBLAS_HANDLE, false, m, n, 1.f, mat_gpu, vec_gpu,
                            0.f, out_gpu));
     CUDA_CHECK(memcpy_gpu_to_host(out_host, out_gpu, m));
-    cudaDeviceSynchronize();
 
     // verify the result
     for (size_t i = 0; i < m; ++i) {
@@ -211,7 +209,6 @@ UTest(matvecmul_t) {
     }
     CUDA_CHECK(memcpy_host_to_gpu(mat_gpu, mat_host, m * n));
     CUDA_CHECK(memcpy_host_to_gpu(vec_gpu, vec_host, m));
-    cudaDeviceSynchronize();
 
     // matrix vector multiplication on host
     for (size_t i = 0; i < n; ++i) {
@@ -226,7 +223,6 @@ UTest(matvecmul_t) {
     CUBLAS_CHECK(matvecmul(CUBLAS_HANDLE, true, m, n, 1.f, mat_gpu, vec_gpu,
                            0.f, out_gpu));
     CUDA_CHECK(memcpy_gpu_to_host(out_host, out_gpu, n));
-    cudaDeviceSynchronize();
 
     // verify the result
     for (size_t i = 0; i < n; ++i) {
@@ -288,7 +284,6 @@ UTest(matvecmul_batch_n) {
         CUDA_CHECK(memcpy_host_to_gpu(mat_gpu[b], mat_host[b], m * n));
         CUDA_CHECK(memcpy_host_to_gpu(vec_gpu[b], vec_host[b], n));
     }
-    cudaDeviceSynchronize();
 
     // matrix vector multiplication on host
     for (size_t b = 0; b < batch_size; ++b) {
@@ -307,7 +302,6 @@ UTest(matvecmul_batch_n) {
     for (size_t b = 0; b < batch_size; ++b) {
         CUDA_CHECK(memcpy_gpu_to_host(out_host[b], out_gpu[b], m));
     }
-    cudaDeviceSynchronize();
 
     // verify the result
     for (size_t b = 0; b < batch_size; ++b) {
@@ -358,7 +352,6 @@ UTest(matmul_n_n) {
     init_matrix(B_host, k, n);
     CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, m * k));
     CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, k * n));
-    cudaDeviceSynchronize();
 
     // matrix multiplication on host
     for (size_t i = 0; i < m; ++i) {
@@ -424,7 +417,6 @@ UTest(matmul_t_n) {
     init_matrix(B_host, k, n);
     CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, k * m));
     CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, k * n));
-    cudaDeviceSynchronize();
 
     // matrix multiplication on host
     for (size_t i = 0; i < m; ++i) {
@@ -490,7 +482,6 @@ UTest(matmul_n_t) {
     init_matrix(B_host, n, k);
     CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, m * k));
     CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, n * k));
-    cudaDeviceSynchronize();
 
     // matrix multiplication on host
     for (size_t i = 0; i < m; ++i) {
@@ -556,7 +547,6 @@ UTest(matmul_t_t) {
     init_matrix(B_host, n, k);
     CUDA_CHECK(memcpy_host_to_gpu(A_gpu, A_host, k * m));
     CUDA_CHECK(memcpy_host_to_gpu(B_gpu, B_host, n * k));
-    cudaDeviceSynchronize();
 
     // matrix multiplication on host
     for (size_t i = 0; i < m; ++i) {
@@ -639,7 +629,6 @@ UTest(matmul_batch_n_n) {
         CUDA_CHECK(memcpy_host_to_gpu(A_gpu[b], A_host[b], m * k));
         CUDA_CHECK(memcpy_host_to_gpu(B_gpu[b], B_host[b], k * n));
     }
-    cudaDeviceSynchronize();
 
     // matrix multiplication on host
     for (size_t b = 0; b < batch_size; ++b) {
@@ -680,7 +669,6 @@ UTest(linear_layer_fwd) {
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     input_gpu.from_host(input_host);
-    cudaDeviceSynchronize();
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     LayerState<ftype> state;
@@ -692,7 +680,6 @@ UTest(linear_layer_fwd) {
 
     urequire(output_gpu == state.output);
     output_gpu->to_host(output_host);
-    cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_equal(output_host[i], 7);
@@ -723,7 +710,6 @@ UTest(linear_layer_bwd) {
 
     urequire(output_err_gpu == state.error);
     output_err_gpu->to_host(output_err_host);
-    cudaDeviceSynchronize();
 
     uassert_equal(output_err_host[0], 123);
     uassert_equal(output_err_host[1], 234);
@@ -745,7 +731,6 @@ UTest(linear_layer_fwd_batched) {
     }
 
     input_gpu.from_host(input_host);
-    cudaDeviceSynchronize();
 
     LinearLayer linear_layer(CUBLAS_HANDLE, CUDNN_HANDLE, inputs, outputs);
     LayerState<ftype> state;
@@ -757,7 +742,6 @@ UTest(linear_layer_fwd_batched) {
 
     urequire(output_gpu == state.output);
     output_gpu->to_host(output_host);
-    cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_equal(output_host[i], 7);
@@ -803,7 +787,6 @@ UTest(linear_layer_bwd_batched) {
 
     urequire(output_err_gpu == state.error);
     output_err_gpu->to_host(output_err_host);
-    cudaDeviceSynchronize();
 
     uassert_equal(output_err_host[0], 321);
     uassert_equal(output_err_host[1], 432);
@@ -846,7 +829,6 @@ UTest(sigmoid_activation_fwd) {
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     input_gpu.from_host(input_host);
-    cudaDeviceSynchronize();
 
     SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
     LayerState<ftype> state;
@@ -855,7 +837,6 @@ UTest(sigmoid_activation_fwd) {
 
     urequire(output_gpu != &input_gpu);
     output_gpu->to_host(output_host);
-    cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_float_equal(output_host[i], sigmoid(input_host[i]), 1e-6);
@@ -873,7 +854,6 @@ UTest(sigmoid_activation_bwd) {
 
     input_gpu.from_host(input_host);
     err_gpu.from_host(err_host);
-    cudaDeviceSynchronize();
 
     SigmoidActivationLayer sigmoid_layer(CUDNN_HANDLE, inputs);
     LayerState<ftype> state;
@@ -882,7 +862,6 @@ UTest(sigmoid_activation_bwd) {
     Tensor<ftype> *output_gpu = sigmoid_layer.bwd(state, &err_gpu);
 
     output_gpu->to_host(output_host);
-    cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_float_equal(output_host[i],
@@ -948,7 +927,6 @@ UTest(inference) {
     NetworkGraph graph;
 
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
-    cudaDeviceSynchronize();
 
     graph.set_loss<QuadraticLoss>(CUDNN_HANDLE);
     graph.set_optimizer<SGDOptimizer>(1, CUDNN_HANDLE);
@@ -970,7 +948,6 @@ UTest(inference) {
     graph.terminate();
 
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(), outputs));
-    cudaDeviceSynchronize();
 
     for (size_t i = 0; i < outputs; ++i) {
         ftype weights_input_bias = input_host[0] * (i + 1) +
@@ -1152,27 +1129,27 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(matvecmul_n);
-    // run_test(matvecmul_t);
-    // run_test(matvecmul_batch_n);
-    // run_test(matmul_n_n);
-    // run_test(matmul_t_n);
-    // run_test(matmul_n_t);
-    // run_test(matmul_t_t);
-    // run_test(matmul_batch_n_n);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matvecmul_batch_n);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
+    run_test(matmul_batch_n_n);
 
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(linear_layer_fwd_batched);
-    // run_test(linear_layer_bwd_batched);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
-    // run_test(sgd_optimizer);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(linear_layer_fwd_batched);
+    run_test(linear_layer_bwd_batched);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
+    run_test(sgd_optimizer);
 
-    // run_test(inference);
+    run_test(inference);
     // run_test(training);
 
-    // run_test(mnist);
+    run_test(mnist);
     run_test(mnist_batched);
     return 0;
 }
