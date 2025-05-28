@@ -73,6 +73,36 @@ int mnist_get_label(ftype *arr) {
     return imax;
 }
 
+float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
+                     std::shared_ptr<NNState<ftype>> &state) {
+    int success = 0;
+    int errors = 0;
+    std::vector<ftype> expected(10), found(10);
+
+    for (auto data : testing_set.datas) {
+        graph.pushData(
+            std::make_shared<InferenceData<ftype>>(state, data.input));
+        Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
+        graph.cleanGraph();
+        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
+        CUDA_CHECK(output->to_host(found.data()));
+        int expected_label = mnist_get_label(expected.data());
+        int found_label = mnist_get_label(found.data());
+
+        if (found_label == expected_label) {
+            ++success;
+        } else {
+            ++errors;
+        }
+    }
+
+    float accuracy = (ftype)success / (ftype)testing_set.datas.size();
+    std::cout << "accuracy: " << accuracy << std::endl;
+    std::cout << "success: " << success << ", errors: " << errors << std::endl;
+
+    return accuracy;
+}
+
 UTest(matvecmul_n) {
     constexpr size_t m = 10;
     constexpr size_t n = 10'000;
@@ -870,17 +900,23 @@ UTest(sgd_optimizer) {
     state.gradients.weights = create_tensor<ftype>(weights_dims);
     state.gradients.biases = create_tensor<ftype>(biases_dims);
 
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights->data(), weights, inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights->data(), weights_gradients, inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.biases->data(), biases, outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases->data(), biases_gradients, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights->data(), weights,
+                                  inputs * outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights->data(),
+                                  weights_gradients, inputs * outputs));
+    CUDA_CHECK(
+        memcpy_host_to_gpu(state.parameters.biases->data(), biases, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases->data(),
+                                  biases_gradients, outputs));
 
     auto sgd = optimizer_factory.create();
     sgd->optimize(state, learning_rate);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
-    CUDA_CHECK(memcpy_gpu_to_host(result_weights, state.parameters.weights->data(), outputs * inputs));
-    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.parameters.biases->data(), outputs));
+    CUDA_CHECK(memcpy_gpu_to_host(
+        result_weights, state.parameters.weights->data(), outputs * inputs));
+    CUDA_CHECK(memcpy_gpu_to_host(result_biases,
+                                  state.parameters.biases->data(), outputs));
 
     for (size_t i = 0; i < inputs * outputs; ++i) {
         uassert_float_equal(result_weights[i],
@@ -978,7 +1014,7 @@ UTest(training) {
                         hh::StructureOptions::QUEUE);
 }
 
-UTest(evaluate_mnist) {
+UTest(mnist) {
     constexpr ftype learning_rate = 0.01;
     constexpr size_t epochs = 2;
     MNISTLoader loader;
@@ -1008,28 +1044,7 @@ UTest(evaluate_mnist) {
     graph.executeGraph(true);
 
     INFO("Inference before training...");
-
-    std::vector<ftype> expected(10), found(10);
-    size_t success = 0, errors = 0;
-    for (auto data : testing_set.datas) {
-        graph.pushData(
-            std::make_shared<InferenceData<ftype>>(state, data.input));
-        Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
-        graph.cleanGraph();
-        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
-        CUDA_CHECK(output->to_host(found.data()));
-        int expected_label = mnist_get_label(expected.data());
-        int found_label = mnist_get_label(found.data());
-
-        if (found_label == expected_label) {
-            ++success;
-        } else {
-            ++errors;
-        }
-    }
-    ftype accuracy_start = (ftype)success / (ftype)testing_set.datas.size();
-    std::cout << "accuracy: " << accuracy_start << std::endl;
-    std::cout << "success: " << success << ", errors: " << errors << std::endl;
+    ftype accuracy_start = evaluate_mnist(graph, testing_set, state);
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
@@ -1041,31 +1056,11 @@ UTest(evaluate_mnist) {
     graph.cleanGraph();
 
     timer_report_prec(online_training, milliseconds);
+
     INFO("Evaluate the model...");
+    ftype accuracy_end = evaluate_mnist(graph, testing_set, state);
 
-    success = 0;
-    errors = 0;
-    for (auto data : testing_set.datas) {
-        graph.pushData(
-            std::make_shared<InferenceData<ftype>>(state, data.input));
-        Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
-        graph.cleanGraph();
-        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
-        CUDA_CHECK(output->to_host(found.data()));
-        int expected_label = mnist_get_label(expected.data());
-        int found_label = mnist_get_label(found.data());
-
-        if (found_label == expected_label) {
-            ++success;
-        } else {
-            ++errors;
-        }
-    }
     graph.terminate();
-
-    ftype accuracy_end = (ftype)success / (ftype)testing_set.datas.size();
-    std::cout << "accuracy: " << accuracy_end << std::endl;
-    std::cout << "success: " << success << ", errors: " << errors << std::endl;
 
     uassert(accuracy_end > 10 * accuracy_start);
 
@@ -1073,7 +1068,7 @@ UTest(evaluate_mnist) {
                         hh::StructureOptions::QUEUE);
 }
 
-UTest(evaluate_mnist_batched) {
+UTest(mnist_batched) {
     constexpr ftype learning_rate = 0.01;
     constexpr size_t epochs = 3;
     constexpr size_t batch_size = 16;
@@ -1106,30 +1101,8 @@ UTest(evaluate_mnist_batched) {
     graph.executeGraph(true);
 
     INFO("Inference before training...");
-
     graph.init_state(state, 1);
-
-    std::vector<ftype> expected(10), found(10);
-    size_t success = 0, errors = 0;
-    for (auto data : testing_set.datas) {
-        graph.pushData(
-            std::make_shared<InferenceData<ftype>>(state, data.input));
-        Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
-        graph.cleanGraph();
-        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
-        CUDA_CHECK(output->to_host(found.data()));
-        int expected_label = mnist_get_label(expected.data());
-        int found_label = mnist_get_label(found.data());
-
-        if (found_label == expected_label) {
-            ++success;
-        } else {
-            ++errors;
-        }
-    }
-    ftype accuracy_start = (ftype)success / (ftype)testing_set.datas.size();
-    std::cout << "accuracy: " << accuracy_start << std::endl;
-    std::cout << "success: " << success << ", errors: " << errors << std::endl;
+    ftype accuracy_start = evaluate_mnist(graph, testing_set, state);
 
     graph.init_state(state, batch_size);
 
@@ -1143,33 +1116,12 @@ UTest(evaluate_mnist_batched) {
     graph.cleanGraph();
 
     timer_report_prec(batch_training, milliseconds);
+
     INFO("Evaluate the model...");
-
     graph.init_state(state, 1);
+    ftype accuracy_end = evaluate_mnist(graph, testing_set, state);
 
-    success = 0;
-    errors = 0;
-    for (auto data : testing_set.datas) {
-        graph.pushData(
-            std::make_shared<InferenceData<ftype>>(state, data.input));
-        Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
-        graph.cleanGraph();
-        CUDA_CHECK(data.ground_truth->to_host(expected.data()));
-        CUDA_CHECK(output->to_host(found.data()));
-        int expected_label = mnist_get_label(expected.data());
-        int found_label = mnist_get_label(found.data());
-
-        if (found_label == expected_label) {
-            ++success;
-        } else {
-            ++errors;
-        }
-    }
     graph.terminate();
-
-    ftype accuracy_end = (ftype)success / (ftype)testing_set.datas.size();
-    std::cout << "accuracy: " << accuracy_end << std::endl;
-    std::cout << "success: " << success << ", errors: " << errors << std::endl;
 
     uassert(accuracy_end > accuracy_start);
 
@@ -1203,7 +1155,7 @@ int main(int, char **) {
     run_test(inference);
     run_test(training);
 
-    run_test(evaluate_mnist);
-    run_test(evaluate_mnist_batched);
+    run_test(mnist);
+    run_test(mnist_batched);
     return 0;
 }
