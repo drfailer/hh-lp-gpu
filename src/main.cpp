@@ -9,6 +9,7 @@
 #include "model/optimizer/sgd_optimizer.hpp"
 #include "tools/defer.hpp"
 #include "tools/gpu.hpp"
+#include "tools/timer.hpp"
 #include "tools/utest.hpp"
 #include <cstdint>
 #include <cstring>
@@ -1006,9 +1007,14 @@ UTest(training) {
     graph.init_state(state, 1);
 
     graph.executeGraph(true);
+    timer_start(training);
     graph.pushData(std::make_shared<TrainingData<ftype>>(
         state, data_set, learning_rate, epochs));
+    (void)graph.get<TrainingData<ftype>>();
+    timer_end(training);
     graph.terminate();
+
+    timer_report_prec(training, milliseconds);
 
     graph.createDotFile("train.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
