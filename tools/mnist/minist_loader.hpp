@@ -14,104 +14,117 @@
 // data is sorted)
 
 class MNISTLoader {
-public:
-  using byte = char;
-  using ifstream_type = std::basic_ifstream<byte>;
+  public:
+    using byte = char;
+    using ifstream_type = std::basic_ifstream<byte>;
 
-public:
-  unsigned int read_big_endian_uint(ifstream_type &fs) {
-    byte buff[4];
-    fs.read(buff, 4);
-    std::swap(buff[0], buff[3]);
-    std::swap(buff[1], buff[2]);
-    return *reinterpret_cast<uint *>(buff);
-  }
-
-  std::vector<int> load_labels(std::string const &path) {
-    ifstream_type fs(path, std::ios::binary);
-    [[maybe_unused]] unsigned int magic = 0, size = 0;
-
-    if (!fs.is_open()) {
-      std::cerr << "error: can't open label file " << path << std::endl;
-      return {};
+  public:
+    unsigned int read_big_endian_uint(ifstream_type &fs) {
+        byte buff[4];
+        fs.read(buff, 4);
+        std::swap(buff[0], buff[3]);
+        std::swap(buff[1], buff[2]);
+        return *reinterpret_cast<uint *>(buff);
     }
-    std::cout << "loading labels " << path << "..." << std::endl;
 
-    magic = read_big_endian_uint(fs);
-    size = read_big_endian_uint(fs);
+    std::vector<int> load_labels(std::string const &path) {
+        ifstream_type fs(path, std::ios::binary);
+        [[maybe_unused]] unsigned int magic = 0, size = 0;
 
-    std::cout << "magic = " << magic << "; size = " << size << std::endl;
+        if (!fs.is_open()) {
+            std::cerr << "error: can't open label file " << path << std::endl;
+            return {};
+        }
+        std::cout << "loading labels " << path << "..." << std::endl;
 
-    std::vector<int> labels(size);
-    for (size_t i = 0; i < size; ++i) {
-      byte label;
-      fs.read(&label, 1);
-      labels[i] = int(label);
+        magic = read_big_endian_uint(fs);
+        size = read_big_endian_uint(fs);
+
+        std::cout << "magic = " << magic << "; size = " << size << std::endl;
+
+        std::vector<int> labels(size);
+        for (size_t i = 0; i < size; ++i) {
+            byte label;
+            fs.read(&label, 1);
+            labels[i] = int(label);
+        }
+        return labels;
     }
-    return labels;
-  }
 
-  auto load_imgages(std::string const &path) {
-    ifstream_type fs(path, std::ios::binary);
-    [[maybe_unused]] unsigned int magic = 0, size = 0, rows = 0, cols = 0;
-
-    if (!fs.is_open()) {
-      std::cerr << "error: can't open image file " << path << std::endl;
-      exit(1);
-    }
-    std::cout << "loading images " << path << "..." << std::endl;
-
-    magic = read_big_endian_uint(fs);
-    size = read_big_endian_uint(fs);
-    rows = read_big_endian_uint(fs);
-    cols = read_big_endian_uint(fs);
-
-    std::cout << "magic = " << magic << "; size = " << size << std::endl;
-    std::cout << "row & cols = " << rows << "x" << cols << std::endl;
-
-    std::vector<Tensor<ftype> *> images(size);
-
-    for (size_t i = 0; i < size; ++i) {
-      std::vector<ftype> image(rows * cols);
-      for (size_t px = 0; px < image.size(); ++px) {
+    auto load_imgages(std::string const &path, int64_t batch_size) {
+        ifstream_type fs(path, std::ios::binary);
+        unsigned int magic = 0, size = 0, rows = 0, cols = 0;
         unsigned char px_value;
-        fs.get(reinterpret_cast<byte &>(px_value));
-        assert(0 <= px_value && px_value <= 255);
-        image[px] = (ftype)px_value / 255.;
-      }
-      auto *image_gpu = new Tensor<ftype>({1, 1, rows * cols, 1},
-                                          {rows * cols, rows * cols, 1, 1});
-      CUDA_CHECK(
-          memcpy_host_to_gpu(image_gpu->data(), image.data(), rows * cols));
-      cudaDeviceSynchronize();
-      images[i] = image_gpu;
+
+        if (!fs.is_open()) {
+            std::cerr << "error: can't open image file " << path << std::endl;
+            exit(1);
+        }
+        std::cout << "loading images " << path << "..." << std::endl;
+
+        magic = read_big_endian_uint(fs);
+        size = read_big_endian_uint(fs);
+        rows = read_big_endian_uint(fs);
+        cols = read_big_endian_uint(fs);
+
+        std::cout << "magic = " << magic << "; size = " << size << std::endl;
+        std::cout << "row & cols = " << rows << "x" << cols << std::endl;
+
+        size_t nb_batches = size / batch_size;
+        assert(size % batch_size == 0);
+        std::vector<Tensor<ftype> *> images(nb_batches);
+        std::vector<ftype> batch_host(batch_size * rows * cols);
+
+        for (size_t b = 0; b < nb_batches; ++b) {
+            auto *batch_tensor =
+                create_tensor<ftype>({batch_size, 1, rows * cols, 1});
+
+            for (size_t i = 0; i < batch_size; ++i) {
+                auto image = &batch_host[i * cols * rows];
+
+                for (size_t px = 0; px < batch_host.size(); ++px) {
+                    fs.get(reinterpret_cast<byte &>(px_value));
+                    assert(0 <= px_value && px_value <= 255);
+                    image[px] = (ftype)px_value / 255.;
+                }
+            }
+            CUDA_CHECK(memcpy_host_to_gpu(batch_tensor->data(),
+                                          batch_host.data(), rows * cols));
+            cudaDeviceSynchronize();
+            images[b] = batch_tensor;
+        }
+
+        return images;
     }
 
-    return images;
-  }
+    auto create_output_vector(int *label, int64_t batch_size) {
+        auto *batch_gpu = create_tensor<ftype>({batch_size, 1, 10, 1});
+        std::vector<ftype> batch_host(batch_size * 10, 0);
 
-  auto create_output_vector(int label) {
-    auto *result_gpu = new Tensor<ftype>({1, 1, 10, 1}, {10, 10, 1, 1});
-    std::vector<ftype> result_host(10, 0);
+        for (size_t b = 0; b < batch_size; ++b) {
+            batch_host[b * 10 + label[b]] = 1;
+        }
+        CUDA_CHECK(memcpy_host_to_gpu(batch_gpu->data(), batch_host.data(),
+                                      batch_size * 10));
 
-    result_host[label] = 1;
-    CUDA_CHECK(memcpy_host_to_gpu(result_gpu->data(), result_host.data(), 10));
-
-    return result_gpu;
-  }
-
-  DataSet<ftype> load_ds(std::string const labels_path,
-                         std::string const images_path) {
-    auto labels = load_labels(labels_path);
-    auto images = load_imgages(images_path);
-
-    DataSet<ftype> ds;
-
-    for (size_t i = 0; i < images.size(); ++i) {
-      ds.datas.emplace_back(images[i], create_output_vector(labels[i]));
+        return batch_gpu;
     }
-    return ds;
-  }
+
+    DataSet<ftype> load_ds(std::string const labels_path,
+                           std::string const images_path,
+                           int64_t batch_size = 1) {
+        auto labels = load_labels(labels_path);
+        auto images = load_imgages(images_path, batch_size);
+
+        DataSet<ftype> ds;
+
+        for (size_t i = 0; i < images.size(); ++i) {
+            ds.datas.emplace_back(
+                images[i],
+                create_output_vector(&labels[i * batch_size], batch_size));
+        }
+        return ds;
+    }
 };
 
 #endif
