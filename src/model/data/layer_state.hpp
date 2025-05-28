@@ -11,6 +11,12 @@ template <typename T> struct LayerState {
     parameters_t<T> gradients;
     layer_data_t *layer_data = nullptr; // data used by layers
 
+    LayerState() = default;
+
+    LayerState(parameters_t<T> const &parameters) {
+        set_parameters(parameters);
+    }
+
     ~LayerState() {
         delete output;
         delete error;
