@@ -1,9 +1,9 @@
 #ifndef MODEL_DATA_TENSOR
 #define MODEL_DATA_TENSOR
+#include "../../tools/gpu.hpp"
 #include <array>
 #include <cstdint>
 #include <cudnn_ops.h>
-#include "../../tools/gpu.hpp"
 
 using vec_t = std::array<int64_t, 4>;
 
@@ -60,7 +60,7 @@ template <typename T> class Tensor {
     T *data_ = nullptr;
     vec_t dims_ = {};
     vec_t strides_ = {};
-    cudnnTensorDescriptor_t descriptor_;
+    cudnnTensorDescriptor_t descriptor_ = nullptr;
 };
 
 #endif
