@@ -56,6 +56,11 @@ template <typename T> class Tensor {
                                      strides[1], strides[2], strides[3]);
     }
 
+    void reshape(vec_t const &dims) {
+        reshape(dims,
+                {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
+    }
+
   public:
     // assums that the host array has the proper size
     auto from_host(T *host) {
