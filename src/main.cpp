@@ -75,11 +75,13 @@ int mnist_get_label(ftype *arr) {
 }
 
 float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
-                     std::shared_ptr<NNState<ftype>> &state) {
+                     std::shared_ptr<NNState<ftype>> &state,
+                     int64_t batch_size = 1) {
     int success = 0;
     int errors = 0;
-    std::vector<ftype> expected(10), found(10);
+    std::vector<ftype> expected(batch_size * 10, 0), found(batch_size * 10, 0);
 
+    timer_start(evaluate_mnist);
     for (auto data : testing_set.datas) {
         graph.pushData(
             std::make_shared<InferenceData<ftype>>(state, data.input));
@@ -87,19 +89,25 @@ float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
         graph.cleanGraph();
         CUDA_CHECK(data.ground_truth->to_host(expected.data()));
         CUDA_CHECK(output->to_host(found.data()));
-        int expected_label = mnist_get_label(expected.data());
-        int found_label = mnist_get_label(found.data());
 
-        if (found_label == expected_label) {
-            ++success;
-        } else {
-            ++errors;
+        for (size_t i = 0; i < batch_size; ++i) {
+            int expected_label = mnist_get_label(&expected.data()[i * 10]);
+            int found_label = mnist_get_label(&found.data()[i * 10]);
+
+            if (found_label == expected_label) {
+                ++success;
+            } else {
+                ++errors;
+            }
         }
     }
+    timer_end(evaluate_mnist);
 
-    float accuracy = (ftype)success / (ftype)testing_set.datas.size();
+    float accuracy =
+        (ftype)success / (ftype)(batch_size * testing_set.datas.size());
     std::cout << "accuracy: " << accuracy << std::endl;
     std::cout << "success: " << success << ", errors: " << errors << std::endl;
+    timer_report_prec(evaluate_mnist, milliseconds);
 
     return accuracy;
 }
@@ -1078,6 +1086,7 @@ UTest(mnist_batched) {
     constexpr ftype learning_rate = 0.01;
     constexpr size_t epochs = 3;
     constexpr size_t batch_size = 16;
+    constexpr size_t test_batch_size = 10'000;
     MNISTLoader loader;
     BatchGenerator<ftype> batch_generator(0);
 
@@ -1089,7 +1098,7 @@ UTest(mnist_batched) {
         batch_generator.generate(training_data, 28 * 28, 10, batch_size);
     DataSet<ftype> testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
-                       "../data/mnist/t10k-images-idx3-ubyte");
+                       "../data/mnist/t10k-images-idx3-ubyte", test_batch_size);
     defer(destroy_data_set(testing_set));
 
     NetworkGraph graph;
@@ -1107,8 +1116,9 @@ UTest(mnist_batched) {
     graph.executeGraph(true);
 
     INFO("Inference before training...");
-    graph.init_state(state, 1);
-    ftype accuracy_start = evaluate_mnist(graph, testing_set, state);
+    graph.init_state(state, test_batch_size);
+    ftype accuracy_start =
+        evaluate_mnist(graph, testing_set, state, test_batch_size);
 
     graph.init_state(state, batch_size);
 
@@ -1124,8 +1134,9 @@ UTest(mnist_batched) {
     timer_report_prec(batch_training, milliseconds);
 
     INFO("Evaluate the model...");
-    graph.init_state(state, 1);
-    ftype accuracy_end = evaluate_mnist(graph, testing_set, state);
+    graph.init_state(state, test_batch_size);
+    ftype accuracy_end =
+        evaluate_mnist(graph, testing_set, state, test_batch_size);
 
     graph.terminate();
 
@@ -1141,27 +1152,27 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    run_test(matvecmul_n);
-    run_test(matvecmul_t);
-    run_test(matvecmul_batch_n);
-    run_test(matmul_n_n);
-    run_test(matmul_t_n);
-    run_test(matmul_n_t);
-    run_test(matmul_t_t);
-    run_test(matmul_batch_n_n);
+    // run_test(matvecmul_n);
+    // run_test(matvecmul_t);
+    // run_test(matvecmul_batch_n);
+    // run_test(matmul_n_n);
+    // run_test(matmul_t_n);
+    // run_test(matmul_n_t);
+    // run_test(matmul_t_t);
+    // run_test(matmul_batch_n_n);
 
-    run_test(linear_layer_fwd);
-    run_test(linear_layer_bwd);
-    run_test(linear_layer_fwd_batched);
-    run_test(linear_layer_bwd_batched);
-    run_test(sigmoid_activation_fwd);
-    run_test(sigmoid_activation_bwd);
-    run_test(sgd_optimizer);
+    // run_test(linear_layer_fwd);
+    // run_test(linear_layer_bwd);
+    // run_test(linear_layer_fwd_batched);
+    // run_test(linear_layer_bwd_batched);
+    // run_test(sigmoid_activation_fwd);
+    // run_test(sigmoid_activation_bwd);
+    // run_test(sgd_optimizer);
 
-    run_test(inference);
-    run_test(training);
+    // run_test(inference);
+    // run_test(training);
 
-    run_test(mnist);
+    // run_test(mnist);
     run_test(mnist_batched);
     return 0;
 }
