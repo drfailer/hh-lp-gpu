@@ -55,15 +55,11 @@ class LinearLayer : public Layer<ftype> {
 
         this->dims.batch_size = batch_size;
 
-        vec_t output_dims = {batch_size, 1, outputs, 1};
-        vec_t output_strides = {outputs, outputs, 1, 1};
-        vec_t error_dims = {batch_size, 1, inputs, 1};
-        vec_t error_strides = {inputs, inputs, 1, 1};
-
+        // TODO: use reshape instead
         delete state.output;
-        state.output = new Tensor<ftype>(output_dims, output_strides);
+        state.output = create_tensor<ftype>({batch_size, 1, outputs, 1});
         delete state.error;
-        state.error = new Tensor<ftype>(error_dims, error_strides);
+        state.error = create_tensor<ftype>({batch_size, 1, inputs, 1});
 
         if (batch_size == 1) {
             return;
@@ -77,9 +73,7 @@ class LinearLayer : public Layer<ftype> {
         temp_weights_gradients_array.resize(batch_size, nullptr);
 
         // create temporary array for the gradients
-        temp_weights_gradients.reshape(
-            {batch_size, 1, outputs, inputs},
-            {outputs * inputs, outputs * inputs, inputs, 1});
+        temp_weights_gradients.reshape({batch_size, 1, outputs, inputs});
         for (size_t b = 0; b < batch_size; ++b) {
             temp_weights_gradients_array[b] =
                 &temp_weights_gradients.data()[b * outputs * inputs];
