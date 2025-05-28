@@ -80,16 +80,15 @@ class MNISTLoader {
                 create_tensor<ftype>({batch_size, 1, rows * cols, 1});
 
             for (size_t i = 0; i < batch_size; ++i) {
-                auto image = &batch_host[i * cols * rows];
+                auto image = &batch_host[i * rows * cols];
 
-                for (size_t px = 0; px < batch_host.size(); ++px) {
+                for (size_t px = 0; px < (rows * cols); ++px) {
                     fs.get(reinterpret_cast<byte &>(px_value));
                     assert(0 <= px_value && px_value <= 255);
                     image[px] = (ftype)px_value / 255.;
                 }
             }
-            CUDA_CHECK(memcpy_host_to_gpu(batch_tensor->data(),
-                                          batch_host.data(), rows * cols));
+            batch_tensor->from_host(batch_host.data());
             cudaDeviceSynchronize();
             images[b] = batch_tensor;
         }
@@ -97,15 +96,14 @@ class MNISTLoader {
         return images;
     }
 
-    auto create_output_vector(int *label, int64_t batch_size) {
+    auto create_output_tensor(int *label, int64_t batch_size) {
         auto *batch_gpu = create_tensor<ftype>({batch_size, 1, 10, 1});
         std::vector<ftype> batch_host(batch_size * 10, 0);
 
-        for (size_t b = 0; b < batch_size; ++b) {
-            batch_host[b * 10 + label[b]] = 1;
+        for (size_t i = 0; i < batch_size; ++i) {
+            batch_host[i * 10 + label[i]] = 1;
         }
-        CUDA_CHECK(memcpy_host_to_gpu(batch_gpu->data(), batch_host.data(),
-                                      batch_size * 10));
+        batch_gpu->from_host(batch_host.data());
 
         return batch_gpu;
     }
@@ -121,7 +119,7 @@ class MNISTLoader {
         for (size_t i = 0; i < images.size(); ++i) {
             ds.datas.emplace_back(
                 images[i],
-                create_output_vector(&labels[i * batch_size], batch_size));
+                create_output_tensor(&labels[i * batch_size], batch_size));
         }
         return ds;
     }
