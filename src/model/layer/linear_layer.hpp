@@ -32,34 +32,24 @@ class LinearLayer : public Layer<ftype> {
      * Allocates memory for a layer state (output memory for the fwd pass, bwd
      * pass, parameters and gradients).
      */
-    layer_state_t<ftype> create_state() const override {
+    parameters_t<ftype> create_parameters() const override {
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
-        layer_state_t<ftype> state = {0};
         int64_t inputs = this->dims.inputs;
         int64_t outputs = this->dims.outputs;
-
-        std::array<int64_t, 4> weights_dims = {1, 1, outputs, inputs};
-        std::array<int64_t, 4> weights_strides = {outputs * inputs,
-                                                  outputs * inputs, inputs, 1};
-        std::array<int64_t, 4> biases_dims = {1, 1, outputs, 1};
-        std::array<int64_t, 4> biases_strides = {outputs, outputs, 1, 1};
-
-        state.parameters = new Parameter<ftype>(
-            new Tensor<ftype>(weights_dims, weights_strides),
-            new Tensor<ftype>(biases_dims, biases_strides));
-        state.gradients = new Parameter<ftype>(
-            new Tensor<ftype>(weights_dims, weights_strides),
-            new Tensor<ftype>(biases_dims, biases_strides));
+        parameters_t<ftype> parameters{
+            .weights = create_tensor<ftype>({1, 1, outputs, inputs}),
+            .biases = create_tensor<ftype>({1, 1, outputs, 1}),
+        };
 
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            state.parameters->weights->data(), outputs * inputs, -0.5, 0.5, 0));
-        CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            state.parameters->biases->data(), outputs, -0.5, 0.5, 0));
+            parameters.weights->data(), outputs * inputs, -0.5, 0.5, 0));
+        CUDA_CHECK(memset_random_uniform_gpu<ftype>(parameters.biases->data(),
+                                                    outputs, -0.5, 0.5, 0));
         cudaDeviceSynchronize();
-        return state;
+        return parameters;
     }
 
-    void init(layer_state_t<ftype> &state, int64_t batch_size) override {
+    void init(LayerState<ftype> &state, int64_t batch_size) override {
         int64_t inputs = this->dims.inputs;
         int64_t outputs = this->dims.outputs;
 
@@ -100,21 +90,21 @@ class LinearLayer : public Layer<ftype> {
         // so it can be used to compute the workspace size
         CUDNN_CHECK(cudnnGetReductionWorkspaceSize(
             cudnn_handle_, average_tensor, state.output->descriptor(),
-            state.gradients->biases->descriptor(),
+            state.gradients.biases->descriptor(),
             &avg_biases_gradients_ws_size));
         cudaFree(avg_biases_gradients_ws); // free if needed
         CUDA_CHECK(
             alloc_gpu(&avg_biases_gradients_ws, avg_biases_gradients_ws_size));
         CUDNN_CHECK(cudnnGetReductionWorkspaceSize(
             cudnn_handle_, average_tensor, temp_weights_gradients.descriptor(),
-            state.gradients->weights->descriptor(),
+            state.gradients.weights->descriptor(),
             &avg_weights_gradients_ws_size));
         cudaFree(avg_weights_gradients_ws); // free if needed
         CUDA_CHECK(alloc_gpu(&avg_weights_gradients_ws,
                              avg_weights_gradients_ws_size));
     }
 
-    Tensor<ftype> *fwd(layer_state_t<ftype> &state,
+    Tensor<ftype> *fwd(LayerState<ftype> &state,
                        Tensor<ftype> *input) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
@@ -124,12 +114,12 @@ class LinearLayer : public Layer<ftype> {
         if (this->dims.batch_size > 1) {
             // TODO: should be done in init
             for (int64_t b = 0; b < this->dims.batch_size; ++b) {
-                weights_array[b] = state.parameters->weights->data();
+                weights_array[b] = state.parameters.weights->data();
                 inputs_array[b] = &state.input->data()[b * this->dims.inputs];
                 outputs_array[b] =
                     &state.output->data()[b * this->dims.outputs];
                 CUDA_CHECK(memcpy_gpu_to_gpu(outputs_array[b],
-                                             state.parameters->biases->data(),
+                                             state.parameters.biases->data(),
                                              this->dims.outputs));
             }
 
@@ -139,18 +129,18 @@ class LinearLayer : public Layer<ftype> {
                 outputs_array.data(), this->dims.batch_size));
         } else {
             CUDA_CHECK(memcpy_gpu_to_gpu(state.output->data(),
-                                         state.parameters->biases->data(),
+                                         state.parameters.biases->data(),
                                          this->dims.outputs));
             CUBLAS_CHECK(matvecmul(
                 cublas_handle_, false, this->dims.outputs, this->dims.inputs,
-                1.f, state.parameters->weights->data(), state.input->data(),
+                1.f, state.parameters.weights->data(), state.input->data(),
                 1.f, state.output->data()));
         }
 
         return state.output;
     }
 
-    Tensor<ftype> *bwd(layer_state_t<ftype> &state,
+    Tensor<ftype> *bwd(LayerState<ftype> &state,
                        Tensor<ftype> *error) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
         int64_t inputs = this->dims.inputs;
@@ -159,7 +149,7 @@ class LinearLayer : public Layer<ftype> {
 
         if (batch_size > 1) {
             for (int64_t b = 0; b < batch_size; ++b) {
-                weights_array[b] = state.parameters->weights->data();
+                weights_array[b] = state.parameters.weights->data();
                 inputs_array[b] = &state.input->data()[b * inputs];
                 errors_array[b] = &error->data()[b * outputs];
                 output_errors_array[b] = &state.error->data()[b * inputs];
@@ -171,8 +161,8 @@ class LinearLayer : public Layer<ftype> {
                 cudnn_handle_, average_tensor, nullptr, 0,
                 avg_biases_gradients_ws, avg_biases_gradients_ws_size, &alpha,
                 error->descriptor(), error->data(), &beta,
-                state.gradients->biases->descriptor(),
-                state.gradients->biases->data()));
+                state.gradients.biases->descriptor(),
+                state.gradients.biases->data()));
             // w_grad = err * fwd_inputT
             CUBLAS_CHECK(matmul(cublas_handle_, false, true, outputs, inputs, 1,
                                 1.f, errors_array.data(), inputs_array.data(),
@@ -186,25 +176,25 @@ class LinearLayer : public Layer<ftype> {
                 avg_weights_gradients_ws, avg_weights_gradients_ws_size, &alpha,
                 temp_weights_gradients.descriptor(),
                 temp_weights_gradients.data(), &beta,
-                state.gradients->weights->descriptor(),
-                state.gradients->weights->data()));
+                state.gradients.weights->descriptor(),
+                state.gradients.weights->data()));
             // output_err = errT * weights
             CUBLAS_CHECK(matmul(cublas_handle_, true, false, 1, inputs, outputs,
                                 1.f, errors_array.data(), weights_array.data(),
                                 0.f, output_errors_array.data(), batch_size));
         } else {
             // grads_b = error
-            CUDA_CHECK(memcpy_gpu_to_gpu(state.gradients->biases->data(),
+            CUDA_CHECK(memcpy_gpu_to_gpu(state.gradients.biases->data(),
                                          error->data(), outputs));
 
             // w_grad = err * fwd_inputT
             CUBLAS_CHECK(matmul(cublas_handle_, false, true, outputs, inputs, 1,
                                 1.f, error->data(), state.input->data(), 0.f,
-                                state.gradients->weights->data()));
+                                state.gradients.weights->data()));
             // output_err = errT * weights
             CUBLAS_CHECK(matmul(cublas_handle_, true, false, 1, inputs, outputs,
                                 1.f, error->data(),
-                                state.parameters->weights->data(), 0.f,
+                                state.parameters.weights->data(), 0.f,
                                 state.error->data()));
         }
 

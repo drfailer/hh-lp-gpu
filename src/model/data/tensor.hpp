@@ -56,11 +56,34 @@ template <typename T> class Tensor {
                                      strides[1], strides[2], strides[3]);
     }
 
+  public:
+    // assums that the host array has the proper size
+    auto from_host(T *host) {
+        return memcpy_host_to_gpu(data_, host,
+                                  dims_[0] * dims_[1] * dims_[2] * dims_[3]);
+    }
+
+    // assums that the host array has the proper size
+    auto to_host(T *host) {
+        return memcpy_gpu_to_host(host, data_,
+                                  dims_[0] * dims_[1] * dims_[2] * dims_[3]);
+    }
+
   private:
     T *data_ = nullptr;
     vec_t dims_ = {};
     vec_t strides_ = {};
     cudnnTensorDescriptor_t descriptor_ = nullptr;
 };
+
+template <typename T>
+Tensor<T> *create_tensor(vec_t const &dims, vec_t const &strides) {
+    return new Tensor<T>(dims, strides);
+}
+
+template <typename T> Tensor<T> *create_tensor(vec_t const &dims) {
+    return create_tensor<T>(
+        dims, {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
+}
 
 #endif

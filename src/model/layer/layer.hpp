@@ -2,36 +2,16 @@
 #define MODEL_LAYER_LAYER_H
 #include "../../model/data/dims.hpp"
 #include "../../model/data/layer_state.hpp"
-#include "../../model/data/network_state.hpp"
-#include "../../model/data/shape.hpp"
 
 template <typename T> struct Layer {
-    Layer(dims_t dims, shape_t shape = {})
-        : dims(dims) {}
+    Layer(dims_t dims) : dims(dims) {}
     size_t idx = 0;
     dims_t dims;
 
-    void create_state(NetworkState<T> &states) const {
-        states.layers[idx] = create_state();
-    }
-
-    Tensor<T> *fwd(NetworkState<T> &states, Tensor<T> *input) {
-        return fwd(states.layers[idx], input);
-    }
-
-    Tensor<T> *bwd(NetworkState<T> &states, Tensor<T> *error) {
-        return bwd(states.layers[idx], error);
-    }
-
-    virtual void init(NetworkState<T> &state, int64_t batch_size) {
-        dims.batch_size = batch_size;
-        init(state.layers[idx], batch_size);
-    }
-
-    virtual layer_state_t<T> create_state() const = 0;
-    virtual void init(layer_state_t<T> &state, int64_t batch_size) = 0;
-    virtual Tensor<T> *fwd(layer_state_t<T> &states, Tensor<T> *input) = 0;
-    virtual Tensor<T> *bwd(layer_state_t<T> &states, Tensor<T> *error) = 0;
+    virtual parameters_t<T> create_parameters() const = 0;
+    virtual void init(LayerState<T> &state, int64_t batch_size) = 0;
+    virtual Tensor<T> *fwd(LayerState<T> &states, Tensor<T> *input) = 0;
+    virtual Tensor<T> *bwd(LayerState<T> &states, Tensor<T> *error) = 0;
 };
 
 #endif

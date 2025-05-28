@@ -20,9 +20,9 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
         auto &states = data->states;
 
         for (int i = layers_.size() - 1; i >= 0; --i) {
-            error = layers_[i]->bwd(states, error);
-            this->addResult(std::make_shared<OptLayerData<ftype>>(data->states,
-                        data->learning_rate, layers_[i]->idx));
+            error = layers_[i]->bwd(states->layers[layers_[i]->idx], error);
+            this->addResult(std::make_shared<OptLayerData<ftype>>(
+                data->states, data->learning_rate, layers_[i]->idx));
         }
         data->error = error;
         this->addResult(data);

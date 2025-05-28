@@ -20,17 +20,13 @@ struct SigmoidActivationLayer : Layer<ftype> {
 
     ~SigmoidActivationLayer() { cudnnDestroyActivationDescriptor(sigmoid_); }
 
-    /*
-     * Allocates memory for a layer state (output memory for the fwd pass, bwd
-     * pass, parameters and gradients). Since this layer is an activation one,
-     * there no need to allocate parameters and gradients.
-     */
-    layer_state_t<ftype> create_state() const override {
-        layer_state_t<ftype> state = {0};
-        return state;
+    parameters_t<ftype> create_parameters() const override {
+        return {nullptr, nullptr};
     }
 
-    void init(layer_state_t<ftype> &state, int64_t batch_size) override {
+    void init(LayerState<ftype> &state, int64_t batch_size) override {
+        this->dims.batch_size = batch_size;
+
         vec_t output_dims = {this->dims.batch_size, 1, this->dims.outputs, 1};
         vec_t output_strides = {this->dims.outputs, this->dims.outputs, 1, 1};
         vec_t error_dims = {this->dims.batch_size, 1, this->dims.inputs, 1};
@@ -42,7 +38,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
         state.error = new Tensor<ftype>(error_dims, error_strides);
     }
 
-    Tensor<ftype> *fwd(layer_state_t<ftype> &state,
+    Tensor<ftype> *fwd(LayerState<ftype> &state,
                        Tensor<ftype> *input) override {
         INFO_GRP("SigmoidActivationLayer FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
@@ -57,7 +53,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
         return state.output;
     }
 
-    Tensor<ftype> *bwd(layer_state_t<ftype> &state,
+    Tensor<ftype> *bwd(LayerState<ftype> &state,
                        Tensor<ftype> *error) override {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;

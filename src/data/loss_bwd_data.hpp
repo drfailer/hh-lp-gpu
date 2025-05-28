@@ -1,9 +1,10 @@
 #ifndef DATA_LOSS_BWD_DATA_H
 #define DATA_LOSS_BWD_DATA_H
-#include "../model/data/network_state.hpp"
+#include "../model/data/nn_state.hpp"
+#include <memory>
 
 template <typename T> struct LossBwdData {
-    NetworkState<T> &states;
+    std::shared_ptr<NNState<T>> states;
     Tensor<T> *input;
     Tensor<T> *ground_truth;
     Tensor<T> *error;

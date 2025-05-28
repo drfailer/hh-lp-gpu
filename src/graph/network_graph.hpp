@@ -95,14 +95,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         }
     }
 
-    void init(NetworkState<ftype> &state, int64_t batch_size) {
-        for (auto layer : layers_) {
-            layer->init(state, batch_size);
-            optimizer_task_->add_layer(optimizer_factory_->create());
-        }
-         loss_task_->init(state);
-    }
-
     void terminate() {
         pipeline_->terminate();
         this->finishPushingData();
@@ -110,24 +102,43 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   public:
-    NetworkState<ftype> create_state() {
-        NetworkState<ftype> state;
+    /*
+     * Create the NNState with allocated parameters for the network. Note that
+     * this function does not allocated the data for the computation since it is
+     * the role of `init_state`.
+     */
+    std::shared_ptr<NNState<ftype>> create_state() {
+        auto state = std::make_shared<NNState<ftype>>();
 
         timer_start(create_state);
-        state.layers = std::vector<layer_state_t<ftype>>(layers_.size());
+        state->layers = std::vector<LayerState<ftype>>(layers_.size());
         for (auto &layer : layers_) {
-            layer->create_state(state);
+            state->layers[layer->idx].set_parameters(
+                layer->create_parameters());
         }
         timer_end(create_state);
         timer_report_prec(create_state, milliseconds);
         return state;
     }
 
-    void destroy_state(NetworkState<ftype> &state) {
-        for (auto &layer_state : state.layers) {
-            destroy_layer_state(layer_state);
+    /*
+     * Initialize data required for the computation. The parameters are not
+     * allocated here, but all the tensors used for the computation (input,
+     * output, error, temporary tensor, ...) are allocated in this function.
+     *
+     * This function can be used multiple times, and all the data is reallocated
+     * each time. The function should be used whenever the batch_size is
+     * changed (because this requires reallocation). Note that once this
+     * function is called, all the tensors and tensor descriptors are properly
+     * allocated and initialized, meaning that no allocation or initialization
+     * will be done during the computation to ensure maximum performance.
+     */
+    void init_state(std::shared_ptr<NNState<ftype>> state, int64_t batch_size) {
+        for (auto layer : layers_) {
+            layer->init(state->layers[layer->idx], batch_size);
+            optimizer_task_->add_layer(optimizer_factory_->create());
         }
-        delete state.loss;
+        loss_task_->init(state);
     }
 
   public:

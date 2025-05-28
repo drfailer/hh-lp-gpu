@@ -3,29 +3,37 @@
 #include "layer_data.hpp"
 #include "parameters.hpp"
 
-template <typename T> struct layer_state_t {
+template <typename T> struct LayerState {
     Tensor<T> *input = nullptr;  // input of the forward pass (gpu)
     Tensor<T> *output = nullptr; // output of the forward pass (gpu)
     Tensor<T> *error = nullptr;  // output of the backwards pass (gpu)
-    Parameter<T> *parameters = nullptr;
-    Parameter<T> *gradients = nullptr;
+    parameters_t<T> parameters;
+    parameters_t<T> gradients;
     layer_data_t *layer_data = nullptr; // data used by layers
-};
 
-template <typename T> void destroy_layer_state(layer_state_t<T> &state) {
-    delete state.output;
-    delete state.error;
-    if (state.parameters) {
-        delete state.parameters->weights;
-        delete state.parameters->biases;
-        delete state.parameters;
+    ~LayerState() {
+        delete output;
+        delete error;
+        delete parameters.weights;
+        delete parameters.biases;
+        delete gradients.weights;
+        delete gradients.biases;
+        delete layer_data;
     }
-    if (state.gradients) {
-        delete state.gradients->weights;
-        delete state.gradients->biases;
-        delete state.gradients;
+
+    void set_parameters(parameters_t<T> const &parameters) {
+        if (parameters.weights || parameters.biases) {
+            this->parameters = parameters;
+            this->gradients.weights = create_tensor<T>(
+                parameters.weights->dims(), parameters.weights->strides());
+            this->gradients.biases = create_tensor<T>(
+                parameters.biases->dims(), parameters.biases->strides());
+        }
     }
-    delete state.layer_data;
-}
+
+    template <typename DataType> DataType *get_data() {
+        return dynamic_cast<DataType>(layer_data);
+    }
+};
 
 #endif

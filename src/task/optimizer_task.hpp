@@ -24,7 +24,7 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         optimizers_->operator[](data->idx)->optimize(
-            data->state.layers[data->idx], data->learning_rate);
+            data->state->layers[data->idx], data->learning_rate);
         this->addResult(data);
     }
 
