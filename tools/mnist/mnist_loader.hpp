@@ -1,5 +1,5 @@
-#ifndef MNIST_MINIST_LOADER_H
-#define MNIST_MINIST_LOADER_H
+#ifndef MNIST_MNIST_LOADER_H
+#define MNIST_MNIST_LOADER_H
 #include "../../src/data/data_set.hpp"
 #include "../../src/tools/gpu.hpp"
 #include "../../src/types.hpp"
