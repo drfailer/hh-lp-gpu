@@ -84,8 +84,8 @@ float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
     timer_start(evaluate_mnist);
     for (auto data : testing_set.datas) {
         graph.pushData(
-            std::make_shared<InferenceData<ftype>>(state, data.input));
-        Tensor<ftype> *output = graph.get<InferenceData<ftype>>()->input;
+            std::make_shared<PredictionData<ftype>>(state, data.input));
+        Tensor<ftype> *output = graph.get<PredictionData<ftype>>()->input;
         graph.cleanGraph();
         CUDA_CHECK(data.ground_truth->to_host(expected.data()));
         CUDA_CHECK(output->to_host(found.data()));
@@ -949,8 +949,8 @@ UTest(inference) {
                          dims_t{.inputs = inputs, .outputs = outputs});
 
     graph.executeGraph(true);
-    graph.pushData(std::make_shared<InferenceData<ftype>>(state, &input_gpu));
-    Tensor<ftype> *output_gpu = graph.get<InferenceData<ftype>>()->input;
+    graph.pushData(std::make_shared<PredictionData<ftype>>(state, &input_gpu));
+    Tensor<ftype> *output_gpu = graph.get<PredictionData<ftype>>()->input;
     graph.terminate();
 
     CUDA_CHECK(memcpy_gpu_to_host(output_host, output_gpu->data(), outputs));
@@ -980,7 +980,7 @@ UTest(training) {
     urequire(data_set.datas.size() == 60'000);
 
     graph.set_loss<QuadraticLoss>();
-    graph.set_optimizer<SGDOptimizer>(2);
+    graph.set_optimizer<SGDOptimizer>(3);
 
     graph.add_layer<LinearLayer>(nb_inputs, 32);
     graph.add_layer<SigmoidActivationLayer>(32);

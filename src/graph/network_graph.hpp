@@ -10,8 +10,8 @@
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
-#define NetworkGraphIn InferenceData<ftype>, TrainingData<ftype>
-#define NetworkGraphOut InferenceData<ftype>, TrainingData<ftype>
+#define NetworkGraphIn PredictionData<ftype>, TrainingData<ftype>
+#define NetworkGraphOut PredictionData<ftype>, TrainingData<ftype>
 #define NetworkGraphIO 2, NetworkGraphIn, NetworkGraphOut
 
 class NetworkGraph : public hh::Graph<NetworkGraphIO> {

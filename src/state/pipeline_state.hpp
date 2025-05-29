@@ -1,9 +1,9 @@
 #ifndef STATE_PIPELINE_STATE_H
 #define STATE_PIPELINE_STATE_H
 #include "../data/fwd_data.hpp"
-#include "../data/inference_data.hpp"
 #include "../data/loss_bwd_data.hpp"
 #include "../data/opt_data.hpp"
+#include "../data/prediction_data.hpp"
 #include "../data/training_data.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
@@ -19,9 +19,9 @@
     state.step = to;
 
 #define PipelineStateIn                                                        \
-    TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>, OptData<ftype>
+    TrainingData<ftype>, PredictionData<ftype>, FwdData<ftype>, OptData<ftype>
 #define PipelineStateOut                                                       \
-    TrainingData<ftype>, InferenceData<ftype>, FwdData<ftype>,                 \
+    TrainingData<ftype>, PredictionData<ftype>, FwdData<ftype>,                \
         LossBwdData<ftype>, OptData<ftype>
 #define PipelineStateIO 4, PipelineStateIn, PipelineStateOut
 
@@ -40,7 +40,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     };
 
   public:
-    void execute(std::shared_ptr<InferenceData<ftype>> data) override {
+    void execute(std::shared_ptr<PredictionData<ftype>> data) override {
         from_step_to(Steps::Idle, Steps::Inference);
         this->addResult(
             std::make_shared<FwdData<ftype>>(data->states, data->input));
@@ -71,7 +71,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
                 nullptr, train_data.learning_rate));
         } else {
             from_step_to(Steps::Inference, Steps::Idle);
-            this->addResult(std::make_shared<InferenceData<ftype>>(
+            this->addResult(std::make_shared<PredictionData<ftype>>(
                 data->states, data->input));
         }
     }
@@ -79,7 +79,8 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     void execute(std::shared_ptr<OptData<ftype>> data) override {
         ++state.data_set_idx;
         // TODO: add a log rate and compute the loss
-        // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx << std::endl;
+        // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx
+        // << std::endl;
         if (state.data_set_idx >= train_data.data_set.datas.size()) {
             INFO_GRP("new epoch", INFO_GRP_PIPELINE_STEP);
             state.data_set_idx = 0;
