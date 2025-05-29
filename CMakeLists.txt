@@ -16,10 +16,13 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 # add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
-add_compile_options(-g)
+# add_compile_options(-g)
+add_compile_options(-O3)
 
 add_executable(hh-lp-gpu
-    src/main.cpp
+    tests/main.cpp
+    tests/cublas_function.cpp
+    tests/layers.cpp
 )
 target_link_directories(hh-lp-gpu
     PUBLIC
@@ -40,3 +43,7 @@ target_link_libraries(hh-lp-gpu
     CUDA::cublas
 )
 target_compile_definitions(hh-lp-gpu PUBLIC HH_USE_CUDA)
+
+include(CTest)
+
+add_test(NAME hh-lp-gpu COMMAND hh-lp-gpu)
