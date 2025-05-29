@@ -83,10 +83,7 @@ float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
 
     timer_start(evaluate_mnist);
     for (auto data : testing_set.datas) {
-        graph.pushData(
-            std::make_shared<PredictionData<ftype>>(state, data.input));
-        Tensor<ftype> *output = graph.get<PredictionData<ftype>>()->input;
-        graph.cleanGraph();
+        Tensor<ftype> *output = graph.predict(state, data.input);
         CUDA_CHECK(data.ground_truth->to_host(expected.data()));
         CUDA_CHECK(output->to_host(found.data()));
 
@@ -1108,11 +1105,8 @@ UTest(mnist_batched) {
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     timer_start(batch_training);
-    graph.pushData(std::make_shared<TrainingData<ftype>>(
-        state, training_set, learning_rate, epochs));
-    (void)graph.get<TrainingData<ftype>>();
+    graph.train(state, training_set, learning_rate, epochs);
     timer_end(batch_training);
-    graph.cleanGraph();
 
     timer_report_prec(batch_training, milliseconds);
 

@@ -33,9 +33,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
     }
 
-    ~NetworkGraph() {
-        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
-    }
+    ~NetworkGraph() { CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle)); }
 
   public:
     void add_layer(std::shared_ptr<Layer<ftype>> layer) {
@@ -72,6 +70,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
             std::make_shared<OptimizerType>(std::forward<Types>(args)...);
     }
 
+  public:
     void build() {
         optimizer_->nb_layers(layers_.size());
 
@@ -99,6 +98,25 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
             this->edges(optimizer_task_, optimizer_state_);
             this->edges(optimizer_state_, pipeline_state_);
         }
+    }
+
+  public:
+    Tensor<ftype> *predict(std::shared_ptr<NNState<ftype>> state,
+                           Tensor<ftype> *input) {
+        this->pushData(std::make_shared<PredictionData<ftype>>(state, input));
+        Tensor<ftype> *output = this->get<PredictionData<ftype>>()->input;
+        this->cleanGraph();
+        return output;
+    }
+
+    std::shared_ptr<NNState<ftype>> train(std::shared_ptr<NNState<ftype>> state,
+                                          DataSet<ftype> const &ds,
+                                          ftype learning_rate, size_t epochs) {
+        this->pushData(std::make_shared<TrainingData<ftype>>(
+            state, ds, learning_rate, epochs));
+        (void)this->get<TrainingData<ftype>>();
+        this->cleanGraph();
+        return state;
     }
 
     void terminate() {
