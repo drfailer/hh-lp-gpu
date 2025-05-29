@@ -13,7 +13,8 @@
 
 class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
   public:
-    LossTask(std::shared_ptr<Loss<ftype>> loss) : loss_(loss) {}
+    LossTask(std::shared_ptr<Loss<ftype>> loss)
+        : hh::AbstractCUDATask<LossTaskIO>("LossTask", 1), loss_(loss) {}
 
     void initializeCuda() override {
         CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
