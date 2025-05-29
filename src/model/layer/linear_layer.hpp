@@ -72,9 +72,15 @@ class LinearLayer : public Layer<ftype> {
 
         // create temporary array for the gradients
         temp_weights_gradients.reshape({batch_size, 1, outputs, inputs});
+
+        // preinit array
         for (size_t b = 0; b < batch_size; ++b) {
             temp_weights_gradients_array[b] =
                 &temp_weights_gradients.data()[b * outputs * inputs];
+            weights_array[b] = state.parameters.weights->data();
+            outputs_array[b] = &state.output->data()[b * this->dims.outputs];
+            weights_array[b] = state.parameters.weights->data();
+            output_errors_array[b] = &state.error->data()[b * inputs];
         }
 
         // setup tensor descriptors for computing the biases gradients
@@ -107,10 +113,7 @@ class LinearLayer : public Layer<ftype> {
         if (this->dims.batch_size > 1) {
             // TODO: should be done in init
             for (int64_t b = 0; b < this->dims.batch_size; ++b) {
-                weights_array[b] = state.parameters.weights->data();
-                inputs_array[b] = &state.input->data()[b * this->dims.inputs];
-                outputs_array[b] =
-                    &state.output->data()[b * this->dims.outputs];
+                inputs_array[b] = &input->data()[b * this->dims.inputs];
                 CUDA_CHECK(memcpy_gpu_to_gpu(outputs_array[b],
                                              state.parameters.biases->data(),
                                              this->dims.outputs));
@@ -143,10 +146,7 @@ class LinearLayer : public Layer<ftype> {
 
         if (batch_size > 1) {
             for (int64_t b = 0; b < batch_size; ++b) {
-                weights_array[b] = state.parameters.weights->data();
-                inputs_array[b] = &state.input->data()[b * inputs];
                 errors_array[b] = &error->data()[b * outputs];
-                output_errors_array[b] = &state.error->data()[b * inputs];
             }
 
             // grads_b = error
