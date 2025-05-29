@@ -676,7 +676,8 @@ UTest(linear_layer_fwd) {
     init_test_parameters(state, dims, 1);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
 
-    Tensor<ftype> *output_gpu = linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
+    Tensor<ftype> *output_gpu =
+        linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
     urequire(output_gpu == state.output);
     output_gpu->to_host(output_host);
@@ -706,7 +707,8 @@ UTest(linear_layer_bwd) {
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
 
     linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
-    Tensor<ftype> *output_err_gpu = linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
+    Tensor<ftype> *output_err_gpu =
+        linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
 
     urequire(output_err_gpu == state.error);
     output_err_gpu->to_host(output_err_host);
@@ -738,7 +740,8 @@ UTest(linear_layer_fwd_batched) {
     init_test_parameters(state, dims, 1);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, batch_size);
 
-    Tensor<ftype> *output_gpu = linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
+    Tensor<ftype> *output_gpu =
+        linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
     urequire(output_gpu == state.output);
     output_gpu->to_host(output_host);
@@ -783,7 +786,8 @@ UTest(linear_layer_bwd_batched) {
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, batch_size);
 
     linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
-    Tensor<ftype> *output_err_gpu = linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_err_gpu);
+    Tensor<ftype> *output_err_gpu =
+        linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_err_gpu);
 
     urequire(output_err_gpu == state.error);
     output_err_gpu->to_host(output_err_host);
@@ -833,7 +837,8 @@ UTest(sigmoid_activation_fwd) {
     SigmoidActivationLayer sigmoid_layer(inputs);
     LayerState<ftype> state;
     sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
-    Tensor<ftype> *output_gpu = sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
+    Tensor<ftype> *output_gpu =
+        sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
     urequire(output_gpu != &input_gpu);
     output_gpu->to_host(output_host);
@@ -859,7 +864,8 @@ UTest(sigmoid_activation_bwd) {
     LayerState<ftype> state;
     sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
     sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
-    Tensor<ftype> *output_gpu = sigmoid_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
+    Tensor<ftype> *output_gpu =
+        sigmoid_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
 
     output_gpu->to_host(output_host);
 
@@ -1129,27 +1135,27 @@ int main(int, char **) {
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
 
-    // run_test(matvecmul_n);
-    // run_test(matvecmul_t);
-    // run_test(matvecmul_batch_n);
-    // run_test(matmul_n_n);
-    // run_test(matmul_t_n);
-    // run_test(matmul_n_t);
-    // run_test(matmul_t_t);
-    // run_test(matmul_batch_n_n);
+    run_test(matvecmul_n);
+    run_test(matvecmul_t);
+    run_test(matvecmul_batch_n);
+    run_test(matmul_n_n);
+    run_test(matmul_t_n);
+    run_test(matmul_n_t);
+    run_test(matmul_t_t);
+    run_test(matmul_batch_n_n);
 
-    // run_test(linear_layer_fwd);
-    // run_test(linear_layer_bwd);
-    // run_test(linear_layer_fwd_batched);
-    // run_test(linear_layer_bwd_batched);
-    // run_test(sigmoid_activation_fwd);
-    // run_test(sigmoid_activation_bwd);
-    // run_test(sgd_optimizer);
+    run_test(linear_layer_fwd);
+    run_test(linear_layer_bwd);
+    run_test(linear_layer_fwd_batched);
+    run_test(linear_layer_bwd_batched);
+    run_test(sigmoid_activation_fwd);
+    run_test(sigmoid_activation_bwd);
+    run_test(sgd_optimizer);
 
-    // run_test(inference);
-    // run_test(training);
+    run_test(inference);
+    run_test(training);
 
-    // run_test(mnist);
+    run_test(mnist);
     run_test(mnist_batched);
     return 0;
 }
