@@ -31,6 +31,7 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
 
     void init(std::shared_ptr<NNState<ftype>> state) {
         auto model_output = state->layers.back().output;
+        delete state->loss.tensor; // delete if required
         state->loss.tensor = create_tensor<ftype>(model_output->dims());
     }
 
