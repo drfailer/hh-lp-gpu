@@ -37,7 +37,7 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         optimizers_->operator[](data->idx)->optimize(
-            cuda_data_, data->state->layers[data->idx], data->learning_rate);
+            cuda_data_, data->state->layers[data->idx]);
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }

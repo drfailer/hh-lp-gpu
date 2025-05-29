@@ -5,7 +5,6 @@
 
 template <typename T> struct OptLayerData {
     std::shared_ptr<NNState<T>> state;
-    T learning_rate;
     size_t idx;
 };
 

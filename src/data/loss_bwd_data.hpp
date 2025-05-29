@@ -8,7 +8,6 @@ template <typename T> struct LossBwdData {
     Tensor<T> *input;
     Tensor<T> *ground_truth;
     Tensor<T> *error;
-    T learning_rate;
 };
 
 #endif

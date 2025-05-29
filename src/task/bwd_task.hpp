@@ -37,7 +37,7 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
                                     error);
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
             this->addResult(std::make_shared<OptLayerData<ftype>>(
-                data->states, data->learning_rate, layers_[i]->idx));
+                data->states, layers_[i]->idx));
         }
         data->error = error;
         this->addResult(data);

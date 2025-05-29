@@ -72,8 +72,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
   public:
     void build() {
-        optimizer_->nb_layers(layers_.size());
-
         // connect the fwds tasks
         this->edges(pipeline_state_, fwds_.front());
         for (size_t i = 0; i < fwds_.size() - 1; ++i) {
@@ -92,6 +90,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
         // connect optimizer
         if (optimizer_task_) {
+            optimizer_->nb_layers(layers_.size());
             for (size_t i = 0; i < bwds_.size(); ++i) {
                 this->edges(bwds_[i], optimizer_task_);
             }
@@ -111,9 +110,9 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
     std::shared_ptr<NNState<ftype>> train(std::shared_ptr<NNState<ftype>> state,
                                           DataSet<ftype> const &ds,
-                                          ftype learning_rate, size_t epochs) {
-        this->pushData(std::make_shared<TrainingData<ftype>>(
-            state, ds, learning_rate, epochs));
+                                          size_t epochs) {
+        this->pushData(
+            std::make_shared<TrainingData<ftype>>(state, ds, epochs));
         (void)this->get<TrainingData<ftype>>();
         this->cleanGraph();
         return state;
@@ -160,9 +159,13 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     void init_state(std::shared_ptr<NNState<ftype>> state, int64_t batch_size) {
         for (auto layer : layers_) {
             layer->init(cuda_data_, state->layers[layer->idx], batch_size);
-            optimizer_task_->add_layer(optimizer_factory_->create());
+            if (optimizer_task_) {
+                optimizer_task_->add_layer(optimizer_factory_->create());
+            }
         }
-        loss_task_->init(state);
+        if (loss_task_) {
+            loss_task_->init(state);
+        }
     }
 
   public:

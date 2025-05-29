@@ -51,7 +51,6 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         // init
         train_data.data_set = data->data_set;
         train_data.epochs = data->epochs;
-        train_data.learning_rate = data->learning_rate;
 
         // start computation
         if (state.data_set_idx < train_data.data_set.datas.size()) {
@@ -68,7 +67,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             this->addResult(std::make_shared<LossBwdData<ftype>>(
                 data->states, data->input,
                 train_data.data_set.datas[state.data_set_idx].ground_truth,
-                nullptr, train_data.learning_rate));
+                nullptr));
         } else {
             from_step_to(Steps::Inference, Steps::Idle);
             this->addResult(std::make_shared<PredictionData<ftype>>(
@@ -95,8 +94,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         } else {
             from_step_to(Steps::Bwd, Steps::Idle);
             this->addResult(std::make_shared<TrainingData<ftype>>(
-                data->states, train_data.data_set, train_data.learning_rate,
-                train_data.epochs));
+                data->states, train_data.data_set, train_data.epochs));
         }
     }
 
@@ -120,7 +118,6 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     } state;
     struct {
         size_t epochs = 0;
-        ftype learning_rate = 0;
         DataSet<ftype> data_set;
     } train_data;
 };

@@ -9,8 +9,12 @@
 #include <log.h/log.h>
 
 struct SGDOptimizer : Optimizer<ftype> {
-    void optimize(cuda_data_t cuda_data, LayerState<ftype> const &state,
-                  ftype learning_rate) override {
+    ftype learning_rate;
+
+    SGDOptimizer(ftype learning_rate) : learning_rate(learning_rate) {}
+
+    void optimize(cuda_data_t cuda_data,
+                  LayerState<ftype> const &state) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
 
         // params = params - learning_rate * gradients
@@ -35,7 +39,7 @@ struct SGDOptimizer : Optimizer<ftype> {
     }
 
     std::shared_ptr<Optimizer<ftype>> create() const override {
-        return std::make_shared<SGDOptimizer>();
+        return std::make_shared<SGDOptimizer>(learning_rate);
     }
 };
 

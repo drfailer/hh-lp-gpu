@@ -5,7 +5,6 @@
 
 template <typename T> struct OptData {
     std::shared_ptr<NNState<T>> states;
-    T learning_rate;
 };
 
 #endif

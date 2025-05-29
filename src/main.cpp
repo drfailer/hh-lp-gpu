@@ -884,7 +884,7 @@ UTest(sgd_optimizer) {
     vec_t weights_dims = {1, 1, inputs, outputs},
           biases_dims = {1, 1, outputs, 1};
     LayerState<ftype> state;
-    SGDOptimizer optimizer_factory;
+    SGDOptimizer optimizer_factory(learning_rate);
 
     state.parameters.weights = create_tensor<ftype>(weights_dims);
     state.parameters.biases = create_tensor<ftype>(biases_dims);
@@ -901,7 +901,7 @@ UTest(sgd_optimizer) {
                                   biases_gradients, outputs));
 
     auto sgd = optimizer_factory.create();
-    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, state, learning_rate);
+    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, state);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
     CUDA_CHECK(memcpy_gpu_to_host(
@@ -930,9 +930,6 @@ UTest(inference) {
     NetworkGraph graph;
 
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
-
-    graph.set_loss<QuadraticLoss>();
-    graph.set_optimizer<SGDOptimizer>(1);
 
     graph.add_layer<LinearLayer>(inputs, outputs);
     graph.add_layer<SigmoidActivationLayer>(outputs);
@@ -977,7 +974,7 @@ UTest(training) {
     urequire(data_set.datas.size() == 60'000);
 
     graph.set_loss<QuadraticLoss>();
-    graph.set_optimizer<SGDOptimizer>(3);
+    graph.set_optimizer<SGDOptimizer>(3, learning_rate);
 
     graph.add_layer<LinearLayer>(nb_inputs, 32);
     graph.add_layer<SigmoidActivationLayer>(32);
@@ -996,8 +993,8 @@ UTest(training) {
 
     graph.executeGraph(true);
     timer_start(training);
-    graph.pushData(std::make_shared<TrainingData<ftype>>(
-        state, data_set, learning_rate, epochs));
+    graph.pushData(
+        std::make_shared<TrainingData<ftype>>(state, data_set, epochs));
     (void)graph.get<TrainingData<ftype>>();
     timer_end(training);
     graph.terminate();
@@ -1025,7 +1022,7 @@ UTest(mnist) {
     NetworkGraph graph;
 
     graph.set_loss<QuadraticLoss>();
-    graph.set_optimizer<SGDOptimizer>(1);
+    graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
     graph.add_layer<LinearLayer>(28 * 28, 10);
     graph.add_layer<SigmoidActivationLayer>(10);
@@ -1043,8 +1040,8 @@ UTest(mnist) {
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     timer_start(online_training);
-    graph.pushData(std::make_shared<TrainingData<ftype>>(
-        state, training_set, learning_rate, epochs));
+    graph.pushData(
+        std::make_shared<TrainingData<ftype>>(state, training_set, epochs));
     (void)graph.get<TrainingData<ftype>>();
     timer_end(online_training);
     graph.cleanGraph();
@@ -1084,7 +1081,7 @@ UTest(mnist_batched) {
     NetworkGraph graph;
 
     graph.set_loss<QuadraticLoss>();
-    graph.set_optimizer<SGDOptimizer>(1);
+    graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
     graph.add_layer<LinearLayer>(28 * 28, 10);
     graph.add_layer<SigmoidActivationLayer>(10);
@@ -1105,7 +1102,7 @@ UTest(mnist_batched) {
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     timer_start(batch_training);
-    graph.train(state, training_set, learning_rate, epochs);
+    graph.train(state, training_set, epochs);
     timer_end(batch_training);
 
     timer_report_prec(batch_training, milliseconds);

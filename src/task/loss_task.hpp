@@ -46,7 +46,7 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
                    data->ground_truth);
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(std::make_shared<BwdData<ftype>>(
-            data->states, data->states->loss.tensor, data->learning_rate));
+            data->states, data->states->loss.tensor));
     }
 
   private:

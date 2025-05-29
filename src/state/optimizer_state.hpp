@@ -19,8 +19,7 @@ class OptimizerState : public hh::AbstractState<OptimizerStateIO> {
         if (nb_processed_layers_ == nb_layers_) {
             // all the layers have been updated and optimized
             nb_processed_layers_ = 0;
-            this->addResult(std::make_shared<OptData<ftype>>(
-                data->state, data->learning_rate));
+            this->addResult(std::make_shared<OptData<ftype>>(data->state));
         }
     }
 
