@@ -13,7 +13,7 @@ class QuadraticLoss : public Loss<ftype> {
     QuadraticLoss() {
         CUDNN_CHECK(cudnnCreateOpTensorDescriptor(&addition_));
         CUDNN_CHECK(cudnnSetOpTensorDescriptor(addition_, CUDNN_OP_TENSOR_ADD,
-                                               CUDNN_DATA_FLOAT,
+                                               CUDNN_DATA_TYPE,
                                                CUDNN_NOT_PROPAGATE_NAN));
     }
 

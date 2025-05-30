@@ -1,6 +1,7 @@
 #ifndef MODEL_DATA_TENSOR
 #define MODEL_DATA_TENSOR
 #include "../../tools/gpu.hpp"
+#include "../../types.hpp"
 #include <array>
 #include <cstdint>
 #include <cudnn_ops.h>
@@ -13,7 +14,7 @@ template <typename T> class Tensor {
         : dims_(dims), strides_(strides) {
         CUDA_CHECK(alloc_gpu(&data_, dims[0] * dims[1] * dims[2] * dims[3]));
         cudnnCreateTensorDescriptor(&descriptor_);
-        cudnnSetTensor4dDescriptorEx(descriptor_, CUDNN_DATA_FLOAT, dims[0],
+        cudnnSetTensor4dDescriptorEx(descriptor_, CUDNN_DATA_TYPE, dims[0],
                                      dims[1], dims[2], dims[3], strides[0],
                                      strides[1], strides[2], strides[3]);
     }
@@ -51,7 +52,7 @@ template <typename T> class Tensor {
         dims_ = dims;
         strides_ = strides;
         CUDA_CHECK(alloc_gpu(&data_, dims[0] * dims[1] * dims[2] * dims[3]));
-        cudnnSetTensor4dDescriptorEx(descriptor_, CUDNN_DATA_FLOAT, dims[0],
+        cudnnSetTensor4dDescriptorEx(descriptor_, CUDNN_DATA_TYPE, dims[0],
                                      dims[1], dims[2], dims[3], strides[0],
                                      strides[1], strides[2], strides[3]);
     }

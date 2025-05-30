@@ -14,7 +14,7 @@ class LinearLayer : public Layer<ftype> {
         : Layer(dims_t{.inputs = input_dim, .outputs = output_dim}) {
         CUDNN_CHECK(cudnnCreateReduceTensorDescriptor(&average_tensor));
         CUDNN_CHECK(cudnnSetReduceTensorDescriptor(
-            average_tensor, CUDNN_REDUCE_TENSOR_AVG, CUDNN_DATA_FLOAT,
+            average_tensor, CUDNN_REDUCE_TENSOR_AVG, CUDNN_DATA_TYPE,
             CUDNN_NOT_PROPAGATE_NAN, CUDNN_REDUCE_TENSOR_NO_INDICES,
             CUDNN_32BIT_INDICES));
     }
