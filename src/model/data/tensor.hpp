@@ -2,11 +2,12 @@
 #define MODEL_DATA_TENSOR
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
+#include "dims.hpp"
 #include <array>
 #include <cstdint>
 #include <cudnn_ops.h>
 
-using vec_t = std::array<int64_t, 4>;
+using vec_t = std::array<int, 4>;
 
 template <typename T> class Tensor {
   public:
@@ -90,6 +91,13 @@ Tensor<T> *create_tensor(vec_t const &dims, vec_t const &strides) {
 template <typename T> Tensor<T> *create_tensor(vec_t const &dims) {
     return create_tensor<T>(
         dims, {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
+}
+
+template <typename T>
+Tensor<T> *create_tensor_from_dims(tensor_dims_t const &dims) {
+    return create_tensor<T>(
+        {dims.n, dims.c, dims.h, dims.w},
+        {dims.c * dims.h * dims.w, dims.h * dims.w, dims.w, 1});
 }
 
 #endif

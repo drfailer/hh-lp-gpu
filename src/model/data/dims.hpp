@@ -6,13 +6,19 @@
 // which contains vectors for the dimensions and strides of the parameter
 // tensors. This struct can be used inside the layers to improve readability.
 struct dims_t {
-    int64_t inputs = 1;
-    int64_t outputs = 1;
-    int64_t kernel_width = 1;
-    int64_t kernel_height = 1;
-    int64_t channels = 1;
-    int64_t batch_size = 1;
+    int inputs = 1;
+    int outputs = 1;
+    int kernel_width = 1;
+    int kernel_height = 1;
+    int channels = 1;
+    int batch_size = 1;
 };
 
+struct tensor_dims_t {
+    int n = 1;
+    int c = 1;
+    int h = 1;
+    int w = 1;
+};
 
 #endif
