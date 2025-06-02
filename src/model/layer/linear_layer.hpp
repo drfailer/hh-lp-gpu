@@ -10,7 +10,7 @@
 
 class LinearLayer : public Layer<ftype> {
   public:
-    LinearLayer(int64_t input_dim, int64_t output_dim)
+    LinearLayer(int input_dim, int output_dim)
         : Layer(dims_t{.inputs = input_dim, .outputs = output_dim}) {
         CUDNN_CHECK(cudnnCreateReduceTensorDescriptor(&average_tensor));
         CUDNN_CHECK(cudnnSetReduceTensorDescriptor(
@@ -32,8 +32,8 @@ class LinearLayer : public Layer<ftype> {
      */
     parameters_t<ftype> create_parameters() const override {
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
-        int64_t inputs = this->dims.inputs;
-        int64_t outputs = this->dims.outputs;
+        int inputs = this->dims.inputs;
+        int outputs = this->dims.outputs;
         parameters_t<ftype> parameters{
             .weights = create_tensor<ftype>({1, 1, outputs, inputs}),
             .biases = create_tensor<ftype>({1, 1, outputs, 1}),
@@ -46,21 +46,23 @@ class LinearLayer : public Layer<ftype> {
         return parameters;
     }
 
-    void init(cuda_data_t cuda_data, LayerState<ftype> &state,
-              int64_t batch_size) override {
-        int64_t inputs = this->dims.inputs;
-        int64_t outputs = this->dims.outputs;
+    tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+                       tensor_dims_t input_dims) override {
+        int inputs = input_dims.c * input_dims.h * input_dims.w;
+        int outputs = this->dims.outputs;
+        auto batch_size = input_dims.n;
+        tensor_dims_t output_dims = {batch_size, 1, outputs, 1};
 
+        this->dims.inputs = inputs;
         this->dims.batch_size = batch_size;
 
-        // TODO: use reshape instead
         delete state.output;
         state.output = create_tensor<ftype>({batch_size, 1, outputs, 1});
         delete state.error;
         state.error = create_tensor<ftype>({batch_size, 1, inputs, 1});
 
         if (batch_size == 1) {
-            return;
+            return output_dims;
         }
 
         weights_array.resize(batch_size, nullptr);
@@ -101,6 +103,7 @@ class LinearLayer : public Layer<ftype> {
         cudaFree(avg_weights_gradients_ws); // free if needed
         CUDA_CHECK(alloc_gpu(&avg_weights_gradients_ws,
                              avg_weights_gradients_ws_size));
+        return output_dims;
     }
 
     Tensor<ftype> *fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
@@ -111,8 +114,7 @@ class LinearLayer : public Layer<ftype> {
         state.input = input;
 
         if (this->dims.batch_size > 1) {
-            // TODO: should be done in init
-            for (int64_t b = 0; b < this->dims.batch_size; ++b) {
+            for (int b = 0; b < this->dims.batch_size; ++b) {
                 inputs_array[b] = &input->data()[b * this->dims.inputs];
                 CUDA_CHECK(memcpy_gpu_to_gpu(outputs_array[b],
                                              state.parameters.biases->data(),
@@ -140,12 +142,12 @@ class LinearLayer : public Layer<ftype> {
     Tensor<ftype> *bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
                        Tensor<ftype> *error) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
-        int64_t inputs = this->dims.inputs;
-        int64_t outputs = this->dims.outputs;
-        int64_t batch_size = this->dims.batch_size;
+        int inputs = this->dims.inputs;
+        int outputs = this->dims.outputs;
+        int batch_size = this->dims.batch_size;
 
         if (batch_size > 1) {
-            for (int64_t b = 0; b < batch_size; ++b) {
+            for (int b = 0; b < batch_size; ++b) {
                 errors_array[b] = &error->data()[b * outputs];
             }
 

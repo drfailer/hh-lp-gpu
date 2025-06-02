@@ -10,8 +10,8 @@ template <typename T> struct Layer {
     dims_t dims;
 
     virtual parameters_t<T> create_parameters() const = 0;
-    virtual void init(cuda_data_t cuda_data, LayerState<T> &state,
-                      int64_t batch_size) = 0;
+    virtual tensor_dims_t init(cuda_data_t cuda_data, LayerState<T> &state,
+                               tensor_dims_t input_dims) = 0;
     virtual Tensor<T> *fwd(cuda_data_t cuda_data, LayerState<T> &states,
                            Tensor<T> *input) = 0;
     virtual Tensor<T> *bwd(cuda_data_t cuda_data, LayerState<T> &states,

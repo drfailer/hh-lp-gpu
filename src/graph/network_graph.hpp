@@ -14,6 +14,8 @@
 #define NetworkGraphOut PredictionData<ftype>, TrainingData<ftype>
 #define NetworkGraphIO 2, NetworkGraphIn, NetworkGraphOut
 
+// TODO: the model should be separated from the graph
+// TODO: add the optimizer in the BwdTask and remove OptimizerTask
 class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
     NetworkGraph()
@@ -23,7 +25,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
           optimizer_(std::make_shared<OptimizerState>()),
           optimizer_state_(
               std::make_shared<OptimizerStateManager>(optimizer_, pipeline_)) {
-        // TODO: we might want a minibatch generator as input
         this->inputs(pipeline_state_);
         this->outputs(pipeline_state_);
 
@@ -156,9 +157,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated and initialized, meaning that no allocation or initialization
      * will be done during the computation to ensure maximum performance.
      */
-    void init_state(std::shared_ptr<NNState<ftype>> state, int64_t batch_size) {
+    void init_state(std::shared_ptr<NNState<ftype>> state, tensor_dims_t
+            input_dims) {
+        auto dims = input_dims;
+
         for (auto layer : layers_) {
-            layer->init(cuda_data_, state->layers[layer->idx], batch_size);
+            dims = layer->init(cuda_data_, state->layers[layer->idx], dims);
             if (optimizer_task_) {
                 optimizer_task_->add_layer(optimizer_factory_->create());
             }

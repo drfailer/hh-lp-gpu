@@ -9,8 +9,7 @@
 #include <log.h/log.h>
 
 struct SigmoidActivationLayer : Layer<ftype> {
-    SigmoidActivationLayer(int64_t size)
-        : Layer(dims_t{.inputs = size, .outputs = size}) {
+    SigmoidActivationLayer() : Layer({}) {
         // sigmoid activation tensor
         CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));
         CUDNN_CHECK(cudnnSetActivationDescriptor(
@@ -23,16 +22,20 @@ struct SigmoidActivationLayer : Layer<ftype> {
         return {nullptr, nullptr};
     }
 
-    void init(cuda_data_t cuda_data, LayerState<ftype> &state,
-              int64_t batch_size) override {
-        this->dims.batch_size = batch_size;
+    tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+                       tensor_dims_t input_dims) override {
+        int inputs = input_dims.c * input_dims.h * input_dims.w;
+        int outputs = inputs;
+        int batch_size = input_dims.n;
+        this->dims.inputs = inputs;
+        this->dims.outputs = outputs;
+        this->dims.batch_size = input_dims.n;
 
         delete state.output;
-        state.output =
-            create_tensor<ftype>({batch_size, 1, this->dims.outputs, 1});
+        state.output = create_tensor<ftype>({batch_size, 1, outputs, 1});
         delete state.error;
-        state.error =
-            create_tensor<ftype>({batch_size, 1, this->dims.inputs, 1});
+        state.error = create_tensor<ftype>({batch_size, 1, inputs, 1});
+        return input_dims;
     }
 
     Tensor<ftype> *fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
