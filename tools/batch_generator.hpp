@@ -6,10 +6,9 @@
 
 template <typename T> class BatchGenerator {
   public:
-    BatchGenerator(int64_t seed) : rand(seed) {}
+    BatchGenerator(int seed) : rand(seed) {}
 
-    DataSet<T> generate(DataSet<T> input_data, int64_t input_size,
-                        int64_t ground_truth_size, int64_t batch_size) {
+    DataSet<T> generate(DataSet<T> input_data, int batch_size) {
         assert(batch_size > 1);
         DataSet<T> result;
         std::shuffle(input_data.datas.begin(), input_data.datas.end(), rand);
@@ -17,18 +16,24 @@ template <typename T> class BatchGenerator {
         for (size_t b = 0; b < input_data.datas.size() / batch_size; ++b) {
             Data<T> batch;
             auto batch_datas = &input_data.datas[b * batch_size];
+            int c = input_data.datas[0].input->dims()[1];
+            int h = input_data.datas[0].input->dims()[2];
+            int w = input_data.datas[0].input->dims()[3];
+            int gt_c = input_data.datas[0].ground_truth->dims()[1];
+            int gt_h = input_data.datas[0].ground_truth->dims()[2];
+            int gt_w = input_data.datas[0].ground_truth->dims()[3];
 
-            batch.input = create_tensor<T>({batch_size, 1, input_size, 1});
+            batch.input = create_tensor<T>({batch_size, c, h, w});
             batch.ground_truth =
-                create_tensor<T>({batch_size, 1, ground_truth_size, 1});
+                create_tensor<T>({batch_size, gt_c, gt_h, gt_w});
 
             for (size_t i = 0; i < batch_size; ++i) {
+                CUDA_CHECK(
+                    memcpy_gpu_to_gpu(&batch.input->data()[i * c * h * w],
+                                      batch_datas[i].input->data(), c * h * w));
                 CUDA_CHECK(memcpy_gpu_to_gpu(
-                    &batch.input->data()[i * input_size],
-                    batch_datas[i].input->data(), input_size));
-                CUDA_CHECK(memcpy_gpu_to_gpu(
-                    &batch.ground_truth->data()[i * ground_truth_size],
-                    batch_datas[i].ground_truth->data(), ground_truth_size));
+                    &batch.ground_truth->data()[i * gt_c * gt_h * gt_w],
+                    batch_datas[i].ground_truth->data(), gt_c * gt_h * gt_w));
             }
             result.datas.push_back(batch);
         }

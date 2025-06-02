@@ -51,7 +51,7 @@ class MNISTLoader {
         return labels;
     }
 
-    auto load_imgages(std::string const &path, int64_t batch_size) {
+    auto load_imgages(std::string const &path, int batch_size) {
         ifstream_type fs(path, std::ios::binary);
         unsigned int magic = 0, size = 0, rows = 0, cols = 0;
         unsigned char px_value;
@@ -77,7 +77,7 @@ class MNISTLoader {
 
         for (size_t b = 0; b < nb_batches; ++b) {
             auto *batch_tensor =
-                create_tensor<ftype>({batch_size, 1, rows * cols, 1});
+                create_tensor<ftype>({batch_size, 1, (int)rows, (int)cols});
 
             for (size_t i = 0; i < batch_size; ++i) {
                 auto image = &batch_host[i * rows * cols];
@@ -96,7 +96,7 @@ class MNISTLoader {
         return images;
     }
 
-    auto create_output_tensor(int *label, int64_t batch_size) {
+    auto create_output_tensor(int *label, int batch_size) {
         auto *batch_gpu = create_tensor<ftype>({batch_size, 1, 10, 1});
         std::vector<ftype> batch_host(batch_size * 10, 0);
 
@@ -110,7 +110,7 @@ class MNISTLoader {
 
     DataSet<ftype> load_ds(std::string const labels_path,
                            std::string const images_path,
-                           int64_t batch_size = 1) {
+                           int batch_size = 1) {
         auto labels = load_labels(labels_path);
         auto images = load_imgages(images_path, batch_size);
 
