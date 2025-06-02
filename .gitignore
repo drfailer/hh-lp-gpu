@@ -1,4 +1,5 @@
-*data
+tools/**/data
+/data
 build/
 .cache/
 tools/mnist/pytorch-env
