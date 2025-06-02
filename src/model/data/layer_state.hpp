@@ -28,10 +28,12 @@ template <typename T> struct LayerState {
     }
 
     void set_parameters(parameters_t<T> const &parameters) {
-        if (parameters.weights || parameters.biases) {
-            this->parameters = parameters;
+        this->parameters = parameters;
+        if (parameters.weights) {
             this->gradients.weights = create_tensor<T>(
                 parameters.weights->dims(), parameters.weights->strides());
+        }
+        if (parameters.biases) {
             this->gradients.biases = create_tensor<T>(
                 parameters.biases->dims(), parameters.biases->strides());
         }
