@@ -1,6 +1,7 @@
 #include "layers.hpp"
 #include "../src/graph/network_graph.hpp"
 #include "../src/model/data/layer_state.hpp"
+#include "../src/model/layer/convolution_layer.hpp"
 #include "../src/model/layer/linear_layer.hpp"
 #include "../src/model/layer/sigmoid_activation_layer.hpp"
 #include "../src/model/loss/quadratic_loss.hpp"
@@ -11,7 +12,6 @@
 #include "../tools/batch_generator.hpp"
 #include "../tools/mnist/mnist_loader.hpp"
 #include "utest.hpp"
-#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <ostream>
@@ -22,16 +22,16 @@ ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
 
 void init_test_parameters(LayerState<ftype> &state, dims_t dims, ftype value) {
-    int64_t weights_size = dims.inputs * dims.outputs;
+    int weights_size = dims.inputs * dims.outputs;
     ftype *weights = new ftype[weights_size];
     defer(delete[] weights);
     ftype *biases = new ftype[dims.outputs];
     defer(delete[] biases);
 
-    for (int64_t i = 0; i < weights_size; ++i) {
+    for (int i = 0; i < weights_size; ++i) {
         weights[i] = value;
     }
-    for (int64_t i = 0; i < dims.outputs; ++i) {
+    for (int i = 0; i < dims.outputs; ++i) {
         biases[i] = value;
     }
     state.parameters.weights->from_host(weights);
@@ -44,14 +44,14 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
     ftype *biases = new ftype[dims.outputs];
     defer(delete[] biases);
 
-    for (int64_t i = 0; i < dims.outputs; ++i) {
-        for (int64_t j = 0; j < dims.inputs; ++j) {
+    for (int i = 0; i < dims.outputs; ++i) {
+        for (int j = 0; j < dims.inputs; ++j) {
             weights[i * dims.inputs + j] = i + j + 1;
             std::cout << weights[i * dims.inputs + j] << " ";
         }
         std::cout << std::endl;
     }
-    for (int64_t i = 0; i < dims.outputs; ++i) {
+    for (int i = 0; i < dims.outputs; ++i) {
         biases[i] = i + 1;
     }
     state.parameters.weights->from_host(weights);
@@ -71,7 +71,7 @@ int mnist_get_label(ftype *arr) {
 
 float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
                      std::shared_ptr<NNState<ftype>> &state,
-                     int64_t batch_size = 1) {
+                     int batch_size = 1) {
     int success = 0;
     int errors = 0;
     std::vector<ftype> expected(batch_size * 10, 0), found(batch_size * 10, 0);
@@ -105,8 +105,8 @@ float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
 }
 
 UTest(linear_layer_fwd) {
-    constexpr int64_t inputs = 3;
-    constexpr int64_t outputs = 3;
+    constexpr int inputs = 3;
+    constexpr int outputs = 3;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
@@ -117,7 +117,7 @@ UTest(linear_layer_fwd) {
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
 
     Tensor<ftype> *output_gpu =
         linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
@@ -131,8 +131,8 @@ UTest(linear_layer_fwd) {
 }
 
 UTest(linear_layer_bwd) {
-    constexpr int64_t inputs = 4;
-    constexpr int64_t outputs = 3;
+    constexpr int inputs = 4;
+    constexpr int outputs = 3;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3, 4},
           input_err_host[outputs] = {100, 10, 1}, output_err_host[inputs] = {0};
@@ -147,7 +147,7 @@ UTest(linear_layer_bwd) {
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
 
     linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
     Tensor<ftype> *output_err_gpu =
@@ -163,9 +163,9 @@ UTest(linear_layer_bwd) {
 }
 
 UTest(linear_layer_fwd_batched) {
-    constexpr int64_t inputs = 3;
-    constexpr int64_t outputs = 3;
-    constexpr int64_t batch_size = 4;
+    constexpr int inputs = 3;
+    constexpr int outputs = 3;
+    constexpr int batch_size = 4;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[batch_size * inputs] = {0},
                                   output_host[batch_size * outputs] = {0};
@@ -181,7 +181,8 @@ UTest(linear_layer_fwd_batched) {
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, batch_size);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
+                      {batch_size, 1, inputs, 1});
 
     Tensor<ftype> *output_gpu =
         linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
@@ -204,9 +205,9 @@ UTest(linear_layer_fwd_batched) {
 }
 
 UTest(linear_layer_bwd_batched) {
-    constexpr int64_t inputs = 4;
-    constexpr int64_t outputs = 3;
-    constexpr int64_t batch_size = 2;
+    constexpr int inputs = 4;
+    constexpr int outputs = 3;
+    constexpr int batch_size = 2;
     dims_t dims = {
         .inputs = inputs, .outputs = outputs, .batch_size = batch_size};
     ftype input_host[batch_size * inputs] = {1, 2, 3, 4, 5, 6, 7, 8};
@@ -226,7 +227,8 @@ UTest(linear_layer_bwd_batched) {
     LayerState<ftype> state;
     state.set_parameters(linear_layer.create_parameters());
     init_test_parameters(state, dims);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, batch_size);
+    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
+                      {batch_size, 1, inputs, 1});
 
     linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
     Tensor<ftype> *output_err_gpu =
@@ -270,16 +272,16 @@ UTest(linear_layer_bwd_batched) {
 }
 
 UTest(sigmoid_activation_fwd) {
-    constexpr int64_t outputs = 3;
-    constexpr int64_t inputs = 3;
+    constexpr int outputs = 3;
+    constexpr int inputs = 3;
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
     Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     input_gpu.from_host(input_host);
 
-    SigmoidActivationLayer sigmoid_layer(inputs);
+    SigmoidActivationLayer sigmoid_layer;
     LayerState<ftype> state;
-    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
+    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
     Tensor<ftype> *output_gpu =
         sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
 
@@ -292,8 +294,8 @@ UTest(sigmoid_activation_fwd) {
 }
 
 UTest(sigmoid_activation_bwd) {
-    constexpr int64_t outputs = 6;
-    constexpr int64_t inputs = 6;
+    constexpr int outputs = 6;
+    constexpr int inputs = 6;
     ftype input_host[inputs] = {1, 2, 3, 4, 5, 6},
           err_host[inputs] = {10, 10, 10, 10, 10, 10},
           output_host[outputs] = {0};
@@ -303,9 +305,9 @@ UTest(sigmoid_activation_bwd) {
     input_gpu.from_host(input_host);
     err_gpu.from_host(err_host);
 
-    SigmoidActivationLayer sigmoid_layer(inputs);
+    SigmoidActivationLayer sigmoid_layer;
     LayerState<ftype> state;
-    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, 1);
+    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
     sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &input_gpu);
     Tensor<ftype> *output_gpu =
         sigmoid_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, &err_gpu);
@@ -320,8 +322,8 @@ UTest(sigmoid_activation_bwd) {
 }
 
 UTest(sgd_optimizer) {
-    constexpr int64_t inputs = 3;
-    constexpr int64_t outputs = 2;
+    constexpr int inputs = 3;
+    constexpr int outputs = 2;
     constexpr ftype learning_rate = 0.01;
     ftype weights[inputs * outputs] = {1, 2, 3, 4, 4, 6};
     ftype weights_gradients[inputs * outputs] = {1, 1, 1, 1, 1, 1};
@@ -378,12 +380,12 @@ UTest(inference) {
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
 
     graph.add_layer<LinearLayer>(inputs, outputs);
-    graph.add_layer<SigmoidActivationLayer>(outputs);
+    graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
 
     auto state = graph.create_state();
-    graph.init_state(state, 1);
+    graph.init_state(state, {1, 1, inputs, 1});
 
     init_test_parameters(state->layers[0],
                          dims_t{.inputs = inputs, .outputs = outputs});
@@ -405,7 +407,6 @@ UTest(inference) {
 }
 
 UTest(training) {
-    constexpr size_t nb_nodes = 10;
     constexpr size_t nb_inputs = 28 * 28;
     constexpr ftype learning_rate = 0.1;
     constexpr ftype epochs = 1;
@@ -423,19 +424,19 @@ UTest(training) {
     graph.set_optimizer<SGDOptimizer>(3, learning_rate);
 
     graph.add_layer<LinearLayer>(nb_inputs, 32);
-    graph.add_layer<SigmoidActivationLayer>(32);
+    graph.add_layer<SigmoidActivationLayer>();
     graph.cut_layer();
     graph.add_layer<LinearLayer>(32, 32);
-    graph.add_layer<SigmoidActivationLayer>(32);
+    graph.add_layer<SigmoidActivationLayer>();
     graph.cut_layer();
     graph.add_layer<LinearLayer>(32, 10);
-    graph.add_layer<SigmoidActivationLayer>(nb_nodes);
+    graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
 
     auto state = graph.create_state();
 
-    graph.init_state(state, 1);
+    graph.init_state(state, {1, 1, nb_inputs, 1});
 
     graph.executeGraph(true);
     timer_start(training);
@@ -470,13 +471,14 @@ UTest(mnist) {
     graph.set_loss<QuadraticLoss>();
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
-    graph.add_layer<LinearLayer>(28 * 28, 10);
-    graph.add_layer<SigmoidActivationLayer>(10);
+    graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    graph.add_layer<LinearLayer>(24 * 24 * 20, 10);
+    graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
 
     auto state = graph.create_state();
-    graph.init_state(state, 1);
+    graph.init_state(state, {1, 1, 28, 28});
 
     graph.executeGraph(true);
 
@@ -518,7 +520,7 @@ UTest(mnist_batched) {
                        "../data/mnist/train-images-idx3-ubyte");
     defer(destroy_data_set(training_data));
     DataSet<ftype> training_set =
-        batch_generator.generate(training_data, 28 * 28, 10, batch_size);
+        batch_generator.generate(training_data, batch_size);
     defer(destroy_data_set(training_set));
     DataSet<ftype> testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
@@ -530,8 +532,9 @@ UTest(mnist_batched) {
     graph.set_loss<QuadraticLoss>();
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
+    graph.add_layer<ConvolutionLayer>(1, 1, 28, 28, 5, 5);
     graph.add_layer<LinearLayer>(28 * 28, 10);
-    graph.add_layer<SigmoidActivationLayer>(10);
+    graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
 
@@ -540,11 +543,11 @@ UTest(mnist_batched) {
     graph.executeGraph(true);
 
     INFO("Inference before training...");
-    graph.init_state(state, test_batch_size);
+    graph.init_state(state, {test_batch_size, 1, 28, 28});
     ftype accuracy_start =
         evaluate_mnist(graph, testing_set, state, test_batch_size);
 
-    graph.init_state(state, batch_size);
+    graph.init_state(state, {batch_size, 1, 28, 28});
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
@@ -555,7 +558,7 @@ UTest(mnist_batched) {
     timer_report_prec(batch_training, milliseconds);
 
     INFO("Evaluate the model...");
-    graph.init_state(state, test_batch_size);
+    graph.init_state(state, {test_batch_size, 1, 28, 28});
     ftype accuracy_end =
         evaluate_mnist(graph, testing_set, state, test_batch_size);
 
