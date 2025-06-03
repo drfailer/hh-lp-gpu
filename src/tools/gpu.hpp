@@ -11,7 +11,7 @@
     {                                                                          \
         auto _result = expr;                                                   \
         if (_result != CUDNN_STATUS_SUCCESS) {                                 \
-            std::cerr << "[CUDA_ERROR]: " __FILE__ ":" << __LINE__ << ": "     \
+            std::cerr << "[CUDNN_ERROR]: " __FILE__ ":" << __LINE__ << ": "    \
                       << cudnnGetErrorString(_result) << std::endl;            \
         }                                                                      \
     }
