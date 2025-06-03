@@ -473,6 +473,9 @@ UTest(mnist) {
 
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
     graph.add_layer<LinearLayer>(24 * 24 * 20, 10);
+
+    // graph.add_layer<LinearLayer>(28 * 28, 10);
+
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
@@ -508,8 +511,8 @@ UTest(mnist) {
 }
 
 UTest(mnist_batched) {
-    constexpr ftype learning_rate = 0.001;
-    constexpr size_t epochs = 3;
+    constexpr ftype learning_rate = 0.01;
+    constexpr size_t epochs = 10;
     constexpr size_t batch_size = 64;
     constexpr size_t test_batch_size = 1'000;
     MNISTLoader loader;
@@ -534,6 +537,9 @@ UTest(mnist_batched) {
 
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
     graph.add_layer<LinearLayer>(24 * 24 * 20, 10);
+
+    // graph.add_layer<LinearLayer>(28 * 28, 10);
+
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
