@@ -60,7 +60,7 @@ template <typename T>
 auto memset_random_uniform_gpu(T *dest, size_t size, T lower_bound,
                                T higher_bound, int32_t seed = 0) {
     std::vector<T> mem_host(size);
-    static std::mt19937 mt(seed);
+    std::mt19937 mt(seed);
     std::uniform_real_distribution<T> dist(lower_bound, higher_bound);
 
     for (size_t i = 0; i < size; ++i) {
