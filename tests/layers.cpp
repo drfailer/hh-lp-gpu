@@ -511,17 +511,17 @@ UTest(mnist_batched) {
     constexpr ftype learning_rate = 0.001;
     constexpr size_t epochs = 3;
     constexpr size_t batch_size = 64;
-    constexpr size_t test_batch_size = 10'000;
+    constexpr size_t test_batch_size = 1'000;
     MNISTLoader loader;
     BatchGenerator<ftype> batch_generator(0);
 
     DataSet<ftype> training_data =
         loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
                        "../data/mnist/train-images-idx3-ubyte");
-    defer(destroy_data_set(training_data));
     DataSet<ftype> training_set =
         batch_generator.generate(training_data, batch_size);
     defer(destroy_data_set(training_set));
+    destroy_data_set(training_data);
     DataSet<ftype> testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
                        "../data/mnist/t10k-images-idx3-ubyte", test_batch_size);
