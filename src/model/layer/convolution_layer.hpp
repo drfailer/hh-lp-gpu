@@ -78,6 +78,9 @@ struct ConvolutionLayer : Layer<ftype> {
         CUDNN_CHECK(cudnnDestroyConvolutionDescriptor(convolution_descriptor));
         CUDNN_CHECK(cudnnDestroyFilterDescriptor(filter_descriptor));
         CUDNN_CHECK(cudnnDestroyTensorDescriptor(input_descriptor));
+        cudaFree(convolution_fw_ws);
+        cudaFree(convolution_bw_filter_ws);
+        cudaFree(convolution_bw_data_ws);
     }
 
     parameters_t<ftype> create_parameters() const {
