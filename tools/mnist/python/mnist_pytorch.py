@@ -32,10 +32,12 @@ def load_mnist_dataset():
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.fc1 = nn.Linear(28 * 28, 10)  # input layer (28x28 images) -> output layer (10 classes)
+        self.conv1 = nn.Conv2d(1, 20, 5)
+        self.fc1 = nn.Linear(24 * 24 * 20, 10)  # input layer (28x28 images) -> output layer (10 classes)
 
     def forward(self, x):
-        x = x.view(-1, 28 * 28)  # flatten the input
+        x = self.conv1(x)
+        x = x.view(-1, 24 * 24 * 20)  # flatten the input
         x = torch.sigmoid(self.fc1(x))
         return x
 
