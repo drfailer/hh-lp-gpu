@@ -115,19 +115,16 @@ struct ConvolutionLayer : Layer<ftype> {
         // properly set the input descriptor
         CUDNN_CHECK(cudnnSetTensor4dDescriptor(
             input_descriptor, CUDNN_TENSOR_NCHW, CUDNN_DATA_TYPE, input_dims.n,
-            1, input_height, input_width));
+            input_dims.c, input_height, input_width));
+        assert(input_height == input_dims.h);
+        assert(input_width == input_dims.w);
 
         delete state.error;
         state.error = create_tensor_from_dims<ftype>(input_dims);
 
         tensor_dims_t output_dims;
-        cudnnTensorDescriptor_t srcTensorDesc;
-        CUDNN_CHECK(cudnnCreateTensorDescriptor(&srcTensorDesc));
-        CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            srcTensorDesc, CUDNN_TENSOR_NCHW, CUDNN_DATA_TYPE, input_dims.n,
-            input_dims.c, input_dims.h, input_dims.w));
         CUDNN_CHECK(cudnnGetConvolutionNdForwardOutputDim(
-            convolution_descriptor, srcTensorDesc, filter_descriptor,
+            convolution_descriptor, input_descriptor, filter_descriptor,
             tensor_dims, tensorOuputDimA));
         output_dims.n = tensorOuputDimA[0];
         output_dims.c = tensorOuputDimA[1];
@@ -142,7 +139,7 @@ struct ConvolutionLayer : Layer<ftype> {
         }
 
         CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(
-            cuda_data.cudnn_handle, srcTensorDesc, filter_descriptor,
+            cuda_data.cudnn_handle, input_descriptor, filter_descriptor,
             convolution_descriptor, state.output->descriptor(), fwd_algo,
             &convolution_fw_ws_size));
         cudaFree(convolution_fw_ws);
@@ -150,21 +147,20 @@ struct ConvolutionLayer : Layer<ftype> {
 
         CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(
             cuda_data.cudnn_handle, filter_descriptor,
-            state.output->descriptor(), convolution_descriptor, srcTensorDesc,
-            bwd_data_algo, &convolution_bw_data_ws_size));
+            state.output->descriptor(), convolution_descriptor,
+            input_descriptor, bwd_data_algo, &convolution_bw_data_ws_size));
         cudaFree(convolution_bw_data_ws);
         CUDA_CHECK(
             alloc_gpu(&convolution_bw_data_ws, convolution_bw_data_ws_size));
 
         CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(
-            cuda_data.cudnn_handle, srcTensorDesc, state.output->descriptor(),
-            convolution_descriptor, filter_descriptor, bwd_filter_algo,
+            cuda_data.cudnn_handle, input_descriptor,
+            state.output->descriptor(), convolution_descriptor,
+            filter_descriptor, bwd_filter_algo,
             &convolution_bw_filter_ws_size));
         cudaFree(convolution_bw_filter_ws);
         CUDA_CHECK(alloc_gpu(&convolution_bw_filter_ws,
                              convolution_bw_filter_ws_size));
-
-        CUDNN_CHECK(cudnnDestroyTensorDescriptor(srcTensorDesc));
         return output_dims;
     }
 
