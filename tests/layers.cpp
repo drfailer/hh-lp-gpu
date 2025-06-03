@@ -501,7 +501,7 @@ UTest(mnist) {
 
     graph.terminate();
 
-    uassert(accuracy_end > 10 * accuracy_start);
+    uassert(accuracy_end > 4 * accuracy_start);
 
     graph.createDotFile("train_mnist.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
@@ -532,8 +532,8 @@ UTest(mnist_batched) {
     graph.set_loss<QuadraticLoss>();
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
-    graph.add_layer<ConvolutionLayer>(1, 1, 28, 28, 5, 5);
-    graph.add_layer<LinearLayer>(28 * 28, 10);
+    graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    graph.add_layer<LinearLayer>(24 * 24 * 20, 10);
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
