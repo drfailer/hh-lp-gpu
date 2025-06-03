@@ -145,10 +145,12 @@ class LinearLayer : public Layer<ftype> {
         int inputs = this->dims.inputs;
         int outputs = this->dims.outputs;
         int batch_size = this->dims.batch_size;
+        auto error_descriptor = state.output->descriptor();
+        auto error_data = error->data();
 
         if (batch_size > 1) {
             for (int b = 0; b < batch_size; ++b) {
-                errors_array[b] = &error->data()[b * outputs];
+                errors_array[b] = &error_data[b * outputs];
             }
 
             // grads_b = error
@@ -156,7 +158,7 @@ class LinearLayer : public Layer<ftype> {
             CUDNN_CHECK(cudnnReduceTensor(
                 cuda_data.cudnn_handle, average_tensor, nullptr, 0,
                 avg_biases_gradients_ws, avg_biases_gradients_ws_size, &alpha,
-                error->descriptor(), error->data(), &beta,
+                error_descriptor, error_data, &beta,
                 state.gradients.biases->descriptor(),
                 state.gradients.biases->data()));
             // w_grad = err * fwd_inputT
