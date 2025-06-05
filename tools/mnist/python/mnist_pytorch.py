@@ -33,11 +33,13 @@ class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 20, 5)
-        self.fc1 = nn.Linear(24 * 24 * 20, 10)  # input layer (28x28 images) -> output layer (10 classes)
+        self.pool1 = nn.MaxPool2d(2)
+        self.fc1 = nn.Linear(12 * 12 * 20, 10)  # input layer (28x28 images) -> output layer (10 classes)
 
     def forward(self, x):
         x = self.conv1(x)
-        x = x.view(-1, 24 * 24 * 20)  # flatten the input
+        x = self.pool1(x)
+        x = x.view(-1, 12 * 12 * 20)  # flatten the input
         x = torch.sigmoid(self.fc1(x))
         return x
 

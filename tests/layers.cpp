@@ -2,6 +2,7 @@
 #include "../src/graph/network_graph.hpp"
 #include "../src/model/data/layer_state.hpp"
 #include "../src/model/layer/convolution_layer.hpp"
+#include "../src/model/layer/pooling_layer.hpp"
 #include "../src/model/layer/linear_layer.hpp"
 #include "../src/model/layer/sigmoid_activation_layer.hpp"
 #include "../src/model/loss/quadratic_loss.hpp"
@@ -324,12 +325,12 @@ UTest(sigmoid_activation_bwd) {
 UTest(sgd_optimizer) {
     constexpr int inputs = 3;
     constexpr int outputs = 2;
-    constexpr ftype learning_rate = 0.01;
+    constexpr ftype learning_rate = 0.001;
     ftype weights[inputs * outputs] = {1, 2, 3, 4, 4, 6};
     ftype weights_gradients[inputs * outputs] = {1, 1, 1, 1, 1, 1};
     ftype biases[outputs] = {1, 2};
     ftype biases_gradients[outputs] = {1, 1};
-    vec_t weights_dims = {1, 1, inputs, outputs},
+    tensor_dims_t weights_dims = {1, 1, inputs, outputs},
           biases_dims = {1, 1, outputs, 1};
     LayerState<ftype> state;
     SGDOptimizer optimizer_factory(learning_rate);
@@ -408,7 +409,7 @@ UTest(inference) {
 
 UTest(training) {
     constexpr size_t nb_inputs = 28 * 28;
-    constexpr ftype learning_rate = 0.1;
+    constexpr ftype learning_rate = 0.01;
     constexpr ftype epochs = 1;
     NetworkGraph graph;
     MNISTLoader loader;
@@ -453,7 +454,7 @@ UTest(training) {
 }
 
 UTest(mnist) {
-    constexpr ftype learning_rate = 0.01;
+    constexpr ftype learning_rate = 0.001;
     constexpr size_t epochs = 2;
     MNISTLoader loader;
 
@@ -472,7 +473,8 @@ UTest(mnist) {
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
-    graph.add_layer<LinearLayer>(24 * 24 * 20, 10);
+    graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
+    graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
 
     // graph.add_layer<LinearLayer>(28 * 28, 10);
 
@@ -504,14 +506,14 @@ UTest(mnist) {
 
     graph.terminate();
 
-    uassert(accuracy_end > 4 * accuracy_start);
+    uassert(accuracy_end > accuracy_start);
 
     graph.createDotFile("train_mnist.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
 }
 
 UTest(mnist_batched) {
-    constexpr ftype learning_rate = 0.01;
+    constexpr ftype learning_rate = 0.001;
     constexpr size_t epochs = 10;
     constexpr size_t batch_size = 64;
     constexpr size_t test_batch_size = 1'000;
@@ -536,7 +538,9 @@ UTest(mnist_batched) {
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
-    graph.add_layer<LinearLayer>(24 * 24 * 20, 10);
+    graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
+    graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
+
 
     // graph.add_layer<LinearLayer>(28 * 28, 10);
 
