@@ -40,9 +40,9 @@ class LinearLayer : public Layer<ftype> {
         };
 
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            parameters.weights->data(), outputs * inputs, -0.5, 0.5, 0));
+            parameters.weights->data(), outputs * inputs, -0.05, 0.05));
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(parameters.biases->data(),
-                                                    outputs, -0.5, 0.5, 0));
+                                                    outputs, -0.05, 0.05));
         return parameters;
     }
 

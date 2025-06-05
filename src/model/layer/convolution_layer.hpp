@@ -88,11 +88,11 @@ struct ConvolutionLayer : Layer<ftype> {
 
         parameters.weights = create_tensor<ftype>(
             {dims.outputs, dims.inputs, dims.kernel_height, dims.kernel_width});
-        CUDA_CHECK(parameters.weights->random_init(-0.5, 0.5));
+        CUDA_CHECK(parameters.weights->random_init(-0.05, 0.05));
 
         if (use_biases) {
             parameters.biases = create_tensor<ftype>({1, dims.outputs, 1, 1});
-            CUDA_CHECK(parameters.biases->random_init(-0.5, 0.5));
+            CUDA_CHECK(parameters.biases->random_init(-0.05, 0.05));
         }
 
         int filter_dims[4] = {dims.outputs, dims.inputs, dims.kernel_height,
@@ -193,6 +193,7 @@ struct ConvolutionLayer : Layer<ftype> {
             cuda_data.cudnn_handle, &alpha, error_descriptor, error_data, &beta,
             state.gradients.biases->descriptor(),
             state.gradients.biases->data()));
+
         // compute weights gradient (gradient / weights)
         CUDNN_CHECK(cudnnConvolutionBackwardFilter(
             cuda_data.cudnn_handle, &alpha, state.input->descriptor(),
@@ -200,6 +201,7 @@ struct ConvolutionLayer : Layer<ftype> {
             convolution_descriptor, bwd_filter_algo, convolution_bw_filter_ws,
             convolution_bw_filter_ws_size, &beta, filter_descriptor,
             state.gradients.weights->data()));
+
         // compute the output error (gradient / data)
         alpha = 1;
         CUDNN_CHECK(cudnnConvolutionBackwardData(
