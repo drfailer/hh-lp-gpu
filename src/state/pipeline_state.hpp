@@ -81,6 +81,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx
         // << std::endl;
         if (state.data_set_idx >= train_data.data_set.datas.size()) {
+        // if (state.data_set_idx >= 2) {
             INFO_GRP("new epoch", INFO_GRP_PIPELINE_STEP);
             state.data_set_idx = 0;
             ++state.epoch;

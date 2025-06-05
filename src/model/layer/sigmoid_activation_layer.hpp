@@ -24,12 +24,12 @@ struct SigmoidActivationLayer : Layer<ftype> {
 
     tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
                        tensor_dims_t input_dims) override {
-        int inputs = input_dims.c * input_dims.h * input_dims.w;
+        int inputs = input_dims[1] * input_dims[2] * input_dims[3];
         int outputs = inputs;
-        int batch_size = input_dims.n;
+        int batch_size = input_dims[0];
         this->dims.inputs = inputs;
         this->dims.outputs = outputs;
-        this->dims.batch_size = input_dims.n;
+        this->dims.batch_size = input_dims[0];
 
         delete state.output;
         state.output = create_tensor<ftype>({batch_size, 1, outputs, 1});

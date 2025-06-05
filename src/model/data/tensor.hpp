@@ -7,11 +7,11 @@
 #include <cstdio>
 #include <cudnn_ops.h>
 
-using vec_t = std::array<int, 4>;
+using tensor_dims_t = std::array<int, 4>;
 
 template <typename T> class Tensor {
   public:
-    Tensor(vec_t const &dims = {0}, vec_t const &strides = {0})
+    Tensor(tensor_dims_t const &dims = {0}, tensor_dims_t const &strides = {0})
         : dims_(dims), strides_(strides) {
         data_size_ = dims[0] * dims[1] * dims[2] * dims[3];
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&descriptor_));
@@ -42,8 +42,8 @@ template <typename T> class Tensor {
 
     T const *data() const { return data_; }
     T *data() { return data_; }
-    vec_t const &dims() const { return dims_; }
-    vec_t const &strides() const { return strides_; }
+    tensor_dims_t const &dims() const { return dims_; }
+    tensor_dims_t const &strides() const { return strides_; }
     cudnnTensorDescriptor_t descriptor() const { return descriptor_; }
     size_t data_size() const { return data_size_; }
 
@@ -54,7 +54,7 @@ template <typename T> class Tensor {
      * This function can also be used as an initializer when using the default
      * constructor.
      */
-    void reshape(vec_t const &dims, vec_t const &strides) {
+    void reshape(tensor_dims_t const &dims, tensor_dims_t const &strides) {
         cudaFree(data_);
         dims_ = dims;
         strides_ = strides;
@@ -65,7 +65,7 @@ template <typename T> class Tensor {
             strides[0], strides[1], strides[2], strides[3]));
     }
 
-    void reshape(vec_t const &dims) {
+    void reshape(tensor_dims_t const &dims) {
         reshape(dims,
                 {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
     }
@@ -92,25 +92,21 @@ template <typename T> class Tensor {
 
   private:
     T *data_ = nullptr;
-    vec_t dims_ = {};
-    vec_t strides_ = {};
+    tensor_dims_t dims_ = {};
+    tensor_dims_t strides_ = {};
     cudnnTensorDescriptor_t descriptor_ = nullptr;
     size_t data_size_;
 };
 
 template <typename T>
-Tensor<T> *create_tensor(vec_t const &dims, vec_t const &strides) {
+Tensor<T> *create_tensor(tensor_dims_t const &dims,
+                         tensor_dims_t const &strides) {
     return new Tensor<T>(dims, strides);
 }
 
-template <typename T> Tensor<T> *create_tensor(vec_t const &dims) {
+template <typename T> Tensor<T> *create_tensor(tensor_dims_t const &dims) {
     return create_tensor<T>(
         dims, {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
-}
-
-template <typename T>
-Tensor<T> *create_tensor_from_dims(tensor_dims_t const &dims) {
-    return create_tensor<T>({dims.n, dims.c, dims.h, dims.w});
 }
 
 #define print_tensor_descriptor(desc)                                          \

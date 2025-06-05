@@ -33,14 +33,19 @@ struct ConvolutionLayer : Layer<ftype> {
     // previous layer dosn't have the right shape.
     cudnnTensorDescriptor_t input_descriptor;
 
+    // filter data
+    static constexpr size_t convolution_dims = 2;
+    int padding[convolution_dims] = {0, 0};
+    int filter_strides[convolution_dims] = {1, 1};
+    int filter_upscale[convolution_dims] = {1, 1};
+
     // n = c = 1;
     // h     = IMAGE_H;
     // w     = IMAGE_W;
 
     ConvolutionLayer(
         int inputs, int outputs, int input_width, int input_height,
-        int kernel_width, int kernel_height,
-        bool use_biases = true,
+        int kernel_width, int kernel_height, bool use_biases = true,
         cudnnConvolutionFwdAlgo_t fwd_algo = CUDNN_CONVOLUTION_FWD_ALGO_GEMM,
         cudnnConvolutionBwdDataAlgo_t bwd_data_algo =
             CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING,
@@ -53,23 +58,18 @@ struct ConvolutionLayer : Layer<ftype> {
           use_biases(use_biases), fwd_algo(fwd_algo),
           bwd_data_algo(bwd_data_algo), bwd_filter_algo(bwd_filter_algo),
           input_height(input_width), input_width(input_width) {
-        constexpr size_t convDims = 2;
-        constexpr int padA[convDims] = {0, 0};
-        constexpr int filterStrideA[convDims] = {1, 1};
-        constexpr int upscaleA[convDims] = {1, 1};
         CUDNN_CHECK(cudnnCreateConvolutionDescriptor(&convolution_descriptor));
         CUDNN_CHECK(cudnnSetConvolutionNdDescriptor(
-            convolution_descriptor, convDims, padA, filterStrideA, upscaleA,
-            CUDNN_CROSS_CORRELATION, CUDNN_DATA_TYPE));
+            convolution_descriptor, convolution_dims, padding, filter_strides,
+            filter_upscale, CUDNN_CROSS_CORRELATION, CUDNN_DATA_TYPE));
         CUDNN_CHECK(cudnnCreateFilterDescriptor(&filter_descriptor));
 
-        const int tensorDims = 4;
-        const int filterDimA[tensorDims] = {outputs, inputs, (int)kernel_height,
-                                            (int)kernel_width};
+        const tensor_dims_t filter_dim = {outputs, inputs, (int)kernel_height,
+                                          (int)kernel_width};
 
         CUDNN_CHECK(cudnnSetFilterNdDescriptor(
-            filter_descriptor, CUDNN_DATA_TYPE, CUDNN_TENSOR_NCHW, tensorDims,
-            filterDimA));
+            filter_descriptor, CUDNN_DATA_TYPE, CUDNN_TENSOR_NCHW,
+            filter_dim.size(), filter_dim.data()));
 
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&input_descriptor));
     }
@@ -106,35 +106,29 @@ struct ConvolutionLayer : Layer<ftype> {
 
     tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
                        tensor_dims_t input_dims) override {
-        constexpr int tensor_dims = 4;
-        int tensorOuputDimA[tensor_dims] = {input_dims.n, input_dims.c,
-                                            input_dims.h, input_dims.w};
-        dims.batch_size = input_dims.n;
+        tensor_dims_t output_dims;
+
+        dims.batch_size = input_dims[0];
 
         // properly set the input descriptor
         CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            input_descriptor, CUDNN_TENSOR_NCHW, CUDNN_DATA_TYPE, input_dims.n,
-            input_dims.c, input_height, input_width));
-        assert(input_height == input_dims.h);
-        assert(input_width == input_dims.w);
+            input_descriptor, CUDNN_TENSOR_NCHW, CUDNN_DATA_TYPE, input_dims[0],
+            input_dims[1], input_height, input_width));
+        assert(input_height == input_dims[2]);
+        assert(input_width == input_dims[3]);
 
         delete state.error;
-        state.error = create_tensor_from_dims<ftype>(input_dims);
+        state.error = create_tensor<ftype>(input_dims);
 
-        tensor_dims_t output_dims;
         CUDNN_CHECK(cudnnGetConvolutionNdForwardOutputDim(
             convolution_descriptor, input_descriptor, filter_descriptor,
-            tensor_dims, tensorOuputDimA));
-        output_dims.n = tensorOuputDimA[0];
-        output_dims.c = tensorOuputDimA[1];
-        output_dims.h = tensorOuputDimA[2];
-        output_dims.w = tensorOuputDimA[3];
+            output_dims.size(), output_dims.data()));
 
         delete state.output;
-        state.output = create_tensor_from_dims<ftype>(output_dims);
+        state.output = create_tensor<ftype>(output_dims);
 
         if (use_biases) {
-            assert(output_dims.c == dims.outputs);
+            assert(output_dims[1] == dims.outputs);
         }
 
         CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(

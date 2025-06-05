@@ -48,9 +48,9 @@ class LinearLayer : public Layer<ftype> {
 
     tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
                        tensor_dims_t input_dims) override {
-        int inputs = input_dims.c * input_dims.h * input_dims.w;
+        int inputs = input_dims[1] * input_dims[2] * input_dims[3];
         int outputs = this->dims.outputs;
-        auto batch_size = input_dims.n;
+        auto batch_size = input_dims[0];
         tensor_dims_t output_dims = {batch_size, 1, outputs, 1};
 
         this->dims.inputs = inputs;
