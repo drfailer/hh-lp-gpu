@@ -88,15 +88,11 @@ struct ConvolutionLayer : Layer<ftype> {
 
         parameters.weights = create_tensor<ftype>(
             {dims.outputs, dims.inputs, dims.kernel_height, dims.kernel_width});
-        CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            parameters.weights->data(), parameters.weights->data_size(), -0.5,
-            0.5, 0));
+        CUDA_CHECK(parameters.weights->random_init(-0.5, 0.5));
 
         if (use_biases) {
             parameters.biases = create_tensor<ftype>({1, dims.outputs, 1, 1});
-            CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-                parameters.biases->data(), parameters.biases->data_size(), -0.5,
-                0.5, 0));
+            CUDA_CHECK(parameters.biases->random_init(-0.5, 0.5));
         }
 
         int filter_dims[4] = {dims.outputs, dims.inputs, dims.kernel_height,

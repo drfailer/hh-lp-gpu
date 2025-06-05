@@ -70,6 +70,13 @@ template <typename T> class Tensor {
                 {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
     }
 
+    auto random_init(T lower_bound, T higher_bound, int seed = 0) {
+        return memset_random_uniform_gpu<ftype>(data_, data_size_, -0.5, 0.5,
+                                                seed);
+    }
+
+    auto zero() { return memset_gpu<ftype>(data_, data_size_, 0); }
+
   public:
     // assums that the host array has the proper size
     auto from_host(T *host) {
@@ -113,7 +120,7 @@ Tensor<T> *create_tensor_from_dims(tensor_dims_t const &dims) {
         cudnnDataType_t data_type;                                             \
         cudnnGetTensor4dDescriptor(desc, &data_type, &n, &c, &h, &w, &ns, &cs, \
                                    &hs, &ws);                                  \
-        printf(#desc ": [%d, %d, %d, %d]%d : (%d, %d, %d, %d)\n", n, c, h, w,    \
+        printf(#desc ": [%d, %d, %d, %d]%d : (%d, %d, %d, %d)\n", n, c, h, w,  \
                data_type, ns, cs, hs, ws);                                     \
     }
 
