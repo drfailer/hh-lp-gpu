@@ -40,12 +40,12 @@ struct ConvolutionLayer : Layer<ftype> {
     ConvolutionLayer(
         int inputs, int outputs, int input_width, int input_height,
         int kernel_width, int kernel_height,
+        bool use_biases = true,
         cudnnConvolutionFwdAlgo_t fwd_algo = CUDNN_CONVOLUTION_FWD_ALGO_GEMM,
         cudnnConvolutionBwdDataAlgo_t bwd_data_algo =
             CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING,
         cudnnConvolutionBwdFilterAlgo_t bwd_filter_algo =
-            CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
-        bool use_biases = true)
+            CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0)
         : Layer({.inputs = inputs,
                  .outputs = outputs,
                  .kernel_width = kernel_width,
