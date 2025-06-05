@@ -83,7 +83,7 @@ struct ConvolutionLayer : Layer<ftype> {
         cudaFree(convolution_bw_data_ws);
     }
 
-    parameters_t<ftype> create_parameters() const {
+    parameters_t<ftype> create_parameters() const override {
         parameters_t<ftype> parameters;
 
         parameters.weights = create_tensor<ftype>(
@@ -109,7 +109,7 @@ struct ConvolutionLayer : Layer<ftype> {
     }
 
     tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
-                       tensor_dims_t input_dims) {
+                       tensor_dims_t input_dims) override {
         constexpr int tensor_dims = 4;
         int tensorOuputDimA[tensor_dims] = {input_dims.n, input_dims.c,
                                             input_dims.h, input_dims.w};
@@ -168,7 +168,7 @@ struct ConvolutionLayer : Layer<ftype> {
     }
 
     Tensor<ftype> *fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                       Tensor<ftype> *input) {
+                       Tensor<ftype> *input) override {
         ftype alpha = 1, beta = 0;
 
         state.input = input; // save the input
@@ -191,7 +191,7 @@ struct ConvolutionLayer : Layer<ftype> {
     }
 
     Tensor<ftype> *bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                       Tensor<ftype> *error) {
+                       Tensor<ftype> *error) override {
         ftype alpha = 1.0 / dims.batch_size, beta = 0;
         // The shape of the input error might be wrong if the next layer is
         // linear, so we need to use the shape of the output.
