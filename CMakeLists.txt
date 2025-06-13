@@ -10,23 +10,33 @@ set(Hedgehog_INCLUDE_DIR lib/hedgehog/)
 
 find_package(CUDAToolkit)
 find_package(Hedgehog REQUIRED)
+find_package(CUDA QUIET)
 find_package(NVTX QUIET)
+
+# CUDA options
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_ARCHITECTURES 50 52 60 61 70 72 75 80 86 87 89 90 100 101 120)
+set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G")
+
+enable_language(CUDA)
 
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 # add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
-# add_compile_options(-g)
-add_compile_options(-O3)
+add_compile_options(-g)
+# add_compile_options(-O3)
 
 add_executable(hh-lp-gpu
     tests/main.cpp
     tests/cublas_function.cpp
     tests/layers.cpp
+    src/kernels/linear_layer_kernel.cu
 )
 target_link_directories(hh-lp-gpu
     PUBLIC
     ~/Programming/usr/lib/
+    /usr/local/cuda/lib64/
 )
 target_include_directories(hh-lp-gpu
     PUBLIC

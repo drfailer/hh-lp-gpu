@@ -7,6 +7,7 @@
 #include <cudnn.h>
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
+#include "../../kernels/linear_layer_kernel.h"
 
 class LinearLayer : public Layer<ftype> {
   public:
@@ -20,9 +21,8 @@ class LinearLayer : public Layer<ftype> {
     }
 
     ~LinearLayer() {
-        cudaFree(avg_biases_gradients_ws);
-        cudaFree(avg_weights_gradients_ws);
-        cudnnDestroyReduceTensorDescriptor(average_tensor);
+        CUDA_CHECK(cudaFree(avg_biases_gradients_ws));
+        CUDNN_CHECK(cudnnDestroyReduceTensorDescriptor(average_tensor));
     }
 
   public:
@@ -70,15 +70,9 @@ class LinearLayer : public Layer<ftype> {
         output_errors_array.resize(batch_size, nullptr);
         outputs_array.resize(batch_size, nullptr);
         errors_array.resize(batch_size, nullptr);
-        temp_weights_gradients_array.resize(batch_size, nullptr);
-
-        // create temporary array for the gradients
-        temp_weights_gradients.reshape({batch_size, 1, outputs, inputs});
 
         // preinit array
         for (size_t b = 0; b < batch_size; ++b) {
-            temp_weights_gradients_array[b] =
-                &temp_weights_gradients.data()[b * outputs * inputs];
             weights_array[b] = state.parameters.weights->data();
             outputs_array[b] = &state.output->data()[b * this->dims.outputs];
             weights_array[b] = state.parameters.weights->data();
@@ -95,14 +89,6 @@ class LinearLayer : public Layer<ftype> {
         cudaFree(avg_biases_gradients_ws); // free if needed
         CUDA_CHECK(
             alloc_gpu(&avg_biases_gradients_ws, avg_biases_gradients_ws_size));
-        CUDNN_CHECK(cudnnGetReductionWorkspaceSize(
-            cuda_data.cudnn_handle, average_tensor,
-            temp_weights_gradients.descriptor(),
-            state.gradients.weights->descriptor(),
-            &avg_weights_gradients_ws_size));
-        cudaFree(avg_weights_gradients_ws); // free if needed
-        CUDA_CHECK(alloc_gpu(&avg_weights_gradients_ws,
-                             avg_weights_gradients_ws_size));
         return output_dims;
     }
 
@@ -127,13 +113,10 @@ class LinearLayer : public Layer<ftype> {
                                    1.f, outputs_array.data(),
                                    this->dims.batch_size));
         } else {
-            CUDA_CHECK(memcpy_gpu_to_gpu(state.output->data(),
-                                         state.parameters.biases->data(),
-                                         this->dims.outputs));
-            CUBLAS_CHECK(matvecmul(
-                cuda_data.cublas_handle, false, this->dims.outputs,
-                this->dims.inputs, 1.f, state.parameters.weights->data(),
-                state.input->data(), 1.f, state.output->data()));
+            CUDNN_CHECK(hhlpLinearForward(
+                cuda_data.cudnn_handle, state.parameters.weights,
+                state.parameters.biases, input, state.output, this->dims.inputs,
+                this->dims.outputs, CUDNN_DATA_TYPE));
         }
 
         return state.output;
@@ -162,20 +145,14 @@ class LinearLayer : public Layer<ftype> {
                 state.gradients.biases->descriptor(),
                 state.gradients.biases->data()));
             // w_grad = err * fwd_inputT
-            CUBLAS_CHECK(
-                matmul(cuda_data.cublas_handle, false, true, outputs, inputs, 1,
-                       1.f, errors_array.data(), inputs_array.data(), 0.f,
-                       temp_weights_gradients_array.data(), batch_size));
-            // average the gradients
-            alpha = 1;
-            beta = 0;
-            CUDNN_CHECK(cudnnReduceTensor(
-                cuda_data.cudnn_handle, average_tensor, nullptr, 0,
-                avg_weights_gradients_ws, avg_weights_gradients_ws_size, &alpha,
-                temp_weights_gradients.descriptor(),
-                temp_weights_gradients.data(), &beta,
-                state.gradients.weights->descriptor(),
-                state.gradients.weights->data()));
+            // TODO: write a custom kernel for this layer
+            state.gradients.weights->zero();
+            for (int b = 0; b < batch_size; ++b) {
+                CUBLAS_CHECK(matmul(cuda_data.cublas_handle, false, true,
+                                    outputs, inputs, 1, 1.f / batch_size,
+                                    errors_array[b], inputs_array[b], 1.f,
+                                    state.gradients.weights->data()));
+            }
             // output_err = errT * weights
             CUBLAS_CHECK(matmul(cuda_data.cublas_handle, true, false, 1, inputs,
                                 outputs, 1.f, errors_array.data(),
@@ -206,17 +183,12 @@ class LinearLayer : public Layer<ftype> {
     ftype *avg_biases_gradients_ws = 0;
     size_t avg_biases_gradients_ws_size = 0;
 
-    Tensor<ftype> temp_weights_gradients;
-    ftype *avg_weights_gradients_ws = 0;
-    size_t avg_weights_gradients_ws_size = 0;
-
     // arrays of pointers used to call the batch version of sgemv and sgemm
     std::vector<ftype *> weights_array = {};
     std::vector<ftype *> inputs_array = {};
     std::vector<ftype *> outputs_array = {};
     std::vector<ftype *> errors_array = {};
     std::vector<ftype *> output_errors_array = {};
-    std::vector<ftype *> temp_weights_gradients_array = {};
 };
 
 #endif

@@ -13,6 +13,7 @@
 #include "../tools/batch_generator.hpp"
 #include "../tools/mnist/mnist_loader.hpp"
 #include "utest.hpp"
+#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <ostream>
