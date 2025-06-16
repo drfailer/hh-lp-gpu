@@ -161,19 +161,20 @@ class LinearLayer : public Layer<ftype> {
                                 output_errors_array.data(), batch_size));
         } else {
             // grads_b = error
-            CUDA_CHECK(memcpy_gpu_to_gpu(state.gradients.biases->data(),
-                                         error->data(), outputs));
-
+            CUDNN_CHECK(hhlpLinearBackwardBias(
+                cuda_data.cudnn_handle, error->data(),
+                state.gradients.biases->data(), this->dims.outputs,
+                CUDNN_DATA_TYPE));
             // w_grad = err * fwd_inputT
-            CUBLAS_CHECK(matmul(cuda_data.cublas_handle, false, true, outputs,
-                                inputs, 1, 1.f, error->data(),
-                                state.input->data(), 0.f,
-                                state.gradients.weights->data()));
+            CUDNN_CHECK(hhlpLinearBackwardWeights(
+                cuda_data.cudnn_handle, error->data(), state.input->data(),
+                state.gradients.weights->data(), this->dims.outputs,
+                this->dims.inputs, CUDNN_DATA_TYPE));
             // output_err = errT * weights
-            CUBLAS_CHECK(matmul(cuda_data.cublas_handle, true, false, 1, inputs,
-                                outputs, 1.f, error->data(),
-                                state.parameters.weights->data(), 0.f,
-                                state.error->data()));
+            CUDNN_CHECK(hhlpLinearBackwardData(
+                cuda_data.cudnn_handle, error->data(),
+                state.parameters.weights->data(), state.error->data(),
+                this->dims.outputs, this->dims.inputs, CUDNN_DATA_TYPE));
         }
 
         return state.error;

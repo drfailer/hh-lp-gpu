@@ -10,10 +10,10 @@
  * TODO: use the x axis to compute over the batch
  */
 template <int BLOCK_SIZE, typename DataType>
-__global__ void hhlpLinearForwardKernel(DataType const *weights,
-                                        DataType const *biases,
-                                        DataType const *input, DataType *output,
-                                        int nb_inputs, int nb_outputs) {
+__global__ void _hhlpLinearForward(DataType const *weights,
+                                   DataType const *biases,
+                                   DataType const *input, DataType *output,
+                                   int nb_inputs, int nb_outputs) {
     int output_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
 
     if (output_idx >= nb_outputs)
@@ -31,9 +31,9 @@ __global__ void hhlpLinearForwardKernel(DataType const *weights,
  * biases_gradient = error
  */
 template <int BLOCK_SIZE, typename DataType>
-__global__ void hhlpLinearBackwardBiasKernel(DataType const *error,
-                                             DataType *biases_gradient,
-                                             int nb_outputs) {
+__global__ void _hhlpLinearBackwardBias(DataType const *error,
+                                        DataType *biases_gradient,
+                                        int nb_outputs) {
     int idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
 
     if (idx >= nb_outputs)
@@ -46,10 +46,10 @@ __global__ void hhlpLinearBackwardBiasKernel(DataType const *error,
  * weights_gradient = output_gradient * inputT
  */
 template <int BLOCK_SIZE, typename DataType>
-__global__ void hhlpLinearBackwardWeightsKernel(DataType const *output_gradient,
-                                                DataType const *input,
-                                                DataType *weights_gradient,
-                                                int nb_outputs, int nb_inputs) {
+__global__ void _hhlpLinearBackwardWeights(DataType const *output_gradient,
+                                           DataType const *input,
+                                           DataType *weights_gradient,
+                                           int nb_outputs, int nb_inputs) {
     int row = blockIdx.y * BLOCK_SIZE + threadIdx.y;
     int col = blockIdx.x * BLOCK_SIZE + threadIdx.x;
 
@@ -63,34 +63,22 @@ __global__ void hhlpLinearBackwardWeightsKernel(DataType const *output_gradient,
  * input_gradientT = output_gradientT * weights
  */
 template <int BLOCK_SIZE, typename DataType>
-__global__ void hhlpLinearBackwardDataKernel(DataType const *output_gradient,
-                                             DataType const *weights,
-                                             DataType *input_gradient,
-                                             int nb_outputs, int nb_inputs) {
-    int block_idx = blockIdx.y * BLOCK_SIZE;
+__global__ void _hhlpLinearBackwardData(DataType const *output_gradient,
+                                        DataType const *weights,
+                                        DataType *input_gradient,
+                                        int nb_outputs, int nb_inputs) {
+    int output_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
 
-    if (block_idx + threadIdx.y >= nb_inputs)
+    if (output_idx >= nb_inputs)
         return;
 
-    __shared__ DataType output_gradient_block[BLOCK_SIZE];
     DataType result = 0;
-
-    // TODO: simplify this
-    for (int i = 0; i < nb_outputs; i += BLOCK_SIZE) {
-        if (i + threadIdx.y < nb_outputs) {
-            output_gradient_block[threadIdx.y] =
-                output_gradient[i + threadIdx.y];
-        }
-        __syncthreads();
-
-        for (int j = 0; j < BLOCK_SIZE && i + j < nb_outputs; ++j) {
-            result += output_gradient_block[j] *
-                      weights[(i + j) * nb_inputs + threadIdx.y];
-        }
-        __syncthreads();
+    DataType const *weights_col = &weights[output_idx];
+    for (int i = 0; i < nb_outputs; ++i) {
+        result += output_gradient[i] * weights_col[i * nb_inputs];
     }
 
-    input_gradient[block_idx + threadIdx.y] = result;
+    input_gradient[output_idx] = result;
 }
 
 /******************************************************************************/
@@ -100,8 +88,8 @@ __global__ void hhlpLinearBackwardDataKernel(DataType const *output_gradient,
 #define EXTERNAL_FUNCTION_IMPL(KERNEL, ...)                                    \
     cudnnStatus_t KERNEL(__VA_ARGS__) {                                        \
         cudaStream_t stream;                                                   \
-        dim3 threads(1, 32);                                                   \
-        dim3 grid(1, nb_outputs / 32);                                         \
+        dim3 threads(1, std::min(nb_outputs, 32));                             \
+        dim3 grid(1, std::max(1, nb_outputs / 32));                            \
                                                                                \
         cudnnGetStream(cudnn_handle, &stream);                                 \
         switch (data_type) {                                                   \
@@ -121,6 +109,27 @@ __global__ void hhlpLinearBackwardDataKernel(DataType const *output_gradient,
         return cudnnStatus_t::CUDNN_STATUS_SUCCESS;                            \
     }
 
+#define LAUNCH_KERNEL(target_type, kernel)                                     \
+    {                                                                          \
+        using type = target_type;                                              \
+        kernel;                                                                \
+    }
+#define SWITCH_CUDNN_TYPE(data_type, kernel)                                   \
+    switch (data_type) {                                                       \
+    case CUDNN_DATA_FLOAT:                                                     \
+        LAUNCH_KERNEL(float, kernel)                                           \
+        break;                                                                 \
+    case CUDNN_DATA_DOUBLE:                                                    \
+        LAUNCH_KERNEL(double, kernel)                                          \
+        break;                                                                 \
+    case CUDNN_DATA_HALF:                                                      \
+        LAUNCH_KERNEL(int16_t, kernel)                                         \
+        break;                                                                 \
+    default:                                                                   \
+        return cudnnStatus_t::CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE;            \
+        break;                                                                 \
+    }
+
 // TODO: it would be better to take tensor descriptor as argument instead
 cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
                                 void const *biases, void const *input,
@@ -132,49 +141,64 @@ cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
     dim3 threads(1, std::min(nb_outputs, 32));
     dim3 grid(1, std::max(1, nb_outputs / 32));
 
-    switch (data_type) {
-    case CUDNN_DATA_FLOAT:
-        hhlpLinearForwardKernel<32><<<grid, threads, 0, stream>>>(
-            (float const *)weights, (float const *)biases, (float const *)input,
-            (float *)output, nb_inputs, nb_outputs);
-        break;
-    case CUDNN_DATA_DOUBLE:
-        hhlpLinearForwardKernel<32><<<grid, threads, 0, stream>>>(
-            (double *)weights, (double *)biases, (double *)input,
-            (double *)output, nb_inputs, nb_outputs);
-        break;
-    case CUDNN_DATA_HALF:
-        hhlpLinearForwardKernel<32><<<grid, threads, 0, stream>>>(
-            (int16_t *)weights, (int16_t *)biases, (int16_t *)input,
-            (int16_t *)output, nb_inputs, nb_outputs);
-        break;
-    default:
-        return cudnnStatus_t ::CUDNN_STATUS_NOT_SUPPORTED_DATA_TYPE;
-        break;
-    }
-    return cudnnStatus_t ::CUDNN_STATUS_SUCCESS;
+    SWITCH_CUDNN_TYPE(
+        data_type,
+        (_hhlpLinearForward<32><<<grid, threads, 0, stream>>>(
+            (type const *)weights, (type const *)biases, (type const *)input,
+            (type *)output, nb_inputs, nb_outputs)));
+    return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 }
 
-#define KERNEL_PARAMS(type) (type *)error, (type *)biases_gradient, nb_outputs
-EXTERNAL_FUNCTION_IMPL(hhlpLinearBackwardBiasKernel, cudnnHandle_t cudnn_handle,
-                       void const *error, void *biases_gradient, int nb_outputs,
-                       cudnnDataType_t data_type)
-#undef KERNEL_PARAMS
+cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
+                                     void const *error, void *biases_gradient,
+                                     int nb_outputs,
+                                     cudnnDataType_t data_type) {
+    cudaStream_t stream;
+    cudnnGetStream(cudnn_handle, &stream);
 
-#define KERNEL_PARAMS(type)                                                    \
-    (type *)output_gradient, (type *)input, (type *)weights_gradient,          \
-        nb_outputs, nb_inputs
-EXTERNAL_FUNCTION_IMPL(hhlpLinearBackwardWeightsKernel,
-                       cudnnHandle_t cudnn_handle, void const *output_gradient,
-                       void const *input, void *weights_gradient,
-                       int nb_outputs, int nb_inputs, cudnnDataType_t data_type)
-#undef KERNEL_PARAMS
+    dim3 threads(1, std::min(nb_outputs, 32));
+    dim3 grid(1, std::max(1, nb_outputs / 32));
 
-#define KERNEL_PARAMS(type)                                                    \
-    (type *)output_gradient, (type *)weights, (type *)input_gradient,          \
-        nb_outputs, nb_inputs
-EXTERNAL_FUNCTION_IMPL(hhlpLinearBackwardDataKernel, cudnnHandle_t cudnn_handle,
-                       void const *output_gradient, void const *weights,
-                       void *input_gradient, int nb_outputs, int nb_inputs,
-                       cudnnDataType_t data_type)
-#undef KERNEL_PARAMS
+    SWITCH_CUDNN_TYPE(
+        data_type, (_hhlpLinearBackwardBias<32><<<grid, threads, 0, stream>>>(
+                       (type *)error, (type *)biases_gradient, nb_outputs)));
+    return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+}
+
+cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
+                                        void const *output_gradient,
+                                        void const *input,
+                                        void *weights_gradient, int nb_outputs,
+                                        int nb_inputs,
+                                        cudnnDataType_t data_type) {
+    cudaStream_t stream;
+    cudnnGetStream(cudnn_handle, &stream);
+
+    dim3 threads(std::min(nb_inputs, 32), std::min(nb_outputs, 32));
+    dim3 grid(std::max(1, nb_inputs / 32), std::max(1, nb_outputs / 32));
+
+    SWITCH_CUDNN_TYPE(
+        data_type,
+        (_hhlpLinearBackwardWeights<32><<<grid, threads, 0, stream>>>(
+            (type *)output_gradient, (type *)input, (type *)weights_gradient,
+            nb_outputs, nb_inputs)));
+    return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+}
+
+cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
+                                     void const *output_gradient,
+                                     void const *weights, void *input_gradient,
+                                     int nb_outputs, int nb_inputs,
+                                     cudnnDataType_t data_type) {
+    cudaStream_t stream;
+    cudnnGetStream(cudnn_handle, &stream);
+
+    dim3 threads(1, std::min(nb_inputs, 32));
+    dim3 grid(1, std::max(1, nb_inputs / 32));
+
+    SWITCH_CUDNN_TYPE(
+        data_type, (_hhlpLinearBackwardData<32><<<grid, threads, 0, stream>>>(
+                       (type *)output_gradient, (type *)weights,
+                       (type *)input_gradient, nb_outputs, nb_inputs)));
+    return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
+}
