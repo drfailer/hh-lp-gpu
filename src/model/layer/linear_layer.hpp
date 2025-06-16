@@ -99,26 +99,11 @@ class LinearLayer : public Layer<ftype> {
         // save input (used for the backwards pass)
         state.input = input;
 
-        if (this->dims.batch_size > 1) {
-            for (int b = 0; b < this->dims.batch_size; ++b) {
-                inputs_array[b] = &input->data()[b * this->dims.inputs];
-                CUDA_CHECK(memcpy_gpu_to_gpu(outputs_array[b],
-                                             state.parameters.biases->data(),
-                                             this->dims.outputs));
-            }
-
-            CUBLAS_CHECK(matvecmul(cuda_data.cublas_handle, false,
-                                   this->dims.outputs, this->dims.inputs, 1.f,
-                                   weights_array.data(), inputs_array.data(),
-                                   1.f, outputs_array.data(),
-                                   this->dims.batch_size));
-        } else {
-            CUDNN_CHECK(hhlpLinearForward(
-                cuda_data.cudnn_handle, state.parameters.weights->data(),
-                state.parameters.biases->data(), input->data(),
-                state.output->data(), this->dims.inputs, this->dims.outputs,
-                CUDNN_DATA_TYPE));
-        }
+        CUDNN_CHECK(hhlpLinearForward(
+            cuda_data.cudnn_handle, state.parameters.weights->data(),
+            state.parameters.biases->data(), input->data(),
+            state.output->data(), this->dims.inputs, this->dims.outputs,
+            this->dims.batch_size, CUDNN_DATA_TYPE));
 
         return state.output;
     }
@@ -126,56 +111,23 @@ class LinearLayer : public Layer<ftype> {
     Tensor<ftype> *bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
                        Tensor<ftype> *error) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
-        int inputs = this->dims.inputs;
-        int outputs = this->dims.outputs;
-        int batch_size = this->dims.batch_size;
-        auto error_descriptor = state.output->descriptor();
-        auto error_data = error->data();
 
-        if (batch_size > 1) {
-            for (int b = 0; b < batch_size; ++b) {
-                errors_array[b] = &error_data[b * outputs];
-            }
-
-            // grads_b = error
-            ftype alpha = 1, beta = 0;
-            CUDNN_CHECK(cudnnReduceTensor(
-                cuda_data.cudnn_handle, average_tensor, nullptr, 0,
-                avg_biases_gradients_ws, avg_biases_gradients_ws_size, &alpha,
-                error_descriptor, error_data, &beta,
-                state.gradients.biases->descriptor(),
-                state.gradients.biases->data()));
-            // w_grad = err * fwd_inputT
-            // TODO: write a custom kernel for this layer
-            state.gradients.weights->zero();
-            for (int b = 0; b < batch_size; ++b) {
-                CUBLAS_CHECK(matmul(cuda_data.cublas_handle, false, true,
-                                    outputs, inputs, 1, 1.f / batch_size,
-                                    errors_array[b], inputs_array[b], 1.f,
-                                    state.gradients.weights->data()));
-            }
-            // output_err = errT * weights
-            CUBLAS_CHECK(matmul(cuda_data.cublas_handle, true, false, 1, inputs,
-                                outputs, 1.f, errors_array.data(),
-                                weights_array.data(), 0.f,
-                                output_errors_array.data(), batch_size));
-        } else {
-            // grads_b = error
-            CUDNN_CHECK(hhlpLinearBackwardBias(
-                cuda_data.cudnn_handle, error->data(),
-                state.gradients.biases->data(), this->dims.outputs,
-                CUDNN_DATA_TYPE));
-            // w_grad = err * fwd_inputT
-            CUDNN_CHECK(hhlpLinearBackwardWeights(
-                cuda_data.cudnn_handle, error->data(), state.input->data(),
-                state.gradients.weights->data(), this->dims.outputs,
-                this->dims.inputs, CUDNN_DATA_TYPE));
-            // output_err = errT * weights
-            CUDNN_CHECK(hhlpLinearBackwardData(
-                cuda_data.cudnn_handle, error->data(),
-                state.parameters.weights->data(), state.error->data(),
-                this->dims.outputs, this->dims.inputs, CUDNN_DATA_TYPE));
-        }
+        // grads_b = error
+        CUDNN_CHECK(hhlpLinearBackwardBias(
+            cuda_data.cudnn_handle, error->data(),
+            state.gradients.biases->data(), this->dims.outputs,
+            this->dims.batch_size, CUDNN_DATA_TYPE));
+        // w_grad = err * fwd_inputT
+        CUDNN_CHECK(hhlpLinearBackwardWeights(
+            cuda_data.cudnn_handle, error->data(), state.input->data(),
+            state.gradients.weights->data(), this->dims.outputs,
+            this->dims.inputs, this->dims.batch_size, CUDNN_DATA_TYPE));
+        // output_err = errT * weights
+        CUDNN_CHECK(hhlpLinearBackwardData(
+            cuda_data.cudnn_handle, error->data(),
+            state.parameters.weights->data(), state.error->data(),
+            this->dims.outputs, this->dims.inputs, this->dims.batch_size,
+            CUDNN_DATA_TYPE));
 
         return state.error;
     }

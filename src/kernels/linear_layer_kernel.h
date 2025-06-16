@@ -2,27 +2,24 @@
 #define KERNELS_LINEAR_LAYER_KERNEL
 #include <cudnn_graph.h>
 
-cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle,
-                                      void const *weights, void const *biases,
-                                      void const *input, void *output,
-                                      int nb_inputs, int nb_outputs,
-                                      cudnnDataType_t data_type);
+cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
+                                void const *biases, void const *input,
+                                void *output, int nb_inputs, int nb_outputs,
+                                int batch_size, cudnnDataType_t data_type);
 cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
-                                           void const *error,
-                                           void *biases_gradient,
-                                           int nb_outputs,
-                                           cudnnDataType_t data_type);
+                                     void const *error, void *biases_gradient,
+                                     int nb_outputs, int batch_size,
+                                     cudnnDataType_t data_type);
 cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
-                                              void const *output_gradient,
-                                              void const *input,
-                                              void *weights_gradient,
-                                              int nb_outputs, int nb_inputs,
-                                              cudnnDataType_t data_type);
+                                        void const *output_gradient,
+                                        void const *input,
+                                        void *weights_gradient, int nb_outputs,
+                                        int nb_inputs, int batch_size,
+                                        cudnnDataType_t data_type);
 cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
-                                           void const *output_gradient,
-                                           void const *weights,
-                                           void *input_gradient, int nb_outputs,
-                                           int nb_inputs,
-                                           cudnnDataType_t data_type);
+                                     void const *output_gradient,
+                                     void const *weights, void *input_gradient,
+                                     int nb_outputs, int nb_inputs,
+                                     int batch_size, cudnnDataType_t data_type);
 
 #endif
