@@ -70,7 +70,8 @@ auto memset_random_uniform_gpu(T *dest, size_t size, T lower_bound,
 }
 
 template <typename T> auto memset_gpu(T *dest, size_t size, T value) {
-    return cudaMemset(dest, value, size * sizeof(T));
+    std::vector<T> host(size, value);
+    return memcpy_host_to_gpu(dest, host.data(), size);
 }
 
 template <typename T>
