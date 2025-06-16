@@ -13,7 +13,6 @@
 #include "../tools/batch_generator.hpp"
 #include "../tools/mnist/mnist_loader.hpp"
 #include "utest.hpp"
-#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <ostream>
@@ -25,26 +24,15 @@ ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
 
 void init_test_parameters(LayerState<ftype> &state, dims_t dims, ftype value) {
     int weights_size = dims.inputs * dims.outputs;
-    ftype *weights = new ftype[weights_size];
-    defer(delete[] weights);
-    ftype *biases = new ftype[dims.outputs];
-    defer(delete[] biases);
-
-    for (int i = 0; i < weights_size; ++i) {
-        weights[i] = value;
-    }
-    for (int i = 0; i < dims.outputs; ++i) {
-        biases[i] = value;
-    }
-    state.parameters.weights->from_host(weights);
-    state.parameters.biases->from_host(biases);
+    std::vector<ftype> weights(weights_size, value);
+    std::vector<ftype> biases(dims.outputs, value);
+    state.parameters.weights->from_host(weights.data());
+    state.parameters.biases->from_host(biases.data());
 }
 
 void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
-    ftype *weights = new ftype[dims.inputs * dims.outputs];
-    defer(delete[] weights);
-    ftype *biases = new ftype[dims.outputs];
-    defer(delete[] biases);
+    std::vector<ftype> weights(dims.inputs * dims.outputs);
+    std::vector<ftype> biases(dims.outputs);
 
     for (int i = 0; i < dims.outputs; ++i) {
         for (int j = 0; j < dims.inputs; ++j) {
@@ -56,8 +44,8 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
     for (int i = 0; i < dims.outputs; ++i) {
         biases[i] = i + 1;
     }
-    state.parameters.weights->from_host(weights);
-    state.parameters.biases->from_host(biases);
+    state.parameters.weights->from_host(weights.data());
+    state.parameters.biases->from_host(biases.data());
 }
 
 int mnist_get_label(ftype *arr) {
