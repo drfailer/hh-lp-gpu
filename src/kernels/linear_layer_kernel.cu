@@ -24,7 +24,6 @@ __global__ void hhlpLinearForwardKernel(DataType const *weights,
     for (int i = 0; i < nb_inputs; ++i) {
         result += weights_row[i] * input[i];
     }
-
     output[output_idx] = result + biases[output_idx];
 }
 

@@ -1,5 +1,6 @@
 #ifndef LAYERS_LINEAR_LAYER_H
 #define LAYERS_LINEAR_LAYER_H
+#include "../../kernels/linear_layer_kernel.h"
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "layer.hpp"
@@ -7,7 +8,6 @@
 #include <cudnn.h>
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
-#include "../../kernels/linear_layer_kernel.h"
 
 class LinearLayer : public Layer<ftype> {
   public:
@@ -114,9 +114,10 @@ class LinearLayer : public Layer<ftype> {
                                    this->dims.batch_size));
         } else {
             CUDNN_CHECK(hhlpLinearForward(
-                cuda_data.cudnn_handle, state.parameters.weights,
-                state.parameters.biases, input, state.output, this->dims.inputs,
-                this->dims.outputs, CUDNN_DATA_TYPE));
+                cuda_data.cudnn_handle, state.parameters.weights->data(),
+                state.parameters.biases->data(), input->data(),
+                state.output->data(), this->dims.inputs, this->dims.outputs,
+                CUDNN_DATA_TYPE));
         }
 
         return state.output;
