@@ -146,6 +146,8 @@ _hhlpLinearBackwardData(DataType const *output_gradients,
         break;                                                                 \
     }
 
+#define CEIL_DIV(ttl_size, block_size) (ttl_size + block_size - 1) / block_size
+
 // TODO: it would be better to take tensor descriptor as argument instead
 cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
                                 void const *biases, void const *input,
@@ -154,13 +156,15 @@ cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
-    dim3 threads(32, 32);
-    dim3 grid(std::max<int>(1, batch_size / threads.x),
-              std::max<int>(1, nb_outputs / threads.y));
+    constexpr int block_size = 32;
+
+    dim3 threads(block_size, block_size, 1);
+    dim3 grid(CEIL_DIV(batch_size, threads.x), CEIL_DIV(nb_outputs, threads.y),
+              1);
 
     SWITCH_CUDNN_TYPE(
         data_type,
-        (_hhlpLinearForward<32><<<grid, threads, 0, stream>>>(
+        (_hhlpLinearForward<block_size><<<grid, threads, 0, stream>>>(
             (type const *)weights, (type const *)biases, (type const *)input,
             (type *)output, nb_inputs, nb_outputs, batch_size)));
     return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
@@ -174,7 +178,7 @@ cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
     cudnnGetStream(cudnn_handle, &stream);
 
     dim3 threads(1, 32);
-    dim3 grid(1, (nb_outputs + threads.y - 1) / threads.y);
+    dim3 grid(1, CEIL_DIV(nb_outputs, threads.y));
 
     SWITCH_CUDNN_TYPE(
         data_type, (_hhlpLinearBackwardBias<32><<<grid, threads, 0, stream>>>(
@@ -193,8 +197,7 @@ cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
     cudnnGetStream(cudnn_handle, &stream);
 
     dim3 threads(32, 32);
-    dim3 grid((nb_inputs + threads.x - 1) / threads.x,
-              (nb_outputs + threads.y - 1) / threads.y);
+    dim3 grid(CEIL_DIV(nb_inputs, threads.x), CEIL_DIV(nb_outputs, threads.y));
 
     SWITCH_CUDNN_TYPE(
         data_type,
@@ -214,8 +217,7 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
     cudnnGetStream(cudnn_handle, &stream);
 
     dim3 threads(32, 32);
-    dim3 grid(std::max<int>(1, batch_size / threads.x),
-              std::max<int>(1, nb_inputs / threads.y));
+    dim3 grid(CEIL_DIV(batch_size, threads.x), CEIL_DIV(nb_inputs, threads.y));
 
     SWITCH_CUDNN_TYPE(
         data_type,
