@@ -9,26 +9,41 @@
 /*
  * output = weights * input + biases
  * TODO: use the x axis to compute over the batch
+ * 1 block per row
+ * blockIdx.x -> row
+ * threadIdx.y -> batch
+ * threadIdx.x -> partial sum over the row
+ * TODO: try to compute multiple rows per block
+ * TODO: try to load more data in the shared memory
  */
 template <int BLOCK_SIZE, typename DataType>
 __global__ void
 _hhlpLinearForward(DataType const *weights, DataType const *biases,
                    DataType const *inputs, DataType *outputs, int nb_inputs,
                    int nb_outputs, int batch_size) {
-    int batch_idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-    int block_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
-    int output_idx = batch_idx * nb_outputs + block_idx;
+    int batch_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
 
-    if (batch_idx >= batch_size || block_idx >= nb_outputs)
+    if (batch_idx >= batch_size)
         return;
 
-    DataType result = 0;
-    DataType const *weights_row = &weights[block_idx * nb_inputs];
-    DataType const *input = &inputs[batch_idx * nb_inputs];
-    for (int i = 0; i < nb_inputs; ++i) {
-        result += weights_row[i] * input[i];
+    __shared__ DataType result[BLOCK_SIZE][BLOCK_SIZE];
+
+    result[threadIdx.y][threadIdx.x] = 0;
+    for (int idx = threadIdx.x; idx < nb_inputs; idx += BLOCK_SIZE) {
+        DataType w = weights[blockIdx.x * nb_inputs + idx];
+        DataType i = inputs[batch_idx * nb_inputs + idx];
+        result[threadIdx.y][threadIdx.x] += w * i;
     }
-    outputs[output_idx] = result + biases[block_idx];
+    __syncthreads();
+
+    for (int idx = BLOCK_SIZE / 2; idx > 0; idx /= 2) {
+        if (threadIdx.x < idx) {
+            result[threadIdx.y][threadIdx.x] +=
+                result[threadIdx.y][threadIdx.x + idx];
+        }
+    }
+    outputs[batch_idx * nb_outputs + blockIdx.x] =
+        result[threadIdx.y][0] + biases[blockIdx.x];
 }
 
 /*
@@ -156,15 +171,13 @@ cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
-    constexpr int block_size = 32;
-
-    dim3 threads(block_size, block_size, 1);
-    dim3 grid(CEIL_DIV(batch_size, threads.x), CEIL_DIV(nb_outputs, threads.y),
-              1);
+    // TODO: compute the number of threads using the warp tile size
+    dim3 threads(16, 64, 1);
+    dim3 grid(nb_outputs, CEIL_DIV(batch_size, threads.z), 1);
 
     SWITCH_CUDNN_TYPE(
         data_type,
-        (_hhlpLinearForward<block_size><<<grid, threads, 0, stream>>>(
+        (_hhlpLinearForward<64><<<grid, threads, 0, stream>>>(
             (type const *)weights, (type const *)biases, (type const *)input,
             (type *)output, nb_inputs, nb_outputs, batch_size)));
     return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
