@@ -13,8 +13,8 @@
  * blockIdx.x -> row
  * threadIdx.y -> batch
  * threadIdx.x -> partial sum over the row
- * TODO: try to compute multiple rows per block
- * TODO: try to load more data in the shared memory
+ * TODO: https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf
+ *       (slide 35)
  */
 template <int BLOCK_SIZE, typename DataType>
 __global__ void
