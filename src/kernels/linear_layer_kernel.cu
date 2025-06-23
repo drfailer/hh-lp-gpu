@@ -73,20 +73,33 @@ _hhlpLinearForward(DataType const *weights, DataType const *biases,
 /*
  * biases_gradient = output_gradient
  */
-template <int BLOCK_SIZE, typename DataType>
+template <unsigned int BATCH_BLOCK_SIZE, unsigned int OUTPUT_BLOCK_SIZE, typename DataType>
 __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
                                         DataType *biases_gradient,
                                         int nb_outputs, int batch_size) {
-    int block_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    __shared__ DataType results[OUTPUT_BLOCK_SIZE][BATCH_BLOCK_SIZE];
+    unsigned int tid = threadIdx.x;
+    unsigned output_idx = blockIdx.y * OUTPUT_BLOCK_SIZE + threadIdx.y;
 
-    if (block_idx >= nb_outputs)
+    if (output_idx >= nb_outputs)
         return;
 
-    DataType result = 0;
-    for (int b = 0; b < batch_size; ++b) {
-        result += output_gradient[b * nb_outputs + block_idx];
+    results[threadIdx.y][tid] = 0;
+    for (int idx = tid; idx < batch_size; idx += BATCH_BLOCK_SIZE) {
+        results[threadIdx.y][tid] += output_gradient[idx * nb_outputs + output_idx];
     }
-    biases_gradient[block_idx] = result / (DataType)batch_size;
+    __syncthreads();
+
+    // clang-format off
+    if (BATCH_BLOCK_SIZE >= 512) { if (tid < 256) { results[threadIdx.y][tid] += results[threadIdx.y][tid + 256]; } __syncthreads(); }
+    if (BATCH_BLOCK_SIZE >= 256) { if (tid < 128) { results[threadIdx.y][tid] += results[threadIdx.y][tid + 128]; } __syncthreads(); }
+    if (BATCH_BLOCK_SIZE >= 128) { if (tid < 64) { results[threadIdx.y][tid] += results[threadIdx.y][tid + 64]; } __syncthreads(); }
+    warp_reduce<BATCH_BLOCK_SIZE, DataType>(results[threadIdx.y], tid);
+    // clang-format on
+
+    if (tid == 0) {
+        biases_gradient[output_idx] = results[threadIdx.y][0] / (DataType)batch_size;
+    }
 }
 
 /*
@@ -119,8 +132,8 @@ __global__ void
 _hhlpLinearBackwardData(DataType const *output_gradients,
                         DataType const *weights, DataType *input_gradient,
                         int nb_outputs, int nb_inputs, int batch_size) {
-    int batch_idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-    int block_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    int batch_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+    int block_idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
     int output_idx = batch_idx * nb_inputs + block_idx;
 
     if (batch_idx >= batch_size || block_idx >= nb_inputs)
@@ -199,12 +212,14 @@ cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
                                                 nb_outputs * sizeof(type),
                                                 cudaMemcpyDeviceToDevice));
     } else {
-        dim3 threads(1, 32);
+        constexpr unsigned int batch_block_size = 32;
+        constexpr unsigned int output_block_size = 32;
+        dim3 threads(batch_block_size, output_block_size);
         dim3 grid(1, CEIL_DIV(nb_outputs, threads.y));
 
         SWITCH_CUDNN_TYPE(
             data_type,
-            (_hhlpLinearBackwardBias<32><<<grid, threads, 0, stream>>>(
+            (_hhlpLinearBackwardBias<batch_block_size, batch_block_size><<<grid, threads, 0, stream>>>(
                 (type const *)error, (type *)biases_gradient, nb_outputs,
                 batch_size)));
     }
@@ -241,7 +256,7 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
     cudnnGetStream(cudnn_handle, &stream);
 
     dim3 threads(32, 32);
-    dim3 grid(CEIL_DIV(batch_size, threads.x), CEIL_DIV(nb_inputs, threads.y));
+    dim3 grid(CEIL_DIV(nb_inputs, threads.x), CEIL_DIV(batch_size, threads.y));
 
     SWITCH_CUDNN_TYPE(
         data_type,
