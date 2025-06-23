@@ -2,6 +2,14 @@
 #include <cudnn_graph.h>
 #include <stdio.h>
 
+// clang-format off
+#define REDUCE(BS, T, SMEM, tid)\
+    if (BS >= 512) { if (tid < 256) { SMEM[tid] += SMEM[tid + 256]; } __syncthreads(); }\
+    if (BS >= 256) { if (tid < 128) { SMEM[tid] += SMEM[tid + 128]; } __syncthreads(); }\
+    if (BS >= 128) { if (tid < 64) { SMEM[tid] += SMEM[tid + 64]; } __syncthreads(); }\
+    warp_reduce<BS, T>(SMEM, tid);
+// clang-format on
+
 /******************************************************************************/
 /*                                cuda kernels                                */
 /******************************************************************************/
@@ -57,12 +65,7 @@ _hhlpLinearForward(DataType const *weights, DataType const *biases,
     }
     __syncthreads();
 
-    // clang-format off
-    if (REDUCE_BLOCK_SIZE >= 512) { if (tid < 256) { result[tid] += result[tid + 256]; } __syncthreads(); }
-    if (REDUCE_BLOCK_SIZE >= 256) { if (tid < 128) { result[tid] += result[tid + 128]; } __syncthreads(); }
-    if (REDUCE_BLOCK_SIZE >= 128) { if (tid < 64) { result[tid] += result[tid + 64]; } __syncthreads(); }
-    warp_reduce<REDUCE_BLOCK_SIZE, DataType>(result, tid);
-    // clang-format on
+    REDUCE(REDUCE_BLOCK_SIZE, DataType, result, tid);
 
     if (tid == 0) {
         outputs[batch_idx * nb_outputs + blockIdx.x] =
@@ -72,33 +75,47 @@ _hhlpLinearForward(DataType const *weights, DataType const *biases,
 
 /*
  * biases_gradient = output_gradient
+ * TODO:
+ * - is it better to load 2 elements from the same column?
  */
-template <unsigned int BATCH_BLOCK_SIZE, unsigned int OUTPUT_BLOCK_SIZE, typename DataType>
+template <unsigned int BATCH_BLOCK_SIZE, unsigned int OUTPUT_BLOCK_SIZE,
+          unsigned int THREAD_BLOCK_SIZE, typename DataType>
 __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
                                         DataType *biases_gradient,
                                         int nb_outputs, int batch_size) {
-    __shared__ DataType results[OUTPUT_BLOCK_SIZE][BATCH_BLOCK_SIZE];
+    __shared__ DataType
+        results[OUTPUT_BLOCK_SIZE][THREAD_BLOCK_SIZE][BATCH_BLOCK_SIZE];
     unsigned int tid = threadIdx.x;
-    unsigned output_idx = blockIdx.y * OUTPUT_BLOCK_SIZE + threadIdx.y;
+    unsigned output_idx =
+        blockIdx.y * OUTPUT_BLOCK_SIZE + THREAD_BLOCK_SIZE * threadIdx.y;
 
-    if (output_idx >= nb_outputs)
-        return;
-
-    results[threadIdx.y][tid] = 0;
+    auto result = results[output_idx];
+#pragma unroll
+    for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+        result[t][tid] = 0;
+    }
     for (int idx = tid; idx < batch_size; idx += BATCH_BLOCK_SIZE) {
-        results[threadIdx.y][tid] += output_gradient[idx * nb_outputs + output_idx];
+#pragma unroll
+        for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+            if (output_idx + t < nb_outputs)
+                result[t][tid] +=
+                    output_gradient[idx * nb_outputs + output_idx + t];
+        }
     }
     __syncthreads();
 
-    // clang-format off
-    if (BATCH_BLOCK_SIZE >= 512) { if (tid < 256) { results[threadIdx.y][tid] += results[threadIdx.y][tid + 256]; } __syncthreads(); }
-    if (BATCH_BLOCK_SIZE >= 256) { if (tid < 128) { results[threadIdx.y][tid] += results[threadIdx.y][tid + 128]; } __syncthreads(); }
-    if (BATCH_BLOCK_SIZE >= 128) { if (tid < 64) { results[threadIdx.y][tid] += results[threadIdx.y][tid + 64]; } __syncthreads(); }
-    warp_reduce<BATCH_BLOCK_SIZE, DataType>(results[threadIdx.y], tid);
-    // clang-format on
+#pragma unroll
+    for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+        REDUCE(BATCH_BLOCK_SIZE, DataType, result[t], tid);
+    }
 
     if (tid == 0) {
-        biases_gradient[output_idx] = results[threadIdx.y][0] / (DataType)batch_size;
+#pragma unroll
+        for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+            if (output_idx + t < nb_outputs)
+                biases_gradient[output_idx + t] =
+                    result[t][0] / (DataType)batch_size;
+        }
     }
 }
 
@@ -213,15 +230,18 @@ cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
                                                 cudaMemcpyDeviceToDevice));
     } else {
         constexpr unsigned int batch_block_size = 32;
-        constexpr unsigned int output_block_size = 32;
-        dim3 threads(batch_block_size, output_block_size);
+        constexpr unsigned int output_block_size = 64;
+        constexpr unsigned int thread_block_size = 2;
+        dim3 threads(batch_block_size, output_block_size / thread_block_size);
         dim3 grid(1, CEIL_DIV(nb_outputs, threads.y));
 
         SWITCH_CUDNN_TYPE(
             data_type,
-            (_hhlpLinearBackwardBias<batch_block_size, batch_block_size><<<grid, threads, 0, stream>>>(
-                (type const *)error, (type *)biases_gradient, nb_outputs,
-                batch_size)));
+            (_hhlpLinearBackwardBias<batch_block_size, output_block_size,
+                                     thread_block_size>
+             <<<grid, threads, 0, stream>>>((type const *)error,
+                                            (type *)biases_gradient, nb_outputs,
+                                            batch_size)));
     }
     return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 }
