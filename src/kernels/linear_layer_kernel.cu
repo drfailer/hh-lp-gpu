@@ -121,6 +121,7 @@ __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
 
 /*
  * weights_gradient = output_gradient * inputT
+ * TODO
  */
 template <int BLOCK_SIZE, typename DataType>
 __global__ void
@@ -144,26 +145,51 @@ _hhlpLinearBackwardWeights(DataType const *output_gradient,
 /*
  * input_gradientT = output_gradientT * weights
  */
-template <int BLOCK_SIZE, typename DataType>
+template <unsigned int REDUCE_BLOCK_SIZE, unsigned int BATCH_BLOCK_SIZE,
+          unsigned int THREAD_BLOCK_SIZE, typename DataType>
 __global__ void
 _hhlpLinearBackwardData(DataType const *output_gradients,
                         DataType const *weights, DataType *input_gradient,
                         int nb_outputs, int nb_inputs, int batch_size) {
-    int batch_idx = blockIdx.y * BLOCK_SIZE + threadIdx.y;
-    int block_idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-    int output_idx = batch_idx * nb_inputs + block_idx;
+    int batch_idx = blockIdx.y * BATCH_BLOCK_SIZE + threadIdx.y;
+    unsigned int tid = threadIdx.x;
 
-    if (batch_idx >= batch_size || block_idx >= nb_inputs)
+    if (batch_idx >= batch_size)
         return;
 
-    DataType result = 0;
-    DataType const *weights_col = &weights[block_idx];
+    __shared__ DataType
+        results[BATCH_BLOCK_SIZE][THREAD_BLOCK_SIZE][REDUCE_BLOCK_SIZE];
+
+    auto result = results[threadIdx.y];
+    unsigned int col_block_idx = blockIdx.x * THREAD_BLOCK_SIZE;
+    DataType const *weights_col = &weights[col_block_idx];
     DataType const *output_gradient = &output_gradients[batch_idx * nb_outputs];
-    for (int i = 0; i < nb_outputs; ++i) {
-        result += output_gradient[i] * weights_col[i * nb_inputs];
+
+#pragma unroll
+    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+        result[t][tid] = 0;
+    }
+    for (int idx = tid; idx < nb_outputs; idx += REDUCE_BLOCK_SIZE) {
+        DataType o = output_gradient[idx];
+#pragma unroll
+        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+            DataType w = weights_col[idx * nb_inputs + t];
+            result[t][tid] += o * w;
+        }
+    }
+    __syncthreads();
+
+    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+        REDUCE(REDUCE_BLOCK_SIZE, DataType, result[t], tid);
     }
 
-    input_gradient[output_idx] = result;
+    if (tid == 0) {
+#pragma unroll
+        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+            input_gradient[batch_idx * nb_inputs +
+                           blockIdx.x * THREAD_BLOCK_SIZE + t] = result[t][0];
+        }
+    }
 }
 
 /******************************************************************************/
@@ -275,13 +301,20 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
-    dim3 threads(32, 32);
-    dim3 grid(CEIL_DIV(nb_inputs, threads.x), CEIL_DIV(batch_size, threads.y));
+    constexpr unsigned int batch_threads = 32;
+    constexpr unsigned int reduce_threads = 32;
+    constexpr unsigned int thread_block_size = 8;
+
+    dim3 threads(reduce_threads, batch_threads);
+    dim3 grid(CEIL_DIV(nb_inputs, thread_block_size),
+              CEIL_DIV(batch_size, threads.y), 1);
 
     SWITCH_CUDNN_TYPE(
         data_type,
-        (_hhlpLinearBackwardData<32><<<grid, threads, 0, stream>>>(
-            (type *)output_gradient, (type *)weights, (type *)input_gradient,
-            nb_outputs, nb_inputs, batch_size)));
+        (_hhlpLinearBackwardData<reduce_threads, batch_threads,
+                                 thread_block_size>
+         <<<grid, threads, 0, stream>>>((type *)output_gradient,
+                                        (type *)weights, (type *)input_gradient,
+                                        nb_outputs, nb_inputs, batch_size)));
     return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 }
