@@ -1,11 +1,19 @@
 #include <cuda_fp16.h>
 #include <cudnn_graph.h>
 
+#define BREAK_IF(block_cond, cond)                                             \
+    if constexpr (block_cond) {                                                \
+        if (cond) {                                                            \
+            break;                                                             \
+        }                                                                      \
+    }
+#define BREAK_IF_BLOCK(block_size, cond) BREAK_IF(block_size > 1, cond)
+
 // clang-format off
 #define REDUCE(BS, T, SMEM, tid)                                                         \
-    if (BS >= 512) { if (tid < 256) { SMEM[tid] += SMEM[tid + 256]; } __syncthreads(); } \
-    if (BS >= 256) { if (tid < 128) { SMEM[tid] += SMEM[tid + 128]; } __syncthreads(); } \
-    if (BS >= 128) { if (tid < 64) { SMEM[tid] += SMEM[tid + 64]; } __syncthreads(); }   \
+    if constexpr (BS >= 512) { if (tid < 256) { SMEM[tid] += SMEM[tid + 256]; } __syncthreads(); } \
+    if constexpr (BS >= 256) { if (tid < 128) { SMEM[tid] += SMEM[tid + 128]; } __syncthreads(); } \
+    if constexpr (BS >= 128) { if (tid < 64) { SMEM[tid] += SMEM[tid + 64]; } __syncthreads(); }   \
     warp_reduce<BS, T>(SMEM, tid);
 // clang-format on
 
@@ -16,12 +24,12 @@ __device__ __half operator+=(__half volatile &lhs, __half volatile const &rhs) {
 template <unsigned int BLOCK_SIZE, typename DataType>
 __device__ void warp_reduce(volatile DataType *shared_data, unsigned int tid) {
     // clang-format off
-    if (BLOCK_SIZE >= 64) { if (tid < 32) shared_data[tid] += shared_data[tid + 32]; }
-    if (BLOCK_SIZE >= 32) { if (tid < 16) shared_data[tid] += shared_data[tid + 16]; }
-    if (BLOCK_SIZE >= 16) { if (tid < 8)  shared_data[tid] += shared_data[tid + 8]; }
-    if (BLOCK_SIZE >= 8) { if (tid < 4)  shared_data[tid] += shared_data[tid + 4]; }
-    if (BLOCK_SIZE >= 4) { if (tid < 2)  shared_data[tid] += shared_data[tid + 2]; }
-    if (BLOCK_SIZE >= 2) { if (tid < 1)  shared_data[tid] += shared_data[tid + 1]; }
+    if constexpr (BLOCK_SIZE >= 64) { if (tid < 32) shared_data[tid] += shared_data[tid + 32]; }
+    if constexpr (BLOCK_SIZE >= 32) { if (tid < 16) shared_data[tid] += shared_data[tid + 16]; }
+    if constexpr (BLOCK_SIZE >= 16) { if (tid < 8)  shared_data[tid] += shared_data[tid + 8]; }
+    if constexpr (BLOCK_SIZE >= 8) { if (tid < 4)  shared_data[tid] += shared_data[tid + 4]; }
+    if constexpr (BLOCK_SIZE >= 4) { if (tid < 2)  shared_data[tid] += shared_data[tid + 2]; }
+    if constexpr (BLOCK_SIZE >= 2) { if (tid < 1)  shared_data[tid] += shared_data[tid + 1]; }
     // clang-format on
 }
 
@@ -89,33 +97,43 @@ __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
                           threadIdx.y * THREAD_BLOCK_SIZE;
 
     auto result = results[threadIdx.y];
-#pragma unroll
+
+    // clang-format off
+    // zero result
+    #pragma unroll
     for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
         result[t][tid] = 0;
     }
+    // clang-format on
+
+    // clang-format off
     for (int idx = tid; idx < batch_size; idx += BATCH_BLOCK_SIZE) {
-#pragma unroll
+        #pragma unroll
         for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
-            if (output_idx + t < nb_outputs)
-                result[t][tid] +=
-                    output_gradient[idx * nb_outputs + output_idx + t];
+            BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, (output_idx + t) >= nb_outputs);
+            result[t][tid] += output_gradient[idx * nb_outputs + output_idx + t];
         }
     }
+    // clang-format on
     __syncthreads();
 
-#pragma unroll
+    // clang-format on
+    #pragma unroll
     for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+        BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, (output_idx + t) >= nb_outputs);
         REDUCE(BATCH_BLOCK_SIZE, DataType, result[t], tid);
     }
+    // clang-format on
 
+    // clang-format off
     if (tid == 0) {
-#pragma unroll
+        #pragma unroll
         for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
-            if (output_idx + t < nb_outputs)
-                biases_gradient[output_idx + t] =
-                    result[t][0] / (DataType)batch_size;
+            BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, (output_idx + t) >= nb_outputs);
+            biases_gradient[output_idx + t] = result[t][0] / (DataType)batch_size;
         }
     }
+    // clang-format on
 }
 
 /*
@@ -142,55 +160,67 @@ _hhlpLinearBackwardWeights(DataType const *output_gradient,
                [THREAD_INPUT_BLOCK_SIZE][BATCH_BLOCK_SIZE];
 
     // zero result
-#pragma unroll
+    // clang-format off
+    #pragma unroll
     for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE; ++to) {
-#pragma unroll
+        #pragma unroll
         for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE; ++ti) {
             results[threadIdx.y][to][threadIdx.x][ti][tid] = 0;
         }
     }
+    // clang-format on
 
     // compute over batches
+    // clang-format off
     for (int b = tid; b < batch_size; b += BATCH_BLOCK_SIZE) {
-#pragma unroll
-        for (int to = 0;
-             to < THREAD_OUTPUT_BLOCK_SIZE && (row + to) < nb_outputs; ++to) {
+        #pragma unroll
+        for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE; ++to) {
+            BREAK_IF_BLOCK(THREAD_OUTPUT_BLOCK_SIZE, (row + to) >= nb_outputs);
             DataType o = output_gradient[b * nb_outputs + (row + to)];
-#pragma unroll
-            for (int ti = 0;
-                 ti < THREAD_INPUT_BLOCK_SIZE && (col + ti) < nb_inputs; ++ti) {
+
+            #pragma unroll
+            for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE; ++ti) {
+                BREAK_IF_BLOCK(THREAD_INPUT_BLOCK_SIZE, (col + ti) >= nb_inputs);
                 DataType i = input[b * nb_inputs + (col + ti)];
                 results[threadIdx.y][to][threadIdx.x][ti][tid] += o * i;
             }
         }
     }
+    // clang-format on
     __syncthreads();
 
     // reduction
-#pragma unroll
-    for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE && (row + to) < nb_outputs;
-         ++to) {
-#pragma unroll
-        for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE && (col + ti) < nb_inputs;
-             ++ti) {
+    // clang-format off
+    #pragma unroll
+    for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE; ++to) {
+        BREAK_IF_BLOCK(THREAD_OUTPUT_BLOCK_SIZE, (row + to) >= nb_outputs);
+
+        #pragma unroll
+        for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE; ++ti) {
+            BREAK_IF_BLOCK(THREAD_INPUT_BLOCK_SIZE, (col + ti) >= nb_inputs);
             REDUCE(BATCH_BLOCK_SIZE, DataType,
                    results[threadIdx.y][to][threadIdx.x][ti], tid);
         }
     }
+    // clang-format on
 
+    // clang-format off
     if (tid == 0) {
-#pragma unroll
-        for (int to = 0;
-             to < THREAD_OUTPUT_BLOCK_SIZE && (row + to) < nb_outputs; ++to) {
-#pragma unroll
-            for (int ti = 0;
-                 ti < THREAD_INPUT_BLOCK_SIZE && (col + ti) < nb_inputs; ++ti) {
+        #pragma unroll
+        for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE; ++to) {
+            BREAK_IF_BLOCK(THREAD_OUTPUT_BLOCK_SIZE, (row + to) >= nb_outputs);
+
+            #pragma unroll
+            for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE; ++ti) {
+                BREAK_IF_BLOCK(THREAD_INPUT_BLOCK_SIZE,
+                               (col + ti) >= nb_inputs);
                 weights_gradient[(row + to) * nb_inputs + (col + ti)] =
                     results[threadIdx.y][to][threadIdx.x][ti][0] /
                     (DataType)batch_size;
             }
         }
     }
+    // clang-format on
 }
 
 /*
@@ -217,35 +247,47 @@ _hhlpLinearBackwardData(DataType const *output_gradients,
     DataType const *weights_col = &weights[col_block_idx];
     DataType const *output_gradient = &output_gradients[batch_idx * nb_outputs];
 
-#pragma unroll
-    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
-         ++t) {
+    // clang-format off
+    // zero result
+    #pragma unroll
+    for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+        BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, col_block_idx + t >= nb_inputs);
         result[t][tid] = 0;
     }
+    // clang-format on
+
+    // clang-format off
     for (int idx = tid; idx < nb_outputs; idx += REDUCE_BLOCK_SIZE) {
         DataType o = output_gradient[idx];
-#pragma unroll
-        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
-             ++t) {
+
+        #pragma unroll
+        for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+            BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, (col_block_idx + t) >= nb_inputs);
             DataType w = weights_col[idx * nb_inputs + t];
             result[t][tid] += o * w;
         }
     }
+    // clang-format on
     __syncthreads();
 
-    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
-         ++t) {
+    // clang-format off
+    #pragma unroll
+    for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+        BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, (col_block_idx + t) >= nb_inputs);
         REDUCE(REDUCE_BLOCK_SIZE, DataType, result[t], tid);
     }
+    // clang-format on
 
+    // clang-format off
     if (tid == 0) {
-#pragma unroll
-        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
-             ++t) {
+        #pragma unroll
+        for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
+            BREAK_IF_BLOCK(THREAD_BLOCK_SIZE, (col_block_idx + t) >= nb_inputs);
             input_gradient[batch_idx * nb_inputs +
                            blockIdx.x * THREAD_BLOCK_SIZE + t] = result[t][0];
         }
     }
+    // clang-format on
 }
 
 /******************************************************************************/
