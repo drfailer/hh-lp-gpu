@@ -1,12 +1,11 @@
 #include <cuda_fp16.h>
 #include <cudnn_graph.h>
-#include <stdio.h>
 
 // clang-format off
-#define REDUCE(BS, T, SMEM, tid)\
-    if (BS >= 512) { if (tid < 256) { SMEM[tid] += SMEM[tid + 256]; } __syncthreads(); }\
-    if (BS >= 256) { if (tid < 128) { SMEM[tid] += SMEM[tid + 128]; } __syncthreads(); }\
-    if (BS >= 128) { if (tid < 64) { SMEM[tid] += SMEM[tid + 64]; } __syncthreads(); }\
+#define REDUCE(BS, T, SMEM, tid)                                                         \
+    if (BS >= 512) { if (tid < 256) { SMEM[tid] += SMEM[tid + 256]; } __syncthreads(); } \
+    if (BS >= 256) { if (tid < 128) { SMEM[tid] += SMEM[tid + 128]; } __syncthreads(); } \
+    if (BS >= 128) { if (tid < 64) { SMEM[tid] += SMEM[tid + 64]; } __syncthreads(); }   \
     warp_reduce<BS, T>(SMEM, tid);
 // clang-format on
 
@@ -86,10 +85,10 @@ __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
     __shared__ DataType
         results[OUTPUT_BLOCK_SIZE][THREAD_BLOCK_SIZE][BATCH_BLOCK_SIZE];
     unsigned int tid = threadIdx.x;
-    unsigned output_idx =
-        blockIdx.y * OUTPUT_BLOCK_SIZE + THREAD_BLOCK_SIZE * threadIdx.y;
+    unsigned output_idx = blockIdx.y * OUTPUT_BLOCK_SIZE * THREAD_BLOCK_SIZE +
+                          threadIdx.y * THREAD_BLOCK_SIZE;
 
-    auto result = results[output_idx];
+    auto result = results[threadIdx.y];
 #pragma unroll
     for (int t = 0; t < THREAD_BLOCK_SIZE; ++t) {
         result[t][tid] = 0;
@@ -118,6 +117,7 @@ __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
         }
     }
 }
+
 /*
  * weights_gradient = output_gradient * inputT
  */
@@ -312,9 +312,10 @@ cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
                                                 cudaMemcpyDeviceToDevice));
     } else {
         constexpr unsigned int batch_block_size = 32;
-        constexpr unsigned int output_block_size = 64;
-        constexpr unsigned int thread_block_size = 2;
-        dim3 threads(batch_block_size, output_block_size / thread_block_size);
+        constexpr unsigned int output_block_size = 32;
+        constexpr unsigned int thread_block_size = 1;
+        static_assert(batch_block_size * output_block_size <= 1024);
+        dim3 threads(batch_block_size, output_block_size);
         dim3 grid(1, CEIL_DIV(nb_outputs, threads.y));
 
         SWITCH_CUDNN_TYPE(
@@ -337,10 +338,10 @@ cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
-    constexpr unsigned int batch_block_size = 16;
-    constexpr unsigned int block_size = 8;
-    constexpr unsigned int thread_input_block_size = 2;
-    constexpr unsigned int thread_output_block_size = 2;
+    constexpr unsigned int batch_block_size = 1;
+    constexpr unsigned int block_size = 32;
+    constexpr unsigned int thread_input_block_size = 1;
+    constexpr unsigned int thread_output_block_size = 1;
     static_assert(block_size * block_size * batch_block_size <= 1024);
     dim3 threads(block_size, block_size, batch_block_size);
     dim3 grid(CEIL_DIV(nb_inputs, (threads.x * thread_input_block_size)),
@@ -367,8 +368,8 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
     cudnnGetStream(cudnn_handle, &stream);
 
     constexpr unsigned int batch_threads = 32;
-    constexpr unsigned int reduce_threads = 16;
-    constexpr unsigned int thread_block_size = 8;
+    constexpr unsigned int reduce_threads = 32;
+    constexpr unsigned int thread_block_size = 1;
 
     dim3 threads(reduce_threads, batch_threads);
     dim3 grid(CEIL_DIV(nb_inputs, thread_block_size),
