@@ -464,7 +464,6 @@ UTest(mnist) {
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
     graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
     graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
-
     // graph.add_layer<LinearLayer>(28 * 28, 10);
 
     graph.add_layer<SigmoidActivationLayer>();
@@ -529,8 +528,6 @@ UTest(mnist_batched) {
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
     graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
     graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
-
-
     // graph.add_layer<LinearLayer>(28 * 28, 10);
 
     graph.add_layer<SigmoidActivationLayer>();
