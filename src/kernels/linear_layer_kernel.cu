@@ -10,10 +10,6 @@
     warp_reduce<BS, T>(SMEM, tid);
 // clang-format on
 
-/******************************************************************************/
-/*                                cuda kernels                                */
-/******************************************************************************/
-
 __device__ __half operator+=(__half volatile &lhs, __half volatile const &rhs) {
     return (__half &)lhs += (const __half &)rhs;
 }
@@ -29,6 +25,10 @@ __device__ void warp_reduce(volatile DataType *shared_data, unsigned int tid) {
     if (BLOCK_SIZE >= 2) { if (tid < 1)  shared_data[tid] += shared_data[tid + 1]; }
     // clang-format on
 }
+
+/******************************************************************************/
+/*                                cuda kernels                                */
+/******************************************************************************/
 
 /*
  * output = weights * input + biases
@@ -118,32 +118,84 @@ __global__ void _hhlpLinearBackwardBias(DataType const *output_gradient,
         }
     }
 }
-
 /*
  * weights_gradient = output_gradient * inputT
- * TODO
  */
-template <int BLOCK_SIZE, typename DataType>
+template <unsigned int BLOCK_SIZE, unsigned int BATCH_BLOCK_SIZE,
+          unsigned int THREAD_INPUT_BLOCK_SIZE,
+          unsigned int THREAD_OUTPUT_BLOCK_SIZE, typename DataType>
 __global__ void
 _hhlpLinearBackwardWeights(DataType const *output_gradient,
                            DataType const *input, DataType *weights_gradient,
                            int nb_outputs, int nb_inputs, int batch_size) {
-    int row = blockIdx.y * BLOCK_SIZE + threadIdx.y;
-    int col = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+    unsigned int row = blockIdx.y * BLOCK_SIZE * THREAD_OUTPUT_BLOCK_SIZE +
+                       threadIdx.y * THREAD_OUTPUT_BLOCK_SIZE;
+    unsigned int col = blockIdx.x * BLOCK_SIZE * THREAD_INPUT_BLOCK_SIZE +
+                       threadIdx.x * THREAD_INPUT_BLOCK_SIZE;
+    unsigned int tid = threadIdx.z;
 
     if (row >= nb_outputs || col >= nb_inputs)
         return;
 
-    DataType result = 0;
-    for (int b = 0; b < batch_size; ++b) {
-        result +=
-            output_gradient[b * nb_outputs + row] * input[b * nb_inputs + col];
+    __shared__ DataType
+        results[BLOCK_SIZE][THREAD_OUTPUT_BLOCK_SIZE][BLOCK_SIZE]
+               [THREAD_INPUT_BLOCK_SIZE][BATCH_BLOCK_SIZE];
+
+    // zero result
+#pragma unroll
+    for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE; ++to) {
+#pragma unroll
+        for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE; ++ti) {
+            results[threadIdx.y][to][threadIdx.x][ti][tid] = 0;
+        }
     }
-    weights_gradient[row * nb_inputs + col] = result / (DataType)batch_size;
+
+    // compute over batches
+    for (int b = tid; b < batch_size; b += BATCH_BLOCK_SIZE) {
+#pragma unroll
+        for (int to = 0;
+             to < THREAD_OUTPUT_BLOCK_SIZE && (row + to) < nb_outputs; ++to) {
+            DataType o = output_gradient[b * nb_outputs + (row + to)];
+#pragma unroll
+            for (int ti = 0;
+                 ti < THREAD_INPUT_BLOCK_SIZE && (col + ti) < nb_inputs; ++ti) {
+                DataType i = input[b * nb_inputs + (col + ti)];
+                results[threadIdx.y][to][threadIdx.x][ti][tid] += o * i;
+            }
+        }
+    }
+    __syncthreads();
+
+    // reduction
+#pragma unroll
+    for (int to = 0; to < THREAD_OUTPUT_BLOCK_SIZE && (row + to) < nb_outputs;
+         ++to) {
+#pragma unroll
+        for (int ti = 0; ti < THREAD_INPUT_BLOCK_SIZE && (col + ti) < nb_inputs;
+             ++ti) {
+            REDUCE(BATCH_BLOCK_SIZE, DataType,
+                   results[threadIdx.y][to][threadIdx.x][ti], tid);
+        }
+    }
+
+    if (tid == 0) {
+#pragma unroll
+        for (int to = 0;
+             to < THREAD_OUTPUT_BLOCK_SIZE && (row + to) < nb_outputs; ++to) {
+#pragma unroll
+            for (int ti = 0;
+                 ti < THREAD_INPUT_BLOCK_SIZE && (col + ti) < nb_inputs; ++ti) {
+                weights_gradient[(row + to) * nb_inputs + (col + ti)] =
+                    results[threadIdx.y][to][threadIdx.x][ti][0] /
+                    (DataType)batch_size;
+            }
+        }
+    }
 }
 
 /*
  * input_gradientT = output_gradientT * weights
+ * TODO: when THREAD_BLOCK_SIZE == 4, we can use 128B load with floats
  */
 template <unsigned int REDUCE_BLOCK_SIZE, unsigned int BATCH_BLOCK_SIZE,
           unsigned int THREAD_BLOCK_SIZE, typename DataType>
@@ -166,26 +218,30 @@ _hhlpLinearBackwardData(DataType const *output_gradients,
     DataType const *output_gradient = &output_gradients[batch_idx * nb_outputs];
 
 #pragma unroll
-    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
+         ++t) {
         result[t][tid] = 0;
     }
     for (int idx = tid; idx < nb_outputs; idx += REDUCE_BLOCK_SIZE) {
         DataType o = output_gradient[idx];
 #pragma unroll
-        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
+             ++t) {
             DataType w = weights_col[idx * nb_inputs + t];
             result[t][tid] += o * w;
         }
     }
     __syncthreads();
 
-    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+    for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
+         ++t) {
         REDUCE(REDUCE_BLOCK_SIZE, DataType, result[t], tid);
     }
 
     if (tid == 0) {
 #pragma unroll
-        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs; ++t) {
+        for (int t = 0; t < THREAD_BLOCK_SIZE && col_block_idx + t < nb_inputs;
+             ++t) {
             input_gradient[batch_idx * nb_inputs +
                            blockIdx.x * THREAD_BLOCK_SIZE + t] = result[t][0];
         }
@@ -281,14 +337,23 @@ cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
-    dim3 threads(32, 32);
-    dim3 grid(CEIL_DIV(nb_inputs, threads.x), CEIL_DIV(nb_outputs, threads.y));
+    constexpr unsigned int batch_block_size = 16;
+    constexpr unsigned int block_size = 8;
+    constexpr unsigned int thread_input_block_size = 2;
+    constexpr unsigned int thread_output_block_size = 2;
+    static_assert(block_size * block_size * batch_block_size <= 1024);
+    dim3 threads(block_size, block_size, batch_block_size);
+    dim3 grid(CEIL_DIV(nb_inputs, (threads.x * thread_input_block_size)),
+              CEIL_DIV(nb_outputs, (threads.y * thread_output_block_size)), 1);
 
     SWITCH_CUDNN_TYPE(
         data_type,
-        (_hhlpLinearBackwardWeights<32><<<grid, threads, 0, stream>>>(
-            (type *)output_gradient, (type *)input, (type *)weights_gradient,
-            nb_outputs, nb_inputs, batch_size)));
+        (_hhlpLinearBackwardWeights<block_size, batch_block_size,
+                                    thread_input_block_size,
+                                    thread_output_block_size>
+         <<<grid, threads, 0, stream>>>((type *)output_gradient, (type *)input,
+                                        (type *)weights_gradient, nb_outputs,
+                                        nb_inputs, batch_size)));
     return cudnnStatus_t::CUDNN_STATUS_SUCCESS;
 }
 
@@ -302,7 +367,7 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
     cudnnGetStream(cudnn_handle, &stream);
 
     constexpr unsigned int batch_threads = 32;
-    constexpr unsigned int reduce_threads = 32;
+    constexpr unsigned int reduce_threads = 16;
     constexpr unsigned int thread_block_size = 8;
 
     dim3 threads(reduce_threads, batch_threads);
