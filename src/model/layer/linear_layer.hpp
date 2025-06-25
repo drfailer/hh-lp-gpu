@@ -65,20 +65,6 @@ class LinearLayer : public Layer<ftype> {
             return output_dims;
         }
 
-        weights_array.resize(batch_size, nullptr);
-        inputs_array.resize(batch_size, nullptr);
-        output_errors_array.resize(batch_size, nullptr);
-        outputs_array.resize(batch_size, nullptr);
-        errors_array.resize(batch_size, nullptr);
-
-        // preinit array
-        for (size_t b = 0; b < batch_size; ++b) {
-            weights_array[b] = state.parameters.weights->data();
-            outputs_array[b] = &state.output->data()[b * this->dims.outputs];
-            weights_array[b] = state.parameters.weights->data();
-            output_errors_array[b] = &state.error->data()[b * inputs];
-        }
-
         // setup tensor descriptors for computing the biases gradients
         // NOTE: the input error tensor has the same dimensions as the output,
         // so it can be used to compute the workspace size
@@ -128,7 +114,6 @@ class LinearLayer : public Layer<ftype> {
             state.parameters.weights->data(), state.error->data(),
             this->dims.outputs, this->dims.inputs, this->dims.batch_size,
             CUDNN_DATA_TYPE));
-
         return state.error;
     }
 
@@ -136,13 +121,6 @@ class LinearLayer : public Layer<ftype> {
     cudnnReduceTensorDescriptor_t average_tensor = nullptr;
     ftype *avg_biases_gradients_ws = 0;
     size_t avg_biases_gradients_ws_size = 0;
-
-    // arrays of pointers used to call the batch version of sgemv and sgemm
-    std::vector<ftype *> weights_array = {};
-    std::vector<ftype *> inputs_array = {};
-    std::vector<ftype *> outputs_array = {};
-    std::vector<ftype *> errors_array = {};
-    std::vector<ftype *> output_errors_array = {};
 };
 
 #endif
