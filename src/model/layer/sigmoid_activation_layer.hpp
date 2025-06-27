@@ -16,7 +16,9 @@ struct SigmoidActivationLayer : Layer<ftype> {
             sigmoid_, CUDNN_ACTIVATION_SIGMOID, CUDNN_NOT_PROPAGATE_NAN, 0));
     }
 
-    ~SigmoidActivationLayer() { cudnnDestroyActivationDescriptor(sigmoid_); }
+    ~SigmoidActivationLayer() override {
+        cudnnDestroyActivationDescriptor(sigmoid_);
+    }
 
     parameters_t<ftype> create_parameters() const override {
         return {nullptr, nullptr};

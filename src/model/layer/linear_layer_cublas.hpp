@@ -19,7 +19,7 @@ class LinearLayer : public Layer<ftype> {
             CUDNN_32BIT_INDICES));
     }
 
-    ~LinearLayer() {
+    ~LinearLayer() override {
         cudaFree(avg_biases_gradients_ws);
         cudaFree(avg_weights_gradients_ws);
         cudnnDestroyReduceTensorDescriptor(average_tensor);

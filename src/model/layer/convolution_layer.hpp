@@ -74,7 +74,7 @@ struct ConvolutionLayer : Layer<ftype> {
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&input_descriptor));
     }
 
-    ~ConvolutionLayer() {
+    ~ConvolutionLayer() override {
         CUDNN_CHECK(cudnnDestroyConvolutionDescriptor(convolution_descriptor));
         CUDNN_CHECK(cudnnDestroyFilterDescriptor(filter_descriptor));
         CUDNN_CHECK(cudnnDestroyTensorDescriptor(input_descriptor));

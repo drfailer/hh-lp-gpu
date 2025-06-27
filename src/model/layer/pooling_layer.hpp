@@ -27,7 +27,7 @@ struct PoolingLayer : Layer<ftype> {
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&input_descriptor));
     }
 
-    ~PoolingLayer() {
+    ~PoolingLayer() override {
         CUDNN_CHECK(cudnnDestroyPoolingDescriptor(pooling_descriptor));
         CUDNN_CHECK(cudnnDestroyTensorDescriptor(input_descriptor));
     }
