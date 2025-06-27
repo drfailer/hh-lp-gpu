@@ -3,16 +3,7 @@
 #include "tensor.hpp"
 
 template <typename T> struct LossState {
-    Tensor<T> *tensor = nullptr;
-
-    LossState() = default;
-
-    LossState(LossState const &) = delete;
-    LossState const &operator=(LossState const &) = delete;
-
-    ~LossState() {
-        delete tensor;
-    }
+    Tensor<T> tensor;
 };
 
 #endif

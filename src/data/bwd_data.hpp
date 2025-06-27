@@ -5,7 +5,7 @@
 
 template <typename T> struct BwdData {
     std::shared_ptr<NNState<T>> states;
-    Tensor<T> *error;
+    Tensor<T> const *error;
 };
 
 #endif

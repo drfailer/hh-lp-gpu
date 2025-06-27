@@ -11,7 +11,7 @@ using tensor_dims_t = std::array<int, 4>;
 
 template <typename T> class Tensor {
   public:
-    Tensor(tensor_dims_t const &dims = {0}, tensor_dims_t const &strides = {0})
+    Tensor(tensor_dims_t const &dims, tensor_dims_t const &strides)
         : dims_(dims), strides_(strides) {
         data_size_ = dims[0] * dims[1] * dims[2] * dims[3];
         CUDNN_CHECK(cudnnCreateTensorDescriptor(&descriptor_));
@@ -24,15 +24,22 @@ template <typename T> class Tensor {
             strides[0], strides[1], strides[2], strides[3]));
     }
 
-    Tensor(Tensor const &) = delete;
+    Tensor(tensor_dims_t const &dims = {0})
+        : Tensor(dims,
+                 {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1}) {
+    }
+
+    Tensor(Tensor<T> const &) = delete;
     Tensor const &operator=(Tensor const &) = delete;
 
-    Tensor(Tensor &&other) {
+    Tensor(Tensor<T> &&other) { this->operator=(std::move(other)); }
+    Tensor const &operator=(Tensor &&other) {
         std::swap(this->data_, other.data_);
         std::swap(this->dims_, other.dims_);
         std::swap(this->strides_, other.strides_);
         std::swap(this->descriptor_, other.descriptor_);
         std::swap(this->data_size_, other.data_size_);
+        return *this;
     }
 
     ~Tensor() {
@@ -85,7 +92,7 @@ template <typename T> class Tensor {
     }
 
     // assums that the host array has the proper size
-    auto to_host(T *host) {
+    auto to_host(T *host) const {
         return memcpy_gpu_to_host(host, data_,
                                   dims_[0] * dims_[1] * dims_[2] * dims_[3]);
     }
@@ -97,17 +104,6 @@ template <typename T> class Tensor {
     cudnnTensorDescriptor_t descriptor_ = nullptr;
     size_t data_size_;
 };
-
-template <typename T>
-Tensor<T> *create_tensor(tensor_dims_t const &dims,
-                         tensor_dims_t const &strides) {
-    return new Tensor<T>(dims, strides);
-}
-
-template <typename T> Tensor<T> *create_tensor(tensor_dims_t const &dims) {
-    return create_tensor<T>(
-        dims, {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
-}
 
 #define print_tensor_descriptor(desc)                                          \
     {                                                                          \

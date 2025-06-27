@@ -49,14 +49,14 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     void execute(std::shared_ptr<TrainingData<ftype>> data) override {
         from_step_to(Steps::Idle, Steps::Fwd);
         // init
-        train_data.data_set = data->data_set;
+        train_data.data_set = &data->data_set;
         train_data.epochs = data->epochs;
 
         // start computation
-        if (state.data_set_idx < train_data.data_set.datas.size()) {
+        if (state.data_set_idx < train_data.data_set->datas.size()) {
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
-                train_data.data_set.datas[state.data_set_idx].input));
+                &train_data.data_set->datas[state.data_set_idx].input));
         }
     }
 
@@ -66,7 +66,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             from_step_to(Steps::Fwd, Steps::Bwd);
             this->addResult(std::make_shared<LossBwdData<ftype>>(
                 data->states, data->input,
-                train_data.data_set.datas[state.data_set_idx].ground_truth,
+                &train_data.data_set->datas[state.data_set_idx].ground_truth,
                 nullptr));
         } else {
             from_step_to(Steps::Inference, Steps::Idle);
@@ -80,8 +80,8 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
         // TODO: add a log rate and compute the loss
         // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx
         // << std::endl;
-        if (state.data_set_idx >= train_data.data_set.datas.size()) {
-        // if (state.data_set_idx >= 2) {
+        if (state.data_set_idx >= train_data.data_set->datas.size()) {
+            // if (state.data_set_idx >= 2) {
             INFO_GRP("new epoch", INFO_GRP_PIPELINE_STEP);
             state.data_set_idx = 0;
             ++state.epoch;
@@ -91,11 +91,11 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             from_step_to(Steps::Bwd, Steps::Fwd);
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
-                train_data.data_set.datas[state.data_set_idx].input));
+                &train_data.data_set->datas[state.data_set_idx].input));
         } else {
             from_step_to(Steps::Bwd, Steps::Idle);
             this->addResult(std::make_shared<TrainingData<ftype>>(
-                data->states, train_data.data_set, train_data.epochs));
+                data->states, *train_data.data_set, train_data.epochs));
         }
     }
 
@@ -119,7 +119,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     } state;
     struct {
         size_t epochs = 0;
-        DataSet<ftype> data_set;
+        DataSet<ftype> const *data_set;
     } train_data;
 };
 

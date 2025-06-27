@@ -72,12 +72,11 @@ class MNISTLoader {
 
         size_t nb_batches = size / batch_size;
         assert(size % batch_size == 0);
-        std::vector<Tensor<ftype> *> images(nb_batches);
+        std::vector<Tensor<ftype>> images(nb_batches);
         std::vector<ftype> batch_host(batch_size * rows * cols);
 
         for (size_t b = 0; b < nb_batches; ++b) {
-            auto *batch_tensor =
-                create_tensor<ftype>({batch_size, 1, (int)rows, (int)cols});
+            Tensor<ftype> batch_tensor({batch_size, 1, (int)rows, (int)cols});
 
             for (size_t i = 0; i < batch_size; ++i) {
                 auto image = &batch_host[i * rows * cols];
@@ -88,22 +87,22 @@ class MNISTLoader {
                     image[px] = (ftype)px_value / 255.;
                 }
             }
-            batch_tensor->from_host(batch_host.data());
+            batch_tensor.from_host(batch_host.data());
             cudaDeviceSynchronize();
-            images[b] = batch_tensor;
+            images[b] = std::move(batch_tensor);
         }
 
         return images;
     }
 
     auto create_output_tensor(int *label, int batch_size) {
-        auto *batch_gpu = create_tensor<ftype>({batch_size, 1, 10, 1});
+        Tensor<ftype> batch_gpu({batch_size, 1, 10, 1});
         std::vector<ftype> batch_host(batch_size * 10, 0);
 
         for (size_t i = 0; i < batch_size; ++i) {
             batch_host[i * 10 + label[i]] = 1;
         }
-        batch_gpu->from_host(batch_host.data());
+        batch_gpu.from_host(batch_host.data());
 
         return batch_gpu;
     }
@@ -118,7 +117,7 @@ class MNISTLoader {
 
         for (size_t i = 0; i < images.size(); ++i) {
             ds.datas.emplace_back(
-                images[i],
+                std::move(images[i]),
                 create_output_tensor(&labels[i * batch_size], batch_size));
         }
         return ds;

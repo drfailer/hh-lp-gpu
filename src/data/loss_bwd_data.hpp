@@ -5,8 +5,8 @@
 
 template <typename T> struct LossBwdData {
     std::shared_ptr<NNState<T>> states;
-    Tensor<T> *input;
-    Tensor<T> *ground_truth;
+    Tensor<T> const *input;
+    Tensor<T> const *ground_truth;
     Tensor<T> *error;
 };
 

@@ -6,7 +6,7 @@
 
 template <typename T> struct TrainingData {
     std::shared_ptr<NNState<T>> states;
-    DataSet<T> data_set;
+    DataSet<T> const &data_set;
     size_t epochs;
 };
 

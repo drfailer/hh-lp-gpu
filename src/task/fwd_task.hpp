@@ -28,11 +28,13 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
     }
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
-        auto *input = data->input;
+        auto const *input = data->input;
         auto states = data->states;
 
         for (auto layer : layers_) {
-            input = layer->fwd(cuda_data_, states->layers[layer->idx], input);
+            auto &state = states->layers[layer->idx];
+            state.input = input;
+            input = &layer->fwd(cuda_data_, state, *input);
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         }
         data->input = input;

@@ -13,28 +13,27 @@ struct SGDOptimizer : Optimizer<ftype> {
 
     SGDOptimizer(ftype learning_rate) : learning_rate(learning_rate) {}
 
-    void optimize(cuda_data_t cuda_data,
-                  LayerState<ftype> const &state) override {
+    void optimize(cuda_data_t cuda_data, LayerState<ftype> &state) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
 
         // params = params - learning_rate * gradients
 
         ftype alpha = -learning_rate, beta = 1;
 
-        if (state.parameters.weights) {
+        if (state.parameters.weights.data()) {
             CUDNN_CHECK(cudnnAddTensor(cuda_data.cudnn_handle, &alpha,
-                                       state.gradients.weights->descriptor(),
-                                       state.gradients.weights->data(), &beta,
-                                       state.parameters.weights->descriptor(),
-                                       state.parameters.weights->data()));
+                                       state.gradients.weights.descriptor(),
+                                       state.gradients.weights.data(), &beta,
+                                       state.parameters.weights.descriptor(),
+                                       state.parameters.weights.data()));
         }
 
-        if (state.parameters.biases) {
+        if (state.parameters.biases.data()) {
             CUDNN_CHECK(cudnnAddTensor(cuda_data.cudnn_handle, &alpha,
-                                       state.gradients.biases->descriptor(),
-                                       state.gradients.biases->data(), &beta,
-                                       state.parameters.biases->descriptor(),
-                                       state.parameters.biases->data()));
+                                       state.gradients.biases.descriptor(),
+                                       state.gradients.biases.data(), &beta,
+                                       state.parameters.biases.descriptor(),
+                                       state.parameters.biases.data()));
         }
     }
 

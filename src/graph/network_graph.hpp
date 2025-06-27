@@ -101,12 +101,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   public:
-    Tensor<ftype> *predict(std::shared_ptr<NNState<ftype>> state,
-                           Tensor<ftype> *input) {
-        this->pushData(std::make_shared<PredictionData<ftype>>(state, input));
-        Tensor<ftype> *output = this->get<PredictionData<ftype>>()->input;
+    Tensor<ftype> const &predict(std::shared_ptr<NNState<ftype>> state,
+                                 Tensor<ftype> const &input) {
+        this->pushData(std::make_shared<PredictionData<ftype>>(state, &input));
+        Tensor<ftype> const *output = this->get<PredictionData<ftype>>()->input;
         this->cleanGraph();
-        return output;
+        return *output;
     }
 
     std::shared_ptr<NNState<ftype>> train(std::shared_ptr<NNState<ftype>> state,
@@ -157,8 +157,8 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated and initialized, meaning that no allocation or initialization
      * will be done during the computation to ensure maximum performance.
      */
-    void init_state(std::shared_ptr<NNState<ftype>> state, tensor_dims_t
-            input_dims) {
+    void init_state(std::shared_ptr<NNState<ftype>> state,
+                    tensor_dims_t input_dims) {
         auto dims = input_dims;
 
         for (auto layer : layers_) {

@@ -6,21 +6,13 @@
 
 template <typename T>
 struct Data {
-    Tensor<T> *input = nullptr;
-    Tensor<T> *ground_truth = nullptr;
+    Tensor<T> input;
+    Tensor<T> ground_truth;
 };
 
 template <typename T>
 struct DataSet {
     std::vector<Data<T>> datas;
 };
-
-template <typename T>
-void destroy_data_set(DataSet<T> &data_set) {
-    for (auto &data : data_set.datas) {
-        delete data.input;
-        delete data.ground_truth;
-    }
-}
 
 #endif

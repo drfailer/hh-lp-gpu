@@ -29,12 +29,12 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
     }
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        auto *error = data->error;
+        auto const *error = data->error;
         auto &states = data->states;
 
         for (int i = layers_.size() - 1; i >= 0; --i) {
-            error = layers_[i]->bwd(cuda_data_, states->layers[layers_[i]->idx],
-                                    error);
+            auto &state = states->layers[layers_[i]->idx];
+            error = &layers_[i]->bwd(cuda_data_, state, *state.input, *error);
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
             this->addResult(std::make_shared<OptLayerData<ftype>>(
                 data->states, layers_[i]->idx));

@@ -5,12 +5,12 @@
 #include "../data/tensor.hpp"
 
 template <typename T> struct Loss {
-    virtual Tensor<T> *fwd(cuda_data_t cuda_data, LossState<T> &state,
-                           Tensor<T> *model_output,
-                           Tensor<T> *ground_truth) = 0;
-    virtual Tensor<T> *bwd(cuda_data_t cuda_data, LossState<T> &state,
-                           Tensor<T> *model_output,
-                           Tensor<T> *ground_truth) = 0;
+    virtual Tensor<T> const &fwd(cuda_data_t cuda_data, LossState<T> &state,
+                                 Tensor<T> const &model_output,
+                                 Tensor<T> const &ground_truth) = 0;
+    virtual Tensor<T> const &bwd(cuda_data_t cuda_data, LossState<T> &state,
+                                 Tensor<T> const &model_output,
+                                 Tensor<T> const &ground_truth) = 0;
 };
 
 #endif

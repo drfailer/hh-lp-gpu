@@ -30,24 +30,23 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
     }
 
     void init(std::shared_ptr<NNState<ftype>> state) {
-        auto model_output = state->layers.back().output;
-        delete state->loss.tensor; // delete if required
-        state->loss.tensor = create_tensor<ftype>(model_output->dims());
+        auto model_output = &state->layers.back().output;
+        state->loss.tensor.reshape(model_output->dims());
     }
 
     void execute(std::shared_ptr<LossFwdData<ftype>> data) override {
-        loss_->fwd(cuda_data_, data->states->loss, data->input,
-                   data->ground_truth);
+        loss_->fwd(cuda_data_, data->states->loss, *data->input,
+                   *data->ground_truth);
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }
 
     void execute(std::shared_ptr<LossBwdData<ftype>> data) override {
-        loss_->bwd(cuda_data_, data->states->loss, data->input,
-                   data->ground_truth);
+        loss_->bwd(cuda_data_, data->states->loss, *data->input,
+                   *data->ground_truth);
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(std::make_shared<BwdData<ftype>>(
-            data->states, data->states->loss.tensor));
+            data->states, &data->states->loss.tensor));
     }
 
   private:

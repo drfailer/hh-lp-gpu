@@ -6,8 +6,7 @@
 
 template <typename T> struct Optimizer {
     virtual std::shared_ptr<Optimizer<T>> create() const = 0;
-    virtual void optimize(cuda_data_t cuda_data,
-                          LayerState<T> const &state) = 0;
+    virtual void optimize(cuda_data_t cuda_data, LayerState<T> &state) = 0;
 };
 
 #endif
