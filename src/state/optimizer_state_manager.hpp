@@ -13,7 +13,7 @@ class OptimizerStateManager : public hh::StateManager<OptimizerStateIO> {
 
     [[nodiscard]] bool canTerminate() const override {
         this->state()->lock();
-        auto ret = pipeline_state_->isDone();
+        auto ret = pipeline_state_->done();
         this->state()->unlock();
         return ret;
     }

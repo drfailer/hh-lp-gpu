@@ -1,18 +1,23 @@
 #ifndef GRAPH_NETWORK_GRAPH_H
 #define GRAPH_NETWORK_GRAPH_H
+#include "../state/init_state.hpp"
+#include "../state/init_state_manager.hpp"
 #include "../state/optimizer_state_manager.hpp"
 #include "../state/pipeline_state_manager.hpp"
-#include "../task/bwd_task.hpp"
-#include "../task/fwd_task.hpp"
+#include "../task/layer_tasks.hpp"
 #include "../task/loss_task.hpp"
 #include "../task/optimizer_task.hpp"
 #include "../tools/timer.hpp"
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
-#define NetworkGraphIn PredictionData<ftype>, TrainingData<ftype>
-#define NetworkGraphOut PredictionData<ftype>, TrainingData<ftype>
-#define NetworkGraphIO 2, NetworkGraphIn, NetworkGraphOut
+#define NetworkGraphIn                                                         \
+    CreateParameterData<ftype>, InitData<ftype>, PredictionData<ftype>,        \
+        TrainingData<ftype>
+#define NetworkGraphOut                                                        \
+    CreateParameterData<ftype>, InitData<ftype>, PredictionData<ftype>,        \
+        TrainingData<ftype>
+#define NetworkGraphIO 4, NetworkGraphIn, NetworkGraphOut
 
 // TODO: the model should be separated from the graph
 // TODO: add the optimizer in the BwdTask and remove OptimizerTask
@@ -20,16 +25,18 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
   public:
     NetworkGraph()
         : hh::Graph<NetworkGraphIO>(),
-          pipeline_(std::make_shared<PipelineState>()),
-          pipeline_state_(std::make_shared<PipelineStateManager>(pipeline_)),
-          optimizer_(std::make_shared<OptimizerState>()),
-          optimizer_state_(
-              std::make_shared<OptimizerStateManager>(optimizer_, pipeline_)) {
-        this->inputs(pipeline_state_);
-        this->outputs(pipeline_state_);
-
-        fwds_.push_back(std::make_shared<FwdTask>());
-        bwds_.push_back(std::make_shared<BwdTask>());
+          init_state_(std::make_shared<InitState>()),
+          init_state_manager_(std::make_shared<InitStateManager>(init_state_)),
+          pipeline_state_(std::make_shared<PipelineState>()),
+          pipeline_state_manager_(
+              std::make_shared<PipelineStateManager>(pipeline_state_)),
+          optimizer_state_(std::make_shared<OptimizerState>()),
+          optimizer_state_manager_(std::make_shared<OptimizerStateManager>(
+              optimizer_state_, pipeline_state_)) {
+        this->inputs(pipeline_state_manager_);
+        this->inputs(init_state_manager_);
+        this->outputs(pipeline_state_manager_);
+        this->outputs(init_state_manager_);
 
         CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
     }
@@ -37,26 +44,13 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     ~NetworkGraph() { CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle)); }
 
   public:
-    void add_layer(std::shared_ptr<Layer<ftype>> layer) {
-        layer->idx = layer_idx_++;
-        fwds_.back()->add_layer(layer);
-        bwds_.back()->add_layer(layer);
-        layers_.push_back(layer);
-    }
-
     template <typename LayerType, typename... Types>
     void add_layer(Types... args) {
-        add_layer(std::make_shared<LayerType>(std::forward<Types>(args)...));
+        layer_tasks_.add_layer(
+            std::make_shared<LayerType>(std::forward<Types>(args)...));
     }
 
-    void cut_layer() {
-        if (fwds_.back()->layers().size() == 0) {
-            throw std::logic_error(
-                "error: cannot add a cut layer after in an empty shard.");
-        }
-        fwds_.push_back(std::make_shared<FwdTask>());
-        bwds_.push_back(std::make_shared<BwdTask>());
-    }
+    void cut_layer() { layer_tasks_.cut_layer(); }
 
     template <typename LossType, typename... Types>
     void set_loss(Types... args) {
@@ -66,41 +60,84 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
     template <typename OptimizerType, typename... Types>
     void set_optimizer(size_t nb_threads, Types... args) {
-        this->optimizer_task_ = std::make_shared<OptimizerTask>(nb_threads);
-        this->optimizer_factory_ =
-            std::make_shared<OptimizerType>(std::forward<Types>(args)...);
+        this->optimizer_task_ = std::make_shared<OptimizerTask>(
+            std::make_shared<OptimizerType>(std::forward<Types>(args)...),
+            nb_threads);
     }
 
   public:
     void build() {
-        // connect the fwds tasks
-        this->edges(pipeline_state_, fwds_.front());
-        for (size_t i = 0; i < fwds_.size() - 1; ++i) {
-            this->edges(fwds_[i], fwds_[i + 1]);
+        // connect the init tasks
+        this->edges(init_state_manager_, layer_tasks_.inits.front());
+        for (size_t i = 0; i < layer_tasks_.inits.size() - 1; ++i) {
+            this->edges(layer_tasks_.inits[i], layer_tasks_.inits[i + 1]);
         }
-        this->edges(fwds_.back(), pipeline_state_);
+        this->edges(layer_tasks_.inits.back(), init_state_manager_);
+
+        // connect the fwds tasks
+        this->edges(pipeline_state_manager_, layer_tasks_.fwds.front());
+        for (size_t i = 0; i < layer_tasks_.fwds.size() - 1; ++i) {
+            this->edges(layer_tasks_.fwds[i], layer_tasks_.fwds[i + 1]);
+        }
+        this->edges(layer_tasks_.fwds.back(), pipeline_state_manager_);
 
         // connect loss and bwds tasks
         if (loss_task_) {
-            this->edges(pipeline_state_, loss_task_);
-            this->edges(loss_task_, bwds_.back());
-            for (size_t i = bwds_.size() - 1; i >= 1; --i) {
-                this->edges(bwds_[i], bwds_[i - 1]);
+            this->edges(pipeline_state_manager_, loss_task_);
+            this->edges(loss_task_, layer_tasks_.bwds.back());
+            for (size_t i = layer_tasks_.bwds.size() - 1; i >= 1; --i) {
+                this->edges(layer_tasks_.bwds[i], layer_tasks_.bwds[i - 1]);
             }
+            this->edges(init_state_manager_, loss_task_);
+            this->edges(loss_task_, init_state_manager_);
+            init_state_->has_loss = true;
         }
 
         // connect optimizer
         if (optimizer_task_) {
-            optimizer_->nb_layers(layers_.size());
-            for (size_t i = 0; i < bwds_.size(); ++i) {
-                this->edges(bwds_[i], optimizer_task_);
+            optimizer_state_->nb_layers(layer_tasks_.layer_count);
+            for (size_t i = 0; i < layer_tasks_.bwds.size(); ++i) {
+                this->edges(layer_tasks_.bwds[i], optimizer_task_);
             }
-            this->edges(optimizer_task_, optimizer_state_);
-            this->edges(optimizer_state_, pipeline_state_);
+            this->edges(optimizer_task_, optimizer_state_manager_);
+            this->edges(optimizer_state_manager_, pipeline_state_manager_);
         }
     }
 
   public:
+    /*
+     * Create the NNState with allocated parameters and the gradient for the
+     * network if needed. The rest of the data required for the computation is
+     * allocated in `init_state`.
+     */
+    std::shared_ptr<NNState<ftype>> create_state() {
+        auto state = std::make_shared<NNState<ftype>>();
+
+        this->pushData(std::make_shared<CreateParameterData<ftype>>(state));
+        (void)this->get<CreateParameterData<ftype>>();
+        this->cleanGraph();
+        return state;
+    }
+
+    /*
+     * Initialize data required for the computation. The parameters are not
+     * allocated here, but all the tensors used for the computation (input,
+     * output, error, temporary tensor, ...) are allocated in this function.
+     *
+     * This function can be used multiple times, and all the data is reallocated
+     * each time. The function should be used whenever the batch_size is
+     * changed (because this requires reallocation). Note that once this
+     * function is called, all the tensors and tensor descriptors are properly
+     * allocated and initialized, meaning that no allocation or initialization
+     * will be done during the computation to ensure maximum performance.
+     */
+    void init_state(std::shared_ptr<NNState<ftype>> state,
+                    tensor_dims_t input_dims) {
+        this->pushData(std::make_shared<InitData<ftype>>(state, input_dims));
+        (void)this->get<InitData<ftype>>();
+        this->cleanGraph();
+    }
+
     Tensor<ftype> const &predict(std::shared_ptr<NNState<ftype>> state,
                                  Tensor<ftype> const &input) {
         this->pushData(std::make_shared<PredictionData<ftype>>(state, &input));
@@ -119,57 +156,12 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         return state;
     }
 
+  public:
     void terminate() {
-        pipeline_->terminate();
+        pipeline_state_->terminate();
+        init_state_->terminate();
         this->finishPushingData();
         this->waitForTermination();
-    }
-
-  public:
-    /*
-     * Create the NNState with allocated parameters for the network. Note that
-     * this function does not allocated the data for the computation since it is
-     * the role of `init_state`.
-     */
-    std::shared_ptr<NNState<ftype>> create_state() {
-        auto state = std::make_shared<NNState<ftype>>();
-
-        timer_start(create_state);
-        state->layers = std::vector<LayerState<ftype>>(layers_.size());
-        for (auto &layer : layers_) {
-            state->layers[layer->idx].set_parameters(
-                layer->create_parameters());
-        }
-        timer_end(create_state);
-        timer_report_prec(create_state, milliseconds);
-        return state;
-    }
-
-    /*
-     * Initialize data required for the computation. The parameters are not
-     * allocated here, but all the tensors used for the computation (input,
-     * output, error, temporary tensor, ...) are allocated in this function.
-     *
-     * This function can be used multiple times, and all the data is reallocated
-     * each time. The function should be used whenever the batch_size is
-     * changed (because this requires reallocation). Note that once this
-     * function is called, all the tensors and tensor descriptors are properly
-     * allocated and initialized, meaning that no allocation or initialization
-     * will be done during the computation to ensure maximum performance.
-     */
-    void init_state(std::shared_ptr<NNState<ftype>> state,
-                    tensor_dims_t input_dims) {
-        auto dims = input_dims;
-
-        for (auto layer : layers_) {
-            dims = layer->init(cuda_data_, state->layers[layer->idx], dims);
-            if (optimizer_task_) {
-                optimizer_task_->add_layer(optimizer_factory_->create());
-            }
-        }
-        if (loss_task_) {
-            loss_task_->init(state);
-        }
     }
 
   public:
@@ -178,18 +170,15 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   private:
-    std::shared_ptr<PipelineState> pipeline_ = nullptr;
-    std::shared_ptr<PipelineStateManager> pipeline_state_ = nullptr;
+    std::shared_ptr<InitState> init_state_ = nullptr;
+    std::shared_ptr<InitStateManager> init_state_manager_ = nullptr;
+    std::shared_ptr<PipelineState> pipeline_state_ = nullptr;
+    std::shared_ptr<PipelineStateManager> pipeline_state_manager_ = nullptr;
     std::shared_ptr<LossTask> loss_task_ = nullptr;
-    std::shared_ptr<Loss<ftype>> loss_ = nullptr;
     std::shared_ptr<OptimizerTask> optimizer_task_ = nullptr;
-    std::shared_ptr<OptimizerState> optimizer_ = nullptr;
-    std::shared_ptr<OptimizerStateManager> optimizer_state_ = nullptr;
-    std::shared_ptr<Optimizer<ftype>> optimizer_factory_ = nullptr;
-    std::vector<std::shared_ptr<FwdTask>> fwds_ = {};
-    std::vector<std::shared_ptr<BwdTask>> bwds_ = {};
-    std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    size_t layer_idx_ = 0;
+    std::shared_ptr<OptimizerState> optimizer_state_ = nullptr;
+    std::shared_ptr<OptimizerStateManager> optimizer_state_manager_ = nullptr;
+    LayerTasks layer_tasks_;
     cuda_data_t cuda_data_;
 };
 

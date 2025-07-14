@@ -103,8 +103,7 @@ UTest(linear_layer_fwd) {
     input_gpu.from_host(input_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state;
-    state.set_parameters(linear_layer.create_parameters());
+    LayerState<ftype> state(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
 
@@ -130,8 +129,8 @@ UTest(linear_layer_bwd) {
     err_gpu.from_host(input_err_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state;
-    state.set_parameters(linear_layer.create_parameters());
+    LayerState<ftype> state(linear_layer.create_parameters());
+    state.create_gradient_tensors();
     init_test_parameters(state, dims);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
 
@@ -161,8 +160,7 @@ UTest(linear_layer_fwd_batched) {
     input_gpu.from_host(input_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state;
-    state.set_parameters(linear_layer.create_parameters());
+    LayerState<ftype> state(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
                       {batch_size, 1, inputs, 1});
@@ -204,8 +202,8 @@ UTest(linear_layer_bwd_batched) {
     input_err_gpu.from_host(input_err_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state;
-    state.set_parameters(linear_layer.create_parameters());
+    LayerState<ftype> state(linear_layer.create_parameters());
+    state.create_gradient_tensors();
     init_test_parameters(state, dims);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
                       {batch_size, 1, inputs, 1});
@@ -356,6 +354,7 @@ UTest(inference) {
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
+    graph.executeGraph(true);
 
     auto state = graph.create_state();
     graph.init_state(state, {1, 1, inputs, 1});
@@ -363,7 +362,6 @@ UTest(inference) {
     init_test_parameters(state->layers[0],
                          dims_t{.inputs = inputs, .outputs = outputs});
 
-    graph.executeGraph(true);
     graph.pushData(std::make_shared<PredictionData<ftype>>(state, &input_gpu));
     auto output_gpu = graph.get<PredictionData<ftype>>()->input;
     graph.terminate();
@@ -405,12 +403,11 @@ UTest(training) {
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
+    graph.executeGraph(true);
 
     auto state = graph.create_state();
-
     graph.init_state(state, {1, 1, nb_inputs, 1});
 
-    graph.executeGraph(true);
     timer_start(training);
     graph.pushData(
         std::make_shared<TrainingData<ftype>>(state, data_set, epochs));
@@ -449,11 +446,10 @@ UTest(mnist) {
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
+    graph.executeGraph(true);
 
     auto state = graph.create_state();
     graph.init_state(state, {1, 1, 28, 28});
-
-    graph.executeGraph(true);
 
     INFO("Inference before training...");
     ftype accuracy_start = evaluate_mnist(graph, testing_set, state);
@@ -510,10 +506,9 @@ UTest(mnist_batched) {
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
+    graph.executeGraph(true);
 
     auto state = graph.create_state();
-
-    graph.executeGraph(true);
 
     INFO("Inference before training...");
     graph.init_state(state, {test_batch_size, 1, 28, 28});

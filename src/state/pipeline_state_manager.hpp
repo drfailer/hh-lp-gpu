@@ -11,7 +11,7 @@ class PipelineStateManager : public hh::StateManager<PipelineStateIO> {
     [[nodiscard]] bool canTerminate() const override {
         this->state()->lock();
         auto ret =
-            std::dynamic_pointer_cast<PipelineState>(this->state())->isDone();
+            std::dynamic_pointer_cast<PipelineState>(this->state())->done();
         this->state()->unlock();
         return ret;
     }

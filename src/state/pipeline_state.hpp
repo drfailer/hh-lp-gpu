@@ -6,17 +6,9 @@
 #include "../data/prediction_data.hpp"
 #include "../data/training_data.hpp"
 #include "../types.hpp"
+#include "state.hpp"
 #include <hedgehog/hedgehog.h>
 #include <log.h/log.h>
-
-#define from_step_to(curr, to)                                                 \
-    INFO_GRP("from stpe " #curr " to " #to ".", INFO_GRP_PIPELINE_STEP);       \
-    if (state.step != curr) {                                                  \
-        std::cerr << "error: entering train step " #to " from step " #curr "." \
-                  << std::endl;                                                \
-        return;                                                                \
-    }                                                                          \
-    state.step = to;
 
 #define PipelineStateIn                                                        \
     TrainingData<ftype>, PredictionData<ftype>, FwdData<ftype>, OptData<ftype>
@@ -30,7 +22,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     PipelineState() : hh::AbstractState<PipelineStateIO>() {}
 
   public:
-    enum class Steps {
+    enum class Step_ {
         Idle,
         Inference,
         Fwd,
@@ -41,86 +33,84 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
   public:
     void execute(std::shared_ptr<PredictionData<ftype>> data) override {
-        from_step_to(Steps::Idle, Steps::Inference);
+        step_from_to(Step_::Idle, Step_::Inference);
         this->addResult(
             std::make_shared<FwdData<ftype>>(data->states, data->input));
     }
 
     void execute(std::shared_ptr<TrainingData<ftype>> data) override {
-        from_step_to(Steps::Idle, Steps::Fwd);
+        step_from_to(Step_::Idle, Step_::Fwd);
         // init
-        train_data.data_set = &data->data_set;
-        train_data.epochs = data->epochs;
+        train_data_.data_set = &data->data_set;
+        train_data_.epochs = data->epochs;
 
         // start computation
-        if (state.data_set_idx < train_data.data_set->datas.size()) {
+        if (data_set_idx_ < train_data_.data_set->datas.size()) {
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
-                &train_data.data_set->datas[state.data_set_idx].input));
+                &train_data_.data_set->datas[data_set_idx_].input));
         }
     }
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
-        if (state.step == Steps::Fwd) {
+        if (step_ == Step_::Fwd) {
             // we might remove this
-            from_step_to(Steps::Fwd, Steps::Bwd);
+            step_from_to(Step_::Fwd, Step_::Bwd);
             this->addResult(std::make_shared<LossBwdData<ftype>>(
                 data->states, data->input,
-                &train_data.data_set->datas[state.data_set_idx].ground_truth,
+                &train_data_.data_set->datas[data_set_idx_].ground_truth,
                 nullptr));
         } else {
-            from_step_to(Steps::Inference, Steps::Idle);
+            step_from_to(Step_::Inference, Step_::Idle);
             this->addResult(std::make_shared<PredictionData<ftype>>(
                 data->states, data->input));
         }
     }
 
     void execute(std::shared_ptr<OptData<ftype>> data) override {
-        ++state.data_set_idx;
+        ++data_set_idx_;
         // TODO: add a log rate and compute the loss
         // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx
         // << std::endl;
-        if (state.data_set_idx >= train_data.data_set->datas.size()) {
+        if (data_set_idx_ >= train_data_.data_set->datas.size()) {
             // if (state.data_set_idx >= 2) {
             INFO_GRP("new epoch", INFO_GRP_PIPELINE_STEP);
-            state.data_set_idx = 0;
-            ++state.epoch;
+            data_set_idx_ = 0;
+            ++epoch_;
         }
 
-        if (state.epoch < train_data.epochs) {
-            from_step_to(Steps::Bwd, Steps::Fwd);
+        if (epoch_ < train_data_.epochs) {
+            step_from_to(Step_::Bwd, Step_::Fwd);
             this->addResult(std::make_shared<FwdData<ftype>>(
                 data->states,
-                &train_data.data_set->datas[state.data_set_idx].input));
+                &train_data_.data_set->datas[data_set_idx_].input));
         } else {
-            from_step_to(Steps::Bwd, Steps::Idle);
+            step_from_to(Step_::Bwd, Step_::Idle);
             this->addResult(std::make_shared<TrainingData<ftype>>(
-                data->states, *train_data.data_set, train_data.epochs));
+                data->states, *train_data_.data_set, train_data_.epochs));
         }
     }
 
   public:
-    bool isDone() const { return state.step == Steps::Finish; }
+    bool done() const { return step_ == Step_::Finish; }
 
     void clean() override {
-        state.step = Steps::Idle;
-        state.epoch = 0;
-        state.data_set_idx = 0;
-        train_data = {0};
+        step_ = Step_::Idle;
+        epoch_ = 0;
+        data_set_idx_ = 0;
+        train_data_ = {0};
     }
 
-    void terminate() { state.step = Steps::Finish; }
+    void terminate() { step_ = Step_::Finish; }
 
   private:
-    struct {
-        Steps step = Steps::Idle;
-        size_t epoch = 0;
-        size_t data_set_idx = 0;
-    } state;
+    size_t epoch_ = 0;
+    size_t data_set_idx_ = 0;
+    Step_ step_ = Step_::Idle;
     struct {
         size_t epochs = 0;
         DataSet<ftype> const *data_set;
-    } train_data;
+    } train_data_;
 };
 
 #endif

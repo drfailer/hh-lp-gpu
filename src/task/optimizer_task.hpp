@@ -14,13 +14,10 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
     using OptimizerList = std::vector<std::shared_ptr<Optimizer<ftype>>>;
 
   public:
-    OptimizerTask(size_t nb_threads)
+    OptimizerTask(std::shared_ptr<Optimizer<ftype>> optimizer,
+                  size_t nb_threads)
         : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
-          optimizers_(std::make_shared<OptimizerList>()) {}
-
-    OptimizerTask(std::shared_ptr<OptimizerList> optimizers, size_t nb_threads)
-        : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
-          optimizers_(optimizers) {}
+          optimizer_(optimizer) {}
 
     void initializeCuda() override {
         CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
@@ -36,23 +33,18 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
     }
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
-        optimizers_->operator[](data->idx)->optimize(
-            cuda_data_, data->state->layers[data->idx]);
+        optimizer_->optimize(cuda_data_, data->state->layers[data->idx]);
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }
 
     std::shared_ptr<hh::AbstractTask<OptimizerTaskIO>> copy() override {
-        return std::make_shared<OptimizerTask>(optimizers_,
+        return std::make_shared<OptimizerTask>(optimizer_,
                                                this->numberThreads());
     }
 
-    void add_layer(std::shared_ptr<Optimizer<ftype>> layer_optimizer) {
-        optimizers_->push_back(layer_optimizer);
-    }
-
   private:
-    std::shared_ptr<OptimizerList> optimizers_ = nullptr;
+    std::shared_ptr<Optimizer<ftype>> optimizer_ = nullptr;
     cuda_data_t cuda_data_;
 };
 

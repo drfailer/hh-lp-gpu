@@ -1,15 +1,18 @@
 #ifndef TASK_LOSS_TASK_H
 #define TASK_LOSS_TASK_H
 #include "../data/bwd_data.hpp"
+#include "../data/init_data.hpp"
 #include "../data/loss_bwd_data.hpp"
 #include "../data/loss_fwd_data.hpp"
 #include "../model/loss/loss.hpp"
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define LossTaskIn LossFwdData<ftype>, LossBwdData<ftype>
-#define LossTaskOut LossFwdData<ftype>, BwdData<ftype>
-#define LossTaskIO 2, LossTaskIn, LossTaskOut
+#define LossTaskIn                                                             \
+    InitData<ftype, InitTarget::Loss>, LossFwdData<ftype>, LossBwdData<ftype>
+#define LossTaskOut                                                            \
+    InitData<ftype, InitTarget::Loss>, LossFwdData<ftype>, BwdData<ftype>
+#define LossTaskIO 3, LossTaskIn, LossTaskOut
 
 class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
   public:
@@ -29,9 +32,10 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
         CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
     }
 
-    void init(std::shared_ptr<NNState<ftype>> state) {
-        auto model_output = &state->layers.back().output;
-        state->loss.tensor.reshape(model_output->dims());
+    void
+    execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
+        data->states->loss.tensor.reshape(data->input_dims);
+        this->addResult(data);
     }
 
     void execute(std::shared_ptr<LossFwdData<ftype>> data) override {

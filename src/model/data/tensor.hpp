@@ -72,6 +72,17 @@ template <typename T> class Tensor {
             strides[0], strides[1], strides[2], strides[3]));
     }
 
+    void reshape_like(Tensor<T> const &other) {
+        cudaFree(data_);
+        dims_ = other.dims_;
+        strides_ = other.strides_;
+        data_size_ = other.data_size_;
+        CUDA_CHECK(alloc_gpu(&data_, data_size_));
+        CUDNN_CHECK(cudnnSetTensor4dDescriptorEx(
+            descriptor_, CUDNN_DATA_TYPE, dims_[0], dims_[1], dims_[2],
+            dims_[3], strides_[0], strides_[1], strides_[2], strides_[3]));
+    }
+
     void reshape(tensor_dims_t const &dims) {
         reshape(dims,
                 {dims[1] * dims[2] * dims[3], dims[2] * dims[3], dims[3], 1});
@@ -95,6 +106,12 @@ template <typename T> class Tensor {
     auto to_host(T *host) const {
         return memcpy_gpu_to_host(host, data_,
                                   dims_[0] * dims_[1] * dims_[2] * dims_[3]);
+    }
+
+    Tensor<T> copy() const {
+        Tensor<T> result(*this);
+        memcpy_gpu_to_gpu(result.data_, this->data_, this->data_size_);
+        return result;
     }
 
   private:

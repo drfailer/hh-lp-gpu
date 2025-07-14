@@ -12,6 +12,12 @@ template <typename T> struct Parameters {
         : weights(weights_dims), biases(biases_dims) {}
     Parameters(Parameters &&other)
         : weights(std::move(other.weights)), biases(std::move(other.biases)) {}
+
+    Parameters<T> const &operator=(Parameters<T> &&other) {
+        this->weights = std::move(other.weights);
+        this->biases = std::move(other.biases);
+        return *this;
+    }
 };
 
 template <typename T> struct Gradients {
