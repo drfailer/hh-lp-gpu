@@ -7,3 +7,6 @@
 [submodule "lib/log.h"]
 	path = lib/log.h
 	url = https://github.com/drfailer/log.h.git
+[submodule "lib/serializer-cpp"]
+	path = lib/serializer-cpp
+	url = https://github.com/drfailer/serializer-cpp.git
