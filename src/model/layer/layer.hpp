@@ -11,6 +11,17 @@ template <typename T> struct Layer {
     Layer(dims_t dims) : dims(dims) {}
     virtual ~Layer() {}
 
+    // TODO: layers should use lists of tensors instead of the current struct
+    //       (more flexible in case a layer needs more data, like combined
+    //       layers)
+    // TODO: create_parameters should be removed and everything should be done
+    //       in `init`. However, initialization should not create tensors but
+    //       tensor views, and allocation should be done automatically in the
+    //       graph (this way, we can skip some allocations, like only use
+    //       weights for the inference as well as using only two memory spaces
+    //       for input and output). The graph or the network will deallocate
+    //       memory if needed.
+
     virtual Parameters<T> create_parameters() const = 0;
     virtual tensor_dims_t init(cuda_data_t cuda_data, LayerState<T> &state,
                                tensor_dims_t input_dims) = 0;
