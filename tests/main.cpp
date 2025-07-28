@@ -7,11 +7,13 @@ cudnnHandle_t CUDNN_HANDLE;
 cublasHandle_t CUBLAS_HANDLE;
 
 
-int main(int, char **) {
+int main(int argc, char **argv) {
     cudnnCreate(&CUDNN_HANDLE);
     defer(cudnnDestroy(CUDNN_HANDLE));
     cublasCreate_v2(&CUBLAS_HANDLE);
     defer(cublasDestroy_v2(CUBLAS_HANDLE));
+
+    // init_mpi(argc, argv);
 
     utest_start();
 
@@ -37,6 +39,8 @@ int main(int, char **) {
 
     urun_test(mnist);
     urun_test(mnist_batched);
+
+    // urun_test(mnist_multi_node);
 
     utest_end();
 

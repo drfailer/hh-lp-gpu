@@ -19,5 +19,6 @@ UTest(inference);
 UTest(training);
 UTest(mnist);
 UTest(mnist_batched);
+UTest(mnist_multi_node);
 
 #endif

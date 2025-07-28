@@ -319,7 +319,7 @@ UTest(sgd_optimizer) {
     CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases.data(),
                                   biases_gradients, outputs));
 
-    auto sgd = optimizer_factory.create();
+    auto sgd = optimizer_factory.copy();
     sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, state);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
@@ -395,10 +395,8 @@ UTest(training) {
 
     graph.add_layer<LinearLayer>(nb_inputs, 32);
     graph.add_layer<SigmoidActivationLayer>();
-    graph.cut_layer();
     graph.add_layer<LinearLayer>(32, 32);
     graph.add_layer<SigmoidActivationLayer>();
-    graph.cut_layer();
     graph.add_layer<LinearLayer>(32, 10);
     graph.add_layer<SigmoidActivationLayer>();
 
@@ -503,6 +501,68 @@ UTest(mnist_batched) {
     graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
     // graph.add_layer<LinearLayer>(28 * 28, 10);
 
+    graph.add_layer<SigmoidActivationLayer>();
+
+    graph.build();
+    graph.executeGraph(true);
+
+    auto state = graph.create_state();
+
+    INFO("Inference before training...");
+    graph.init_state(state, {test_batch_size, 1, 28, 28});
+    ftype accuracy_start =
+        evaluate_mnist(graph, testing_set, state, test_batch_size);
+
+    graph.init_state(state, {batch_size, 1, 28, 28});
+
+    INFO("start training (learning_rate = " << learning_rate
+                                            << ", epochs = " << epochs << ")");
+    timer_start(batch_training);
+    graph.train(state, training_set, epochs);
+    timer_end(batch_training);
+
+    timer_report_prec(batch_training, milliseconds);
+
+    INFO("Evaluate the model...");
+    graph.init_state(state, {test_batch_size, 1, 28, 28});
+    ftype accuracy_end =
+        evaluate_mnist(graph, testing_set, state, test_batch_size);
+
+    graph.terminate();
+
+    uassert(accuracy_end > accuracy_start);
+
+    graph.createDotFile("train_mnist_batch.dot", hh::ColorScheme::EXECUTION,
+                        hh::StructureOptions::QUEUE);
+}
+
+UTest(mnist_multi_node) {
+    constexpr ftype learning_rate = 0.001;
+    constexpr size_t epochs = 10;
+    constexpr size_t batch_size = 64;
+    constexpr size_t test_batch_size = 1'000;
+    MNISTLoader loader;
+    BatchGenerator<ftype> batch_generator(0);
+
+    DataSet<ftype> training_data =
+        loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
+                       "../data/mnist/train-images-idx3-ubyte");
+    DataSet<ftype> training_set =
+        batch_generator.generate(std::move(training_data), batch_size);
+    DataSet<ftype> testing_set =
+        loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
+                       "../data/mnist/t10k-images-idx3-ubyte", test_batch_size);
+
+    NetworkGraph graph;
+
+    graph.set_loss<QuadraticLoss>();
+    graph.set_optimizer<SGDOptimizer>(1, learning_rate);
+
+    graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
+    graph.add_layer<LinearLayer>(12 * 12 * 20, 64);
+    graph.add_layer<SigmoidActivationLayer>();
+    graph.add_layer<LinearLayer>(64, 10);
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
