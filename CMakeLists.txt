@@ -10,6 +10,7 @@ set(Hedgehog_INCLUDE_DIR lib/hedgehog/)
 
 find_package(CUDAToolkit)
 find_package(Hedgehog REQUIRED)
+find_package(MPI REQUIRED)
 find_package(CUDA QUIET)
 find_package(NVTX QUIET)
 
@@ -25,29 +26,35 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 # add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
-# add_compile_options(-g)
-add_compile_options(-O3)
+add_compile_options(-g)
+# add_compile_options(-O3)
+
+add_library(linear_layer_kernel src/kernels/linear_layer_kernel.cu)
 
 add_executable(hh-lp-gpu
     tests/main.cpp
     tests/cublas_function.cpp
     tests/layers.cpp
-    src/kernels/linear_layer_kernel.cu
+)
+add_definitions(-DOMPI_SKIP_MPICXX)
+target_include_directories(hh-lp-gpu
+    PUBLIC
+    lib
+    lib/serializer-cpp/
+    ~/Programming/usr/include/
+    lib/hedgehog/
+    ${MPI_INCLUDE_PATH}
+    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
 )
 target_link_directories(hh-lp-gpu
     PUBLIC
     ~/Programming/usr/lib/
     /usr/local/cuda/lib64/
 )
-target_include_directories(hh-lp-gpu
-    PUBLIC
-    lib
-    ~/Programming/usr/include/
-    lib/hedgehog/
-    ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
-)
 target_link_libraries(hh-lp-gpu
     PRIVATE
+    ${MPI_C_LIBRARIES}
+    linear_layer_kernel
     cudnn
     CUDA::cudart
     CUDA::cuda_driver
