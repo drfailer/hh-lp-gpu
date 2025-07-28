@@ -41,7 +41,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
     }
 
-    ~NetworkGraph() { CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle)); }
+    virtual ~NetworkGraph() { CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle)); }
 
   public:
     template <typename LayerType, typename... Types>
@@ -49,8 +49,6 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         layer_tasks_.add_layer(
             std::make_shared<LayerType>(std::forward<Types>(args)...));
     }
-
-    void cut_layer() { layer_tasks_.cut_layer(); }
 
     template <typename LossType, typename... Types>
     void set_loss(Types... args) {
@@ -66,28 +64,19 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   public:
-    void build() {
+    virtual void build() {
         // connect the init tasks
         this->edges(init_state_manager_, layer_tasks_.inits.front());
-        for (size_t i = 0; i < layer_tasks_.inits.size() - 1; ++i) {
-            this->edges(layer_tasks_.inits[i], layer_tasks_.inits[i + 1]);
-        }
         this->edges(layer_tasks_.inits.back(), init_state_manager_);
 
         // connect the fwds tasks
         this->edges(pipeline_state_manager_, layer_tasks_.fwds.front());
-        for (size_t i = 0; i < layer_tasks_.fwds.size() - 1; ++i) {
-            this->edges(layer_tasks_.fwds[i], layer_tasks_.fwds[i + 1]);
-        }
         this->edges(layer_tasks_.fwds.back(), pipeline_state_manager_);
 
         // connect loss and bwds tasks
         if (loss_task_) {
             this->edges(pipeline_state_manager_, loss_task_);
             this->edges(loss_task_, layer_tasks_.bwds.back());
-            for (size_t i = layer_tasks_.bwds.size() - 1; i >= 1; --i) {
-                this->edges(layer_tasks_.bwds[i], layer_tasks_.bwds[i - 1]);
-            }
             this->edges(init_state_manager_, loss_task_);
             this->edges(loss_task_, init_state_manager_);
             init_state_->has_loss = true;
@@ -96,9 +85,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         // connect optimizer
         if (optimizer_task_) {
             optimizer_state_->nb_layers(layer_tasks_.layer_count);
-            for (size_t i = 0; i < layer_tasks_.bwds.size(); ++i) {
-                this->edges(layer_tasks_.bwds[i], optimizer_task_);
-            }
+            this->edges(layer_tasks_.bwds.front(), optimizer_task_);
             this->edges(optimizer_task_, optimizer_state_manager_);
             this->edges(optimizer_state_manager_, pipeline_state_manager_);
         }
@@ -169,7 +156,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         return std::get<std::shared_ptr<OutType>>(*this->getBlockingResult());
     }
 
-  private:
+  protected:
     std::shared_ptr<InitState> init_state_ = nullptr;
     std::shared_ptr<InitStateManager> init_state_manager_ = nullptr;
     std::shared_ptr<PipelineState> pipeline_state_ = nullptr;
