@@ -6,7 +6,6 @@
 #include <cudnn.h>
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
-#include <log.h/log.h>
 
 struct SigmoidActivationLayer : Layer<ftype> {
     SigmoidActivationLayer() : Layer({}) {

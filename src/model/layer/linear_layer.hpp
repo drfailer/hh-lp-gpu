@@ -4,7 +4,6 @@
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "layer.hpp"
-#include "log.h/log.h"
 #include <cudnn.h>
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>

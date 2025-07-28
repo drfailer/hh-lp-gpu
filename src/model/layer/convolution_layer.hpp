@@ -3,7 +3,6 @@
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "layer.hpp"
-#include "log.h/log.h"
 #include <cassert>
 #include <cudnn.h>
 #include <cudnn_cnn.h>

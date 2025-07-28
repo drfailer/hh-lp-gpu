@@ -8,7 +8,7 @@
 #include "../types.hpp"
 #include "state.hpp"
 #include <hedgehog/hedgehog.h>
-#include <log.h/log.h>
+#include "../tools/log.h"
 
 #define PipelineStateIn                                                        \
     TrainingData<ftype>, PredictionData<ftype>, FwdData<ftype>, OptData<ftype>

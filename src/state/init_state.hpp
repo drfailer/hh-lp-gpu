@@ -5,7 +5,6 @@
 #include "../types.hpp"
 #include "state.hpp"
 #include <hedgehog/hedgehog.h>
-#include <log.h/log.h>
 
 #define InitStateIn                                                            \
     CreateParameterData<ftype, CreateParameterTarget::Network>,                \
