@@ -1,6 +1,6 @@
 #ifndef TOOLS_GPU_H
 #define TOOLS_GPU_H
-#include "log.h/log.h"
+#include <log.h/log.h>
 #include <cublas_v2.h>
 #include <cuda_runtime_api.h>
 #include <iostream>
