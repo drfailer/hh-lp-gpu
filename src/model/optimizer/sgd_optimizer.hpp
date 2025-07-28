@@ -37,7 +37,7 @@ struct SGDOptimizer : Optimizer<ftype> {
         }
     }
 
-    std::shared_ptr<Optimizer<ftype>> create() const override {
+    std::shared_ptr<Optimizer<ftype>> copy() const override {
         return std::make_shared<SGDOptimizer>(learning_rate);
     }
 };

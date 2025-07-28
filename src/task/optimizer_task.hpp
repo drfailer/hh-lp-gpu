@@ -39,7 +39,7 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
     }
 
     std::shared_ptr<hh::AbstractTask<OptimizerTaskIO>> copy() override {
-        return std::make_shared<OptimizerTask>(optimizer_,
+        return std::make_shared<OptimizerTask>(optimizer_->copy(),
                                                this->numberThreads());
     }
 
