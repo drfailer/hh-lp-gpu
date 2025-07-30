@@ -43,10 +43,9 @@ template <typename T> class Tensor {
         this->reshape(other.dims(), other.strides());
     }
 
-    // BUG: rewrite this!
     auto random_init(T lower_bound, T higher_bound, int seed = 0) {
-        return memset_random_uniform_gpu<ftype>(td_->data, td_->size, -0.5, 0.5,
-                                                seed);
+        return memset_random_uniform_gpu<ftype>(
+            td_->data, td_->size, lower_bound, higher_bound, seed);
     }
 
     auto zero() { return memset_gpu<ftype>(td_->data, td_->size, 0); }
