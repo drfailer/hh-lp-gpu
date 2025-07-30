@@ -15,8 +15,20 @@
         InitData<ftype, InitTarget::Layer>
 #define InitTaskIO 2, InitTaskIn, InitTaskOut
 
-// We might want to have only one LayerTask that does everything (we don't need
-// parallelisation in this task).
+// TODO: tmp function
+template <typename T>
+LayerData<T> parameter_to_layer_data(Parameters<T> &&params) {
+    LayerData<T> ld;
+    if (!params.weights.empty()) {
+        ld.dw.reshape_like(params.weights);
+        ld.w = std::move(params.weights);
+    }
+    if (!params.biases.empty()) {
+        ld.db.reshape_like(params.biases);
+        ld.b = std::move(params.biases);
+    }
+    return ld;
+}
 
 class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
   public:
@@ -39,9 +51,8 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
                  CreateParameterData<ftype, CreateParameterTarget::Layer>>
                      data) override {
         for (auto &layer : layers_) {
-            data->states->layers.emplace_back(layer->create_parameters());
-            // TODO: this should not be done here v
-            data->states->layers.back().create_gradient_tensors();
+            LayerData<ftype> ld = parameter_to_layer_data(layer->create_parameters());
+            data->states->layers.push_back(ld);
         }
         this->addResult(data);
     }

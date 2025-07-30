@@ -13,27 +13,27 @@ struct SGDOptimizer : Optimizer<ftype> {
 
     SGDOptimizer(ftype learning_rate) : learning_rate(learning_rate) {}
 
-    void optimize(cuda_data_t cuda_data, LayerState<ftype> &state) override {
+    void optimize(cuda_data_t cuda_data, LayerData<ftype> &state) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
 
         // params = params - learning_rate * gradients
 
         ftype alpha = -learning_rate, beta = 1;
 
-        if (!state.parameters.weights.empty()) {
+        if (!state.w.empty()) {
             CUDNN_CHECK(cudnnAddTensor(cuda_data.cudnn_handle, &alpha,
-                                       state.gradients.weights.desc(),
-                                       state.gradients.weights.data(), &beta,
-                                       state.parameters.weights.desc(),
-                                       state.parameters.weights.data()));
+                                       state.dw.desc(),
+                                       state.dw.data(), &beta,
+                                       state.w.desc(),
+                                       state.w.data()));
         }
 
-        if (!state.parameters.biases.empty()) {
+        if (!state.b.empty()) {
             CUDNN_CHECK(cudnnAddTensor(cuda_data.cudnn_handle, &alpha,
-                                       state.gradients.biases.desc(),
-                                       state.gradients.biases.data(), &beta,
-                                       state.parameters.biases.desc(),
-                                       state.parameters.biases.data()));
+                                       state.db.desc(),
+                                       state.db.data(), &beta,
+                                       state.b.desc(),
+                                       state.b.data()));
         }
     }
 

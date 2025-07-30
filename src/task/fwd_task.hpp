@@ -33,7 +33,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
 
         for (auto layer : layers_) {
             auto &state = states->layers[layer->idx];
-            state.input = input;
+            state.x = *input;
             input = &layer->fwd(cuda_data_, state, *input);
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         }

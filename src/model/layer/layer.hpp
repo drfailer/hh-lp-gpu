@@ -2,7 +2,8 @@
 #define MODEL_LAYER_LAYER_H
 #include "../../model/data/cuda_data.hpp"
 #include "../../model/data/dims.hpp"
-#include "../../model/data/layer_state.hpp"
+#include "../../model/data/layer_data.hpp"
+#include "../../model/data/parameters.hpp"
 
 template <typename T> struct Layer {
     size_t idx = 0;
@@ -23,11 +24,11 @@ template <typename T> struct Layer {
     //       memory if needed.
 
     virtual Parameters<T> create_parameters() const = 0;
-    virtual tensor::dims_t init(cuda_data_t cuda_data, LayerState<T> &state,
+    virtual tensor::dims_t init(cuda_data_t cuda_data, LayerData<T> &state,
                                tensor::dims_t input_dims) = 0;
-    virtual tensor::Tensor<T> const &fwd(cuda_data_t cuda_data, LayerState<T> &states,
+    virtual tensor::Tensor<T> const &fwd(cuda_data_t cuda_data, LayerData<T> &states,
                                  tensor::Tensor<T> const &input) = 0;
-    virtual tensor::Tensor<T> const &bwd(cuda_data_t cuda_data, LayerState<T> &states,
+    virtual tensor::Tensor<T> const &bwd(cuda_data_t cuda_data, LayerData<T> &states,
                                  tensor::Tensor<T> const &input,
                                  tensor::Tensor<T> const &output_gradient) = 0;
 };

@@ -43,7 +43,7 @@ class LinearLayer : public Layer<ftype> {
         return parameters;
     }
 
-    tensor::dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+    tensor::dims_t init(cuda_data_t cuda_data, LayerData<ftype> &state,
                         tensor::dims_t input_dims) override {
         int inputs = input_dims[1] * input_dims[2] * input_dims[3];
         int outputs = this->dims.outputs;
@@ -53,47 +53,44 @@ class LinearLayer : public Layer<ftype> {
         this->dims.inputs = inputs;
         this->dims.batch_size = batch_size;
 
-        state.output.reshape(batch_size, 1, outputs, 1);
-        state.gradients.input.reshape(batch_size, 1, inputs, 1);
+        state.y.reshape(batch_size, 1, outputs, 1);
+        state.dx.reshape(batch_size, 1, inputs, 1);
         return output_dims;
     }
 
     tensor::Tensor<ftype> const &
-    fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+    fwd(cuda_data_t cuda_data, LayerData<ftype> &state,
         tensor::Tensor<ftype> const &input) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
         CUDNN_CHECK(hhlpLinearForward(
-            cuda_data.cudnn_handle, state.parameters.weights.data(),
-            state.parameters.biases.data(), input.data(), state.output.data(),
-            this->dims.inputs, this->dims.outputs, this->dims.batch_size,
-            CUDNN_DATA_TYPE));
-        return state.output;
+            cuda_data.cudnn_handle, state.w.data(), state.b.data(),
+            input.data(), state.y.data(), this->dims.inputs, this->dims.outputs,
+            this->dims.batch_size, CUDNN_DATA_TYPE));
+        return state.y;
     }
 
     tensor::Tensor<ftype> const &
-    bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+    bwd(cuda_data_t cuda_data, LayerData<ftype> &state,
         tensor::Tensor<ftype> const &input,
         tensor::Tensor<ftype> const &output_gradient) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
 
         // grads_b = error
         CUDNN_CHECK(hhlpLinearBackwardBias(
-            cuda_data.cudnn_handle, output_gradient.data(),
-            state.gradients.biases.data(), this->dims.outputs,
-            this->dims.batch_size, CUDNN_DATA_TYPE));
+            cuda_data.cudnn_handle, output_gradient.data(), state.db.data(),
+            this->dims.outputs, this->dims.batch_size, CUDNN_DATA_TYPE));
         // w_grad = err * fwd_inputT
         CUDNN_CHECK(hhlpLinearBackwardWeights(
             cuda_data.cudnn_handle, output_gradient.data(), input.data(),
-            state.gradients.weights.data(), this->dims.outputs,
-            this->dims.inputs, this->dims.batch_size, CUDNN_DATA_TYPE));
+            state.dw.data(), this->dims.outputs, this->dims.inputs,
+            this->dims.batch_size, CUDNN_DATA_TYPE));
         // output_err = errT * weights
         CUDNN_CHECK(hhlpLinearBackwardData(
-            cuda_data.cudnn_handle, output_gradient.data(),
-            state.parameters.weights.data(), state.gradients.input.data(),
-            this->dims.outputs, this->dims.inputs, this->dims.batch_size,
-            CUDNN_DATA_TYPE));
-        return state.gradients.input;
+            cuda_data.cudnn_handle, output_gradient.data(), state.w.data(),
+            state.dx.data(), this->dims.outputs, this->dims.inputs,
+            this->dims.batch_size, CUDNN_DATA_TYPE));
+        return state.dx;
     }
 
   private:

@@ -103,7 +103,7 @@ struct ConvolutionLayer : Layer<ftype> {
         return parameters;
     }
 
-    tensor::dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+    tensor::dims_t init(cuda_data_t cuda_data, LayerData<ftype> &state,
                         tensor::dims_t input_dims) override {
         tensor::dims_t output_dims;
 
@@ -116,13 +116,13 @@ struct ConvolutionLayer : Layer<ftype> {
         assert(input_height == input_dims[2]);
         assert(input_width == input_dims[3]);
 
-        state.gradients.input.reshape(input_dims);
+        state.dx.reshape(input_dims);
 
         CUDNN_CHECK(cudnnGetConvolutionNdForwardOutputDim(
             convolution_descriptor, input_descriptor, filter_descriptor,
             output_dims.size(), output_dims.data()));
 
-        state.output.reshape(output_dims);
+        state.y.reshape(output_dims);
 
         if (use_biases) {
             assert(output_dims[1] == dims.outputs);
@@ -130,13 +130,13 @@ struct ConvolutionLayer : Layer<ftype> {
 
         CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(
             cuda_data.cudnn_handle, input_descriptor, filter_descriptor,
-            convolution_descriptor, state.output.desc(), fwd_algo,
+            convolution_descriptor, state.y.desc(), fwd_algo,
             &convolution_fw_ws_size));
         cudaFree(convolution_fw_ws);
         CUDA_CHECK(alloc_gpu(&convolution_fw_ws, convolution_fw_ws_size));
 
         CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(
-            cuda_data.cudnn_handle, filter_descriptor, state.output.desc(),
+            cuda_data.cudnn_handle, filter_descriptor, state.y.desc(),
             convolution_descriptor, input_descriptor, bwd_data_algo,
             &convolution_bw_data_ws_size));
         cudaFree(convolution_bw_data_ws);
@@ -144,7 +144,7 @@ struct ConvolutionLayer : Layer<ftype> {
             alloc_gpu(&convolution_bw_data_ws, convolution_bw_data_ws_size));
 
         CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(
-            cuda_data.cudnn_handle, input_descriptor, state.output.desc(),
+            cuda_data.cudnn_handle, input_descriptor, state.y.desc(),
             convolution_descriptor, filter_descriptor, bwd_filter_algo,
             &convolution_bw_filter_ws_size));
         cudaFree(convolution_bw_filter_ws);
@@ -154,60 +154,57 @@ struct ConvolutionLayer : Layer<ftype> {
     }
 
     tensor::Tensor<ftype> const &
-    fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+    fwd(cuda_data_t cuda_data, LayerData<ftype> &state,
         tensor::Tensor<ftype> const &input) override {
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnConvolutionForward(
             cuda_data.cudnn_handle, &alpha, input.desc(), input.data(),
-            filter_descriptor, state.parameters.weights.data(),
-            convolution_descriptor, fwd_algo, convolution_fw_ws,
-            convolution_fw_ws_size, &beta, state.output.desc(),
-            state.output.data()));
+            filter_descriptor, state.w.data(), convolution_descriptor, fwd_algo,
+            convolution_fw_ws, convolution_fw_ws_size, &beta, state.y.desc(),
+            state.y.data()));
 
         alpha = 1;
         beta = 1;
         CUDNN_CHECK(cudnnAddTensor(cuda_data.cudnn_handle, &alpha,
-                                   state.parameters.biases.desc(),
-                                   state.parameters.biases.data(), &beta,
-                                   state.output.desc(), state.output.data()));
-        return state.output;
+                                   state.b.desc(), state.b.data(), &beta,
+                                   state.y.desc(), state.y.data()));
+        return state.y;
     }
 
     tensor::Tensor<ftype> const &
-    bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+    bwd(cuda_data_t cuda_data, LayerData<ftype> &state,
         tensor::Tensor<ftype> const &input,
         tensor::Tensor<ftype> const &output_gradient) override {
         ftype alpha = 1.0 / dims.batch_size, beta = 0;
         // The shape of the input error might be wrong if the next layer is
         // linear, so we need to use the shape of the output.
-        auto output_gradient_descriptor = state.output.desc();
+        auto output_gradient_descriptor = state.y.desc();
         auto output_gradient_data = output_gradient.data();
 
         // compute biases gradient (gradient / biases)
         CUDNN_CHECK(cudnnConvolutionBackwardBias(
             cuda_data.cudnn_handle, &alpha, output_gradient_descriptor,
-            output_gradient_data, &beta, state.gradients.biases.desc(),
-            state.gradients.biases.data()));
+            output_gradient_data, &beta, state.db.desc(), state.db.data()));
 
         // compute weights gradient (gradient / weights)
         CUDNN_CHECK(cudnnConvolutionBackwardFilter(
-            cuda_data.cudnn_handle, &alpha, state.input->desc(),
-            state.input->data(), output_gradient_descriptor,
-            output_gradient_data, convolution_descriptor, bwd_filter_algo,
-            convolution_bw_filter_ws, convolution_bw_filter_ws_size, &beta,
-            filter_descriptor, state.gradients.weights.data()));
+            cuda_data.cudnn_handle, &alpha, state.x.desc(), state.x.data(),
+            output_gradient_descriptor, output_gradient_data,
+            convolution_descriptor, bwd_filter_algo, convolution_bw_filter_ws,
+            convolution_bw_filter_ws_size, &beta, filter_descriptor,
+            state.dw.data()));
 
         // compute the output error (gradient / data)
         alpha = 1;
         CUDNN_CHECK(cudnnConvolutionBackwardData(
-            cuda_data.cudnn_handle, &alpha, filter_descriptor,
-            state.parameters.weights.data(), output_gradient_descriptor,
-            output_gradient_data, convolution_descriptor, bwd_data_algo,
-            convolution_bw_data_ws, convolution_bw_data_ws_size, &beta,
-            state.gradients.input.desc(), state.gradients.input.data()));
+            cuda_data.cudnn_handle, &alpha, filter_descriptor, state.w.data(),
+            output_gradient_descriptor, output_gradient_data,
+            convolution_descriptor, bwd_data_algo, convolution_bw_data_ws,
+            convolution_bw_data_ws_size, &beta, state.dx.desc(),
+            state.dx.data()));
 
-        return state.gradients.input;
+        return state.dx;
     }
 };
 

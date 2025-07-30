@@ -1,6 +1,5 @@
 #include "layers.hpp"
 #include "../src/graph/network_graph.hpp"
-#include "../src/model/data/layer_state.hpp"
 #include "../src/model/layer/convolution_layer.hpp"
 #include "../src/model/layer/linear_layer.hpp"
 #include "../src/model/layer/pooling_layer.hpp"
@@ -21,15 +20,15 @@ ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
 
-void init_test_parameters(LayerState<ftype> &state, dims_t dims, ftype value) {
+void init_test_parameters(LayerData<ftype> &state, dims_t dims, ftype value) {
     int weights_size = dims.inputs * dims.outputs;
     std::vector<ftype> weights(weights_size, value);
     std::vector<ftype> biases(dims.outputs, value);
-    state.parameters.weights.from_host(weights.data());
-    state.parameters.biases.from_host(biases.data());
+    state.w.from_host(weights.data());
+    state.b.from_host(biases.data());
 }
 
-void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
+void init_test_parameters(LayerData<ftype> &state, dims_t dims) {
     std::vector<ftype> weights(dims.inputs * dims.outputs);
     std::vector<ftype> biases(dims.outputs);
 
@@ -43,8 +42,8 @@ void init_test_parameters(LayerState<ftype> &state, dims_t dims) {
     for (int i = 0; i < dims.outputs; ++i) {
         biases[i] = i + 1;
     }
-    state.parameters.weights.from_host(weights.data());
-    state.parameters.biases.from_host(biases.data());
+    state.w.from_host(weights.data());
+    state.b.from_host(biases.data());
 }
 
 int mnist_get_label(ftype *arr) {
@@ -103,7 +102,7 @@ UTest(linear_layer_fwd) {
     input_gpu.from_host(input_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state(linear_layer.create_parameters());
+    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
 
@@ -129,8 +128,7 @@ UTest(linear_layer_bwd) {
     err_gpu.from_host(input_err_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state(linear_layer.create_parameters());
-    state.create_gradient_tensors();
+    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
     init_test_parameters(state, dims);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
 
@@ -151,7 +149,8 @@ UTest(linear_layer_fwd_batched) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[batch_size * inputs] = {0},
                                   output_host[batch_size * outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1},
+                                    {inputs, inputs, 1, 1});
 
     for (size_t i = 0; i < batch_size * inputs; ++i) {
         input_host[i] = i + 1;
@@ -160,7 +159,7 @@ UTest(linear_layer_fwd_batched) {
     input_gpu.from_host(input_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state(linear_layer.create_parameters());
+    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
     init_test_parameters(state, dims, 1);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
                       {batch_size, 1, inputs, 1});
@@ -193,17 +192,17 @@ UTest(linear_layer_bwd_batched) {
     ftype output_err_host[batch_size * inputs] = {0};
     ftype biases_gradient_host[outputs] = {0};
     ftype weights_gradient_host[inputs * outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1},
+                                    {inputs, inputs, 1, 1});
     tensor::Tensor<ftype> input_err_gpu({batch_size, 1, outputs, 1},
-                                {outputs, outputs, 1, 1});
+                                        {outputs, outputs, 1, 1});
 
     // init input and output gpu buffers
     input_gpu.from_host(input_host);
     input_err_gpu.from_host(input_err_host);
 
     LinearLayer linear_layer(inputs, outputs);
-    LayerState<ftype> state(linear_layer.create_parameters());
-    state.create_gradient_tensors();
+    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
     init_test_parameters(state, dims);
     linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
                       {batch_size, 1, inputs, 1});
@@ -223,7 +222,7 @@ UTest(linear_layer_bwd_batched) {
     uassert_equal(output_err_host[6], 345);
     uassert_equal(output_err_host[7], 456);
 
-    state.gradients.biases.to_host(biases_gradient_host);
+    state.db.to_host(biases_gradient_host);
     for (size_t i = 0; i < outputs; ++i) {
         ftype sum = 0;
         for (size_t b = 0; b < batch_size; ++b) {
@@ -232,7 +231,7 @@ UTest(linear_layer_bwd_batched) {
         ftype expected = sum / batch_size;
         uassert_float_equal(biases_gradient_host[i], expected, 1e-6);
     }
-    state.gradients.weights.to_host(weights_gradient_host);
+    state.dw.to_host(weights_gradient_host);
     for (size_t i = 0; i < outputs; ++i) {
         for (size_t j = 0; j < inputs; ++j) {
             ftype sum = 0;
@@ -256,7 +255,7 @@ UTest(sigmoid_activation_fwd) {
     input_gpu.from_host(input_host);
 
     SigmoidActivationLayer sigmoid_layer;
-    LayerState<ftype> state;
+    LayerData<ftype> state;
     sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
     sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu)
         .to_host(output_host);
@@ -279,7 +278,7 @@ UTest(sigmoid_activation_bwd) {
     err_gpu.from_host(err_host);
 
     SigmoidActivationLayer sigmoid_layer;
-    LayerState<ftype> state;
+    LayerData<ftype> state;
     sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
     sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu);
     sigmoid_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu, err_gpu)
@@ -301,32 +300,28 @@ UTest(sgd_optimizer) {
     ftype biases[outputs] = {1, 2};
     ftype biases_gradients[outputs] = {1, 1};
     tensor::dims_t weights_dims = {1, 1, inputs, outputs},
-                  biases_dims = {1, 1, outputs, 1};
-    LayerState<ftype> state;
+                   biases_dims = {1, 1, outputs, 1};
+    LayerData<ftype> state;
     SGDOptimizer optimizer_factory(learning_rate);
 
-    state.parameters.weights.reshape(weights_dims);
-    state.parameters.biases.reshape(biases_dims);
-    state.gradients.weights.reshape(weights_dims);
-    state.gradients.biases.reshape(biases_dims);
+    state.w.reshape(weights_dims);
+    state.b.reshape(biases_dims);
+    state.dw.reshape(weights_dims);
+    state.db.reshape(biases_dims);
 
-    CUDA_CHECK(memcpy_host_to_gpu(state.parameters.weights.data(), weights,
+    CUDA_CHECK(memcpy_host_to_gpu(state.w.data(), weights, inputs * outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.dw.data(), weights_gradients,
                                   inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.weights.data(),
-                                  weights_gradients, inputs * outputs));
-    CUDA_CHECK(
-        memcpy_host_to_gpu(state.parameters.biases.data(), biases, outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.gradients.biases.data(),
-                                  biases_gradients, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.b.data(), biases, outputs));
+    CUDA_CHECK(memcpy_host_to_gpu(state.db.data(), biases_gradients, outputs));
 
     auto sgd = optimizer_factory.copy();
     sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, state);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
-    CUDA_CHECK(memcpy_gpu_to_host(
-        result_weights, state.parameters.weights.data(), outputs * inputs));
-    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.parameters.biases.data(),
-                                  outputs));
+    CUDA_CHECK(
+        memcpy_gpu_to_host(result_weights, state.w.data(), outputs * inputs));
+    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.b.data(), outputs));
 
     for (size_t i = 0; i < inputs * outputs; ++i) {
         uassert_float_equal(result_weights[i],
