@@ -98,7 +98,7 @@ UTest(linear_layer_fwd) {
     constexpr int outputs = 3;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
-    Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     input_gpu.from_host(input_host);
 
@@ -121,8 +121,8 @@ UTest(linear_layer_bwd) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3, 4},
           input_err_host[outputs] = {100, 10, 1}, output_err_host[inputs] = {0};
-    Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
-    Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     // init input and output gpu buffers
     input_gpu.from_host(input_host);
@@ -151,7 +151,7 @@ UTest(linear_layer_fwd_batched) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[batch_size * inputs] = {0},
                                   output_host[batch_size * outputs] = {0};
-    Tensor<ftype> input_gpu({batch_size, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     for (size_t i = 0; i < batch_size * inputs; ++i) {
         input_host[i] = i + 1;
@@ -192,9 +192,9 @@ UTest(linear_layer_bwd_batched) {
     ftype input_err_host[batch_size * outputs] = {1, 10, 100, 100, 10, 1};
     ftype output_err_host[batch_size * inputs] = {0};
     ftype biases_gradient_host[outputs] = {0};
-    ftype weights_gradient_host[outputs * outputs] = {0};
-    Tensor<ftype> input_gpu({batch_size, 1, inputs, 1}, {inputs, inputs, 1, 1});
-    Tensor<ftype> input_err_gpu({batch_size, 1, outputs, 1},
+    ftype weights_gradient_host[inputs * outputs] = {0};
+    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_err_gpu({batch_size, 1, outputs, 1},
                                 {outputs, outputs, 1, 1});
 
     // init input and output gpu buffers
@@ -251,7 +251,7 @@ UTest(sigmoid_activation_fwd) {
     constexpr int outputs = 3;
     constexpr int inputs = 3;
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
-    Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     input_gpu.from_host(input_host);
 
@@ -272,8 +272,8 @@ UTest(sigmoid_activation_bwd) {
     ftype input_host[inputs] = {1, 2, 3, 4, 5, 6},
           err_host[inputs] = {10, 10, 10, 10, 10, 10},
           output_host[outputs] = {0};
-    Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
-    Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
 
     input_gpu.from_host(input_host);
     err_gpu.from_host(err_host);
@@ -300,7 +300,7 @@ UTest(sgd_optimizer) {
     ftype weights_gradients[inputs * outputs] = {1, 1, 1, 1, 1, 1};
     ftype biases[outputs] = {1, 2};
     ftype biases_gradients[outputs] = {1, 1};
-    tensor_dims_t weights_dims = {1, 1, inputs, outputs},
+    tensor::dims_t weights_dims = {1, 1, inputs, outputs},
                   biases_dims = {1, 1, outputs, 1};
     LayerState<ftype> state;
     SGDOptimizer optimizer_factory(learning_rate);
@@ -345,7 +345,7 @@ UTest(inference) {
     constexpr size_t outputs = 3;
     constexpr size_t inputs = 3;
     ftype input_host[inputs] = {1, 1, 1}, output_host[outputs] = {0};
-    Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
     NetworkGraph graph;
 
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));

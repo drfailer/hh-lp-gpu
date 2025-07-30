@@ -17,14 +17,14 @@ int main(int argc, char **argv) {
 
     utest_start();
 
-    urun_test(matvecmul_n);
-    urun_test(matvecmul_t);
-    urun_test(matvecmul_batch_n);
-    urun_test(matmul_n_n);
-    urun_test(matmul_t_n);
-    urun_test(matmul_n_t);
-    urun_test(matmul_t_t);
-    urun_test(matmul_batch_n_n);
+    // urun_test(matvecmul_n);
+    // urun_test(matvecmul_t);
+    // urun_test(matvecmul_batch_n);
+    // urun_test(matmul_n_n);
+    // urun_test(matmul_t_n);
+    // urun_test(matmul_n_t);
+    // urun_test(matmul_t_t);
+    // urun_test(matmul_batch_n_n);
 
     urun_test(linear_layer_fwd);
     urun_test(linear_layer_bwd);

@@ -21,8 +21,8 @@ struct SigmoidActivationLayer : Layer<ftype> {
 
     Parameters<ftype> create_parameters() const override { return {}; }
 
-    tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
-                       tensor_dims_t input_dims) override {
+    tensor::dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+                        tensor::dims_t input_dims) override {
         int inputs = input_dims[1] * input_dims[2] * input_dims[3];
         int outputs = inputs;
         int batch_size = input_dims[0];
@@ -30,34 +30,35 @@ struct SigmoidActivationLayer : Layer<ftype> {
         this->dims.outputs = outputs;
         this->dims.batch_size = input_dims[0];
 
-        state.output.reshape({batch_size, 1, outputs, 1});
-        state.gradients.input.reshape({batch_size, 1, inputs, 1});
+        state.output.reshape(batch_size, 1, outputs, 1);
+        state.gradients.input.reshape(batch_size, 1, inputs, 1);
         return input_dims;
     }
 
-    Tensor<ftype> const &fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                             Tensor<ftype> const &input) override {
+    tensor::Tensor<ftype> const &
+    fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+        tensor::Tensor<ftype> const &input) override {
         INFO_GRP("SigmoidActivationLayer FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnActivationForward(
-            cuda_data.cudnn_handle, sigmoid_, &alpha, input.descriptor(),
-            input.data(), &beta, state.output.descriptor(),
-            state.output.data()));
+            cuda_data.cudnn_handle, sigmoid_, &alpha, input.desc(),
+            input.data(), &beta, state.output.desc(), state.output.data()));
         return state.output;
     }
 
-    Tensor<ftype> const &bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                             Tensor<ftype> const &input,
-                             Tensor<ftype> const &output_gradient) override {
+    tensor::Tensor<ftype> const &
+    bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+        tensor::Tensor<ftype> const &input,
+        tensor::Tensor<ftype> const &output_gradient) override {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnActivationBackward(
-            cuda_data.cudnn_handle, sigmoid_, &alpha, state.output.descriptor(),
-            state.output.data(), output_gradient.descriptor(),
-            output_gradient.data(), input.descriptor(), input.data(), &beta,
-            state.gradients.input.descriptor(), state.gradients.input.data()));
+            cuda_data.cudnn_handle, sigmoid_, &alpha, state.output.desc(),
+            state.output.data(), output_gradient.desc(), output_gradient.data(),
+            input.desc(), input.data(), &beta, state.gradients.input.desc(),
+            state.gradients.input.data()));
         return state.gradients.input;
     }
 

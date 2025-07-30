@@ -3,8 +3,8 @@
 #include "parameters.hpp"
 
 template <typename T> struct LayerState {
-    Tensor<T> const *input = nullptr; // input of the forward pass (gpu)
-    Tensor<T> output;                 // output of the forward pass (gpu)
+    tensor::Tensor<T> const *input = nullptr; // input of the forward pass (gpu)
+    tensor::Tensor<T> output;                 // output of the forward pass (gpu)
     Parameters<T> parameters;
     Gradients<T> gradients;
 
@@ -14,10 +14,10 @@ template <typename T> struct LayerState {
     }
 
     void create_gradient_tensors() {
-        if (this->parameters.weights.data()) {
+        if (!this->parameters.weights.empty()) {
             this->gradients.weights.reshape_like(this->parameters.weights);
         }
-        if (this->parameters.biases.data()) {
+        if (!this->parameters.biases.empty()) {
             this->gradients.biases.reshape_like(this->parameters.biases);
         }
     }

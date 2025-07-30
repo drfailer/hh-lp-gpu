@@ -23,8 +23,8 @@ template <typename T> class BatchGenerator {
             int gt_h = input_data.datas[0].ground_truth.dims()[2];
             int gt_w = input_data.datas[0].ground_truth.dims()[3];
 
-            batch.input.reshape({batch_size, c, h, w});
-            batch.ground_truth.reshape({batch_size, gt_c, gt_h, gt_w});
+            batch.input.reshape(batch_size, c, h, w);
+            batch.ground_truth.reshape(batch_size, gt_c, gt_h, gt_w);
 
             for (size_t i = 0; i < batch_size; ++i) {
                 CUDA_CHECK(

@@ -119,16 +119,16 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * will be done during the computation to ensure maximum performance.
      */
     void init_state(std::shared_ptr<NNState<ftype>> state,
-                    tensor_dims_t input_dims) {
+                    tensor::dims_t input_dims) {
         this->pushData(std::make_shared<InitData<ftype>>(state, input_dims));
         (void)this->get<InitData<ftype>>();
         this->cleanGraph();
     }
 
-    Tensor<ftype> const &predict(std::shared_ptr<NNState<ftype>> state,
-                                 Tensor<ftype> const &input) {
+    tensor::Tensor<ftype> const &predict(std::shared_ptr<NNState<ftype>> state,
+                                 tensor::Tensor<ftype> const &input) {
         this->pushData(std::make_shared<PredictionData<ftype>>(state, &input));
-        Tensor<ftype> const *output = this->get<PredictionData<ftype>>()->input;
+        tensor::Tensor<ftype> const *output = this->get<PredictionData<ftype>>()->input;
         this->cleanGraph();
         return *output;
     }

@@ -1,6 +1,7 @@
 #ifndef MODEL_LOSS_QUADRATIC_LOSS_H
 #define MODEL_LOSS_QUADRATIC_LOSS_H
 #include "../../tools/gpu.hpp"
+#include "../../tools/tensor/tensor.hpp"
 #include "../../types.hpp"
 #include "loss.hpp"
 #include <cudnn.h>
@@ -19,9 +20,10 @@ class QuadraticLoss : public Loss<ftype> {
     ~QuadraticLoss() { cudnnDestroyOpTensorDescriptor(addition_); }
 
   public:
-    Tensor<ftype> const &fwd(cuda_data_t cuda_data, LossState<ftype> &state,
-                       Tensor<ftype> const &model_output,
-                       Tensor<ftype> const &ground_truth) override {
+    tensor::Tensor<ftype> const &
+    fwd(cuda_data_t cuda_data, LossState<ftype> &state,
+        tensor::Tensor<ftype> const &model_output,
+        tensor::Tensor<ftype> const &ground_truth) override {
         INFO_GRP("QuadraticLossTask FWD", INFO_GRP_LAYER_TASK);
         ERROR("unimplemented");
         exit(1);
@@ -30,18 +32,19 @@ class QuadraticLoss : public Loss<ftype> {
         return state.tensor;
     }
 
-    Tensor<ftype> const &bwd(cuda_data_t cuda_data, LossState<ftype> &state,
-                       Tensor<ftype> const &model_output,
-                       Tensor<ftype> const &ground_truth) override {
+    tensor::Tensor<ftype> const &
+    bwd(cuda_data_t cuda_data, LossState<ftype> &state,
+        tensor::Tensor<ftype> const &model_output,
+        tensor::Tensor<ftype> const &ground_truth) override {
         INFO_GRP("QuadraticLossTask BWD", INFO_GRP_LAYER_TASK);
         // return output - ground_truth;
         ftype alpha1 = 1, alpha2 = -1, beta = 0;
 
-        CUDNN_CHECK(cudnnOpTensor(
-            cuda_data.cudnn_handle, addition_, &alpha1,
-            model_output.descriptor(), model_output.data(), &alpha2,
-            ground_truth.descriptor(), ground_truth.data(), &beta,
-            state.tensor.descriptor(), state.tensor.data()));
+        CUDNN_CHECK(cudnnOpTensor(cuda_data.cudnn_handle, addition_, &alpha1,
+                                  model_output.desc(), model_output.data(),
+                                  &alpha2, ground_truth.desc(),
+                                  ground_truth.data(), &beta,
+                                  state.tensor.desc(), state.tensor.data()));
         return state.tensor;
     }
 

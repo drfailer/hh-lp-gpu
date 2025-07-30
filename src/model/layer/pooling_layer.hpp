@@ -34,9 +34,9 @@ struct PoolingLayer : Layer<ftype> {
 
     Parameters<ftype> create_parameters() const override { return {}; }
 
-    tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
-                       tensor_dims_t input_dims) override {
-        tensor_dims_t output_dims;
+    tensor::dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+                        tensor::dims_t input_dims) override {
+        tensor::dims_t output_dims;
         cudnnSetTensorNdDescriptorEx(input_descriptor, CUDNN_TENSOR_NCHW,
                                      CUDNN_DATA_TYPE, input_dims.size(),
                                      input_dims.data());
@@ -48,31 +48,32 @@ struct PoolingLayer : Layer<ftype> {
         return output_dims;
     }
 
-    Tensor<ftype> const &fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                             Tensor<ftype> const &input) override {
+    tensor::Tensor<ftype> const &
+    fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+        tensor::Tensor<ftype> const &input) override {
         ftype alpha = 1;
         ftype beta = 0;
 
         CUDNN_CHECK(cudnnPoolingForward(
-            cuda_data.cudnn_handle, pooling_descriptor, &alpha,
-            input.descriptor(), input.data(), &beta, state.output.descriptor(),
-            state.output.data()));
+            cuda_data.cudnn_handle, pooling_descriptor, &alpha, input.desc(),
+            input.data(), &beta, state.output.desc(), state.output.data()));
         return state.output;
     }
 
-    Tensor<ftype> const &bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                             Tensor<ftype> const &input,
-                             Tensor<ftype> const &output_gradient) override {
-        auto error_descriptor = state.output.descriptor();
+    tensor::Tensor<ftype> const &
+    bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+        tensor::Tensor<ftype> const &input,
+        tensor::Tensor<ftype> const &output_gradient) override {
+        auto error_descriptor = state.output.desc();
         auto error_data = output_gradient.data();
         ftype alpha = 1;
         ftype beta = 0;
 
         CUDNN_CHECK(cudnnPoolingBackward(
             cuda_data.cudnn_handle, pooling_descriptor, &alpha,
-            state.output.descriptor(), state.output.data(), error_descriptor,
-            error_data, input.descriptor(), state.input->data(), &beta,
-            state.gradients.input.descriptor(), state.gradients.input.data()));
+            state.output.desc(), state.output.data(), error_descriptor,
+            error_data, input.desc(), state.input->data(), &beta,
+            state.gradients.input.desc(), state.gradients.input.data()));
         return state.gradients.input;
     }
 };

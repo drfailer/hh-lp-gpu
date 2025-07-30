@@ -43,38 +43,24 @@ class LinearLayer : public Layer<ftype> {
         return parameters;
     }
 
-    tensor_dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
-                       tensor_dims_t input_dims) override {
+    tensor::dims_t init(cuda_data_t cuda_data, LayerState<ftype> &state,
+                        tensor::dims_t input_dims) override {
         int inputs = input_dims[1] * input_dims[2] * input_dims[3];
         int outputs = this->dims.outputs;
         auto batch_size = input_dims[0];
-        tensor_dims_t output_dims = {batch_size, 1, outputs, 1};
+        tensor::dims_t output_dims = {batch_size, 1, outputs, 1};
 
         this->dims.inputs = inputs;
         this->dims.batch_size = batch_size;
 
-        state.output.reshape({batch_size, 1, outputs, 1});
-        state.gradients.input.reshape({batch_size, 1, inputs, 1});
-
-        if (batch_size == 1) {
-            return output_dims;
-        }
-
-        // setup tensor descriptors for computing the biases gradients
-        // NOTE: the input error tensor has the same dimensions as the output,
-        // so it can be used to compute the workspace size
-        CUDNN_CHECK(cudnnGetReductionWorkspaceSize(
-            cuda_data.cudnn_handle, average_tensor, state.output.descriptor(),
-            state.gradients.biases.descriptor(),
-            &avg_biases_gradients_ws_size));
-        cudaFree(avg_biases_gradients_ws); // free if needed
-        CUDA_CHECK(
-            alloc_gpu(&avg_biases_gradients_ws, avg_biases_gradients_ws_size));
+        state.output.reshape(batch_size, 1, outputs, 1);
+        state.gradients.input.reshape(batch_size, 1, inputs, 1);
         return output_dims;
     }
 
-    Tensor<ftype> const &fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                             Tensor<ftype> const &input) override {
+    tensor::Tensor<ftype> const &
+    fwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+        tensor::Tensor<ftype> const &input) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
         CUDNN_CHECK(hhlpLinearForward(
@@ -85,9 +71,10 @@ class LinearLayer : public Layer<ftype> {
         return state.output;
     }
 
-    Tensor<ftype> const &bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
-                             Tensor<ftype> const &input,
-                             Tensor<ftype> const &output_gradient) override {
+    tensor::Tensor<ftype> const &
+    bwd(cuda_data_t cuda_data, LayerState<ftype> &state,
+        tensor::Tensor<ftype> const &input,
+        tensor::Tensor<ftype> const &output_gradient) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
 
         // grads_b = error
@@ -112,7 +99,6 @@ class LinearLayer : public Layer<ftype> {
   private:
     cudnnReduceTensorDescriptor_t average_tensor = nullptr;
     ftype *avg_biases_gradients_ws = 0;
-    size_t avg_biases_gradients_ws_size = 0;
 };
 
 #endif

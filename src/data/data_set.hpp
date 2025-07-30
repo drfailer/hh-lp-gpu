@@ -2,12 +2,12 @@
 #define DATA_DATA_SET_H
 #include <vector>
 #include <cuda_runtime_api.h>
-#include "../model/data/tensor.hpp"
+#include "../tools/tensor/tensor.hpp"
 
 template <typename T>
 struct Data {
-    Tensor<T> input;
-    Tensor<T> ground_truth;
+    tensor::Tensor<T> input;
+    tensor::Tensor<T> ground_truth;
 };
 
 template <typename T>

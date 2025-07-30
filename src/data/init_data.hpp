@@ -12,7 +12,7 @@ enum class InitTarget {
 
 template <typename T, InitTarget target = InitTarget::Network> struct InitData {
     std::shared_ptr<NNState<T>> states;
-    tensor_dims_t input_dims;
+    tensor::dims_t input_dims;
 };
 
 #endif

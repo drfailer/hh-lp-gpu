@@ -2,6 +2,7 @@
 #define MNIST_MNIST_LOADER_H
 #include "../../src/data/data_set.hpp"
 #include "../../src/tools/gpu.hpp"
+#include "../../src/tools/tensor/tensor.hpp"
 #include "../../src/types.hpp"
 #include <cassert>
 #include <fstream>
@@ -72,11 +73,11 @@ class MNISTLoader {
 
         size_t nb_batches = size / batch_size;
         assert(size % batch_size == 0);
-        std::vector<Tensor<ftype>> images(nb_batches);
+        std::vector<tensor::Tensor<ftype>> images(nb_batches);
         std::vector<ftype> batch_host(batch_size * rows * cols);
 
         for (size_t b = 0; b < nb_batches; ++b) {
-            Tensor<ftype> batch_tensor({batch_size, 1, (int)rows, (int)cols});
+            tensor::Tensor<ftype> batch_tensor(batch_size, 1, (int)rows, (int)cols);
 
             for (size_t i = 0; i < batch_size; ++i) {
                 auto image = &batch_host[i * rows * cols];
@@ -96,7 +97,7 @@ class MNISTLoader {
     }
 
     auto create_output_tensor(int *label, int batch_size) {
-        Tensor<ftype> batch_gpu({batch_size, 1, 10, 1});
+        tensor::Tensor<ftype> batch_gpu(batch_size, 1, 10, 1);
         std::vector<ftype> batch_host(batch_size * 10, 0);
 
         for (size_t i = 0; i < batch_size; ++i) {

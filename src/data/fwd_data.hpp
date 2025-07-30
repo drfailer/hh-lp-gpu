@@ -5,7 +5,7 @@
 
 template <typename T> struct FwdData {
     std::shared_ptr<NNState<T>> states;
-    Tensor<T> const *input;
+    tensor::Tensor<T> const *input;
 };
 
 #endif
