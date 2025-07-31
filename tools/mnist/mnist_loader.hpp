@@ -77,7 +77,7 @@ class MNISTLoader {
         std::vector<ftype> batch_host(batch_size * rows * cols);
 
         for (size_t b = 0; b < nb_batches; ++b) {
-            tensor::Tensor<ftype> batch_tensor(batch_size, 1, (int)rows, (int)cols);
+            auto batch_tensor = tensor::tensor<ftype>(batch_size, 1, (int)rows, (int)cols);
 
             for (size_t i = 0; i < batch_size; ++i) {
                 auto image = &batch_host[i * rows * cols];
@@ -97,7 +97,7 @@ class MNISTLoader {
     }
 
     auto create_output_tensor(int *label, int batch_size) {
-        tensor::Tensor<ftype> batch_gpu(batch_size, 1, 10, 1);
+        auto batch_gpu = tensor::tensor<ftype>(batch_size, 1, 10, 1);
         std::vector<ftype> batch_host(batch_size * 10, 0);
 
         for (size_t i = 0; i < batch_size; ++i) {

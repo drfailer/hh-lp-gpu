@@ -16,6 +16,40 @@
 #include <ostream>
 #include <unistd.h>
 
+template <typename T>
+LayerData<T> init_layer_and_get_layer_data(auto layer,
+                                           tensor::dims_t const &input_dims,
+                                           bool bwd) {
+    cuda_data_t cuda{CUDNN_HANDLE, CUBLAS_HANDLE};
+    LayerData<ftype> data;
+
+    // create and init parameters
+    auto param_shape = layer->parameters_shape();
+    data.w = tensor::tensor<ftype>(param_shape.w);
+    data.b = tensor::tensor<ftype>(param_shape.b);
+    layer->init_parameters(cuda, {data.w, data.b});
+
+    // data initialization
+    auto io_shape = layer->io_shape(input_dims);
+
+    // fwd init
+    data.x = tensor::tensor_view<const ftype>(io_shape.x, nullptr);
+    data.y = tensor::tensor<ftype>(io_shape.y);
+    layer->init_fwd(cuda, data);
+
+    if (!bwd) {
+        return data;
+    }
+
+    // bwd init
+    data.dx = tensor::tensor<ftype>(io_shape.x);
+    data.dy = tensor::tensor_view<const ftype>(io_shape.y, nullptr);
+    data.dw = tensor::tensor_like<ftype>(data.w);
+    data.db = tensor::tensor_like<ftype>(data.b);
+    layer->init_bwd(cuda, data);
+    return data;
+}
+
 ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
@@ -97,17 +131,18 @@ UTest(linear_layer_fwd) {
     constexpr int outputs = 3;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
 
     input_gpu.from_host(input_host);
 
-    LinearLayer linear_layer(inputs, outputs);
-    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
-    init_test_parameters(state, dims, 1);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
+    LinearLayer layer(inputs, outputs);
+    LayerData<ftype> ld =
+        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), false);
+    init_test_parameters(ld, dims, 1);
 
-    linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu)
-        .to_host(output_host);
+    ld.x.data(input_gpu.data());
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    ld.y.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_equal(output_host[i], 7);
@@ -120,21 +155,24 @@ UTest(linear_layer_bwd) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3, 4},
           input_err_host[outputs] = {100, 10, 1}, output_err_host[inputs] = {0};
-    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
-    tensor::Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto err_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
 
     // init input and output gpu buffers
     input_gpu.from_host(input_host);
     err_gpu.from_host(input_err_host);
 
-    LinearLayer linear_layer(inputs, outputs);
-    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
-    init_test_parameters(state, dims);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
+    LinearLayer layer(inputs, outputs);
+    LayerData<ftype> ld =
+        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+    init_test_parameters(ld, dims);
 
-    linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu);
-    linear_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu, err_gpu)
-        .to_host(output_err_host);
+    ld.x.data(input_gpu.data());
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    ld.dy.data(err_gpu.data());
+    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE},
+              {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db}, ld.dy, ld.dx);
+    ld.dx.to_host(output_err_host);
 
     uassert_equal(output_err_host[0], 123);
     uassert_equal(output_err_host[1], 234);
@@ -149,8 +187,7 @@ UTest(linear_layer_fwd_batched) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[batch_size * inputs] = {0},
                                   output_host[batch_size * outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1},
-                                    {inputs, inputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(batch_size, 1, inputs, 1);
 
     for (size_t i = 0; i < batch_size * inputs; ++i) {
         input_host[i] = i + 1;
@@ -158,14 +195,14 @@ UTest(linear_layer_fwd_batched) {
 
     input_gpu.from_host(input_host);
 
-    LinearLayer linear_layer(inputs, outputs);
-    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
-    init_test_parameters(state, dims, 1);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
-                      {batch_size, 1, inputs, 1});
+    LinearLayer layer(inputs, outputs);
+    LayerData<ftype> ld =
+        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), false);
+    init_test_parameters(ld, dims, 1);
 
-    linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu)
-        .to_host(output_host);
+    ld.x.data(input_gpu.data());
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    ld.y.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_equal(output_host[i], 7);
@@ -192,25 +229,24 @@ UTest(linear_layer_bwd_batched) {
     ftype output_err_host[batch_size * inputs] = {0};
     ftype biases_gradient_host[outputs] = {0};
     ftype weights_gradient_host[inputs * outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({batch_size, 1, inputs, 1},
-                                    {inputs, inputs, 1, 1});
-    tensor::Tensor<ftype> input_err_gpu({batch_size, 1, outputs, 1},
-                                        {outputs, outputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(batch_size, 1, inputs, 1);
+    auto input_err_gpu = tensor::tensor<ftype>(batch_size, 1, outputs, 1);
 
     // init input and output gpu buffers
     input_gpu.from_host(input_host);
     input_err_gpu.from_host(input_err_host);
 
-    LinearLayer linear_layer(inputs, outputs);
-    LayerData<ftype> state = parameter_to_layer_data(linear_layer.create_parameters());
-    init_test_parameters(state, dims);
-    linear_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state,
-                      {batch_size, 1, inputs, 1});
+    LinearLayer layer(inputs, outputs);
+    LayerData<ftype> ld =
+        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+    init_test_parameters(ld, dims);
 
-    linear_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu);
-    linear_layer
-        .bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu, input_err_gpu)
-        .to_host(output_err_host);
+    ld.x.data(input_gpu.data());
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    ld.dy.data(input_err_gpu.data());
+    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE},
+              {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db}, ld.dy, ld.dx);
+    ld.dx.to_host(output_err_host);
 
     uassert_equal(output_err_host[0], 321);
     uassert_equal(output_err_host[1], 432);
@@ -222,7 +258,7 @@ UTest(linear_layer_bwd_batched) {
     uassert_equal(output_err_host[6], 345);
     uassert_equal(output_err_host[7], 456);
 
-    state.db.to_host(biases_gradient_host);
+    ld.db.to_host(biases_gradient_host);
     for (size_t i = 0; i < outputs; ++i) {
         ftype sum = 0;
         for (size_t b = 0; b < batch_size; ++b) {
@@ -231,7 +267,7 @@ UTest(linear_layer_bwd_batched) {
         ftype expected = sum / batch_size;
         uassert_float_equal(biases_gradient_host[i], expected, 1e-6);
     }
-    state.dw.to_host(weights_gradient_host);
+    ld.dw.to_host(weights_gradient_host);
     for (size_t i = 0; i < outputs; ++i) {
         for (size_t j = 0; j < inputs; ++j) {
             ftype sum = 0;
@@ -250,15 +286,17 @@ UTest(sigmoid_activation_fwd) {
     constexpr int outputs = 3;
     constexpr int inputs = 3;
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
 
     input_gpu.from_host(input_host);
 
-    SigmoidActivationLayer sigmoid_layer;
-    LayerData<ftype> state;
-    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
-    sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu)
-        .to_host(output_host);
+    SigmoidActivationLayer layer;
+    LayerData<ftype> ld =
+        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+
+    ld.x.data(input_gpu.data());
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    ld.y.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
         uassert_float_equal(output_host[i], sigmoid(input_host[i]), 1e-6);
@@ -269,25 +307,29 @@ UTest(sigmoid_activation_bwd) {
     constexpr int outputs = 6;
     constexpr int inputs = 6;
     ftype input_host[inputs] = {1, 2, 3, 4, 5, 6},
-          err_host[inputs] = {10, 10, 10, 10, 10, 10},
+          input_err_host[inputs] = {10, 10, 10, 10, 10, 10},
           output_host[outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
-    tensor::Tensor<ftype> err_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto input_err_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
 
     input_gpu.from_host(input_host);
-    err_gpu.from_host(err_host);
+    input_err_gpu.from_host(input_err_host);
 
-    SigmoidActivationLayer sigmoid_layer;
-    LayerData<ftype> state;
-    sigmoid_layer.init({CUDNN_HANDLE, CUBLAS_HANDLE}, state, {1, 1, inputs, 1});
-    sigmoid_layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu);
-    sigmoid_layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, state, input_gpu, err_gpu)
-        .to_host(output_host);
+    SigmoidActivationLayer layer;
+    LayerData<ftype> ld =
+        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+
+    ld.x.data(input_gpu.data());
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    ld.dy.data(input_err_gpu.data());
+    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE},
+              {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db}, ld.dy, ld.dx);
+    ld.dx.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
-        uassert_float_equal(output_host[i],
-                            err_host[i] * sigmoid_derivative(input_host[i]),
-                            1e-6);
+        uassert_float_equal(
+            output_host[i],
+            input_err_host[i] * sigmoid_derivative(input_host[i]), 1e-6);
     }
 }
 
@@ -301,27 +343,25 @@ UTest(sgd_optimizer) {
     ftype biases_gradients[outputs] = {1, 1};
     tensor::dims_t weights_dims = {1, 1, inputs, outputs},
                    biases_dims = {1, 1, outputs, 1};
-    LayerData<ftype> state;
+    LayerData<ftype> ld;
     SGDOptimizer optimizer_factory(learning_rate);
 
-    state.w.reshape(weights_dims);
-    state.b.reshape(biases_dims);
-    state.dw.reshape(weights_dims);
-    state.db.reshape(biases_dims);
+    ld.w = tensor::tensor<ftype>(weights_dims);
+    ld.b = tensor::tensor<ftype>(biases_dims);
+    ld.dw = tensor::tensor<ftype>(weights_dims);
+    ld.db = tensor::tensor<ftype>(biases_dims);
 
-    CUDA_CHECK(memcpy_host_to_gpu(state.w.data(), weights, inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.dw.data(), weights_gradients,
-                                  inputs * outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.b.data(), biases, outputs));
-    CUDA_CHECK(memcpy_host_to_gpu(state.db.data(), biases_gradients, outputs));
+    CUDA_CHECK(ld.w.from_host(weights));
+    CUDA_CHECK(ld.dw.from_host(weights_gradients));
+    CUDA_CHECK(ld.b.from_host(biases));
+    CUDA_CHECK(ld.db.from_host(biases_gradients));
 
     auto sgd = optimizer_factory.copy();
-    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, state);
+    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, ld);
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
-    CUDA_CHECK(
-        memcpy_gpu_to_host(result_weights, state.w.data(), outputs * inputs));
-    CUDA_CHECK(memcpy_gpu_to_host(result_biases, state.b.data(), outputs));
+    CUDA_CHECK(ld.w.to_host(result_weights));
+    CUDA_CHECK(ld.b.to_host(result_biases));
 
     for (size_t i = 0; i < inputs * outputs; ++i) {
         uassert_float_equal(result_weights[i],
@@ -340,7 +380,7 @@ UTest(inference) {
     constexpr size_t outputs = 3;
     constexpr size_t inputs = 3;
     ftype input_host[inputs] = {1, 1, 1}, output_host[outputs] = {0};
-    tensor::Tensor<ftype> input_gpu({1, 1, inputs, 1}, {inputs, inputs, 1, 1});
+    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
     NetworkGraph graph;
 
     CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
