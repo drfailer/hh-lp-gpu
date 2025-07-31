@@ -1,20 +1,20 @@
 #ifndef STATE_INIT_STATE
 #define STATE_INIT_STATE
-#include "../data/create_parameter_data.hpp"
 #include "../data/init_data.hpp"
+#include "../data/init_parameters_data.hpp"
 #include "../types.hpp"
 #include "state.hpp"
 #include <hedgehog/hedgehog.h>
 
 #define InitStateIn                                                            \
-    CreateParameterData<ftype, CreateParameterTarget::Network>,                \
+    InitParametersData<ftype, InitTarget::Network>,                            \
         InitData<ftype, InitTarget::Network>,                                  \
-        CreateParameterData<ftype, CreateParameterTarget::Layer>,              \
+        InitParametersData<ftype, InitTarget::Layer>,                          \
         InitData<ftype, InitTarget::Layer>, InitData<ftype, InitTarget::Loss>
 #define InitStateOut                                                           \
-    CreateParameterData<ftype, CreateParameterTarget::Network>,                \
+    InitParametersData<ftype, InitTarget::Network>,                            \
         InitData<ftype, InitTarget::Network>,                                  \
-        CreateParameterData<ftype, CreateParameterTarget::Layer>,              \
+        InitParametersData<ftype, InitTarget::Layer>,                          \
         InitData<ftype, InitTarget::Layer>, InitData<ftype, InitTarget::Loss>
 #define InitStateIO 5, InitStateIn, InitStateOut
 
@@ -32,23 +32,19 @@ class InitState : public hh::AbstractState<InitStateIO> {
     };
 
   public:
-    void execute(std::shared_ptr<
-                 CreateParameterData<ftype, CreateParameterTarget::Network>>
+    void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Network>>
                      data) override {
         step_from_to(Step::Idle, Step::CreateParameters);
         this->addResult(
-            std::make_shared<
-                CreateParameterData<ftype, CreateParameterTarget::Layer>>(
+            std::make_shared<InitParametersData<ftype, InitTarget::Layer>>(
                 data->states));
     }
 
-    void execute(std::shared_ptr<
-                 CreateParameterData<ftype, CreateParameterTarget::Layer>>
+    void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Layer>>
                      data) override {
         step_from_to(Step::CreateParameters, Step::Idle);
         this->addResult(
-            std::make_shared<
-                CreateParameterData<ftype, CreateParameterTarget::Network>>(
+            std::make_shared<InitParametersData<ftype, InitTarget::Network>>(
                 data->states));
     }
 

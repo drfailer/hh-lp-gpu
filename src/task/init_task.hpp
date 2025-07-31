@@ -1,6 +1,6 @@
 #ifndef TASK_INIT_TASK
 #define TASK_INIT_TASK
-#include "../data/create_parameter_data.hpp"
+#include "../data/init_parameters_data.hpp"
 #include "../data/init_data.hpp"
 #include "../model/layer/layer.hpp"
 #include "../types.hpp"
@@ -8,13 +8,12 @@
 #include <memory>
 
 #define InitTaskIn                                                             \
-    CreateParameterData<ftype, CreateParameterTarget::Layer>,                  \
+    InitParametersData<ftype, InitTarget::Layer>,                              \
         InitData<ftype, InitTarget::Layer>
 #define InitTaskOut                                                            \
-    CreateParameterData<ftype, CreateParameterTarget::Layer>,                  \
+    InitParametersData<ftype, InitTarget::Layer>,                              \
         InitData<ftype, InitTarget::Layer>
 #define InitTaskIO 2, InitTaskIn, InitTaskOut
-
 
 class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
   public:
@@ -33,8 +32,7 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
         CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
     }
 
-    void execute(std::shared_ptr<
-                 CreateParameterData<ftype, CreateParameterTarget::Layer>>
+    void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Layer>>
                      data) override {
         for (auto &layer : layers_) {
             LayerData<ftype> ld;

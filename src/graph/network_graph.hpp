@@ -12,10 +12,10 @@
 #include <stdexcept>
 
 #define NetworkGraphIn                                                         \
-    CreateParameterData<ftype>, InitData<ftype>, PredictionData<ftype>,        \
+    InitParametersData<ftype>, InitData<ftype>, PredictionData<ftype>,         \
         TrainingData<ftype>
 #define NetworkGraphOut                                                        \
-    CreateParameterData<ftype>, InitData<ftype>, PredictionData<ftype>,        \
+    InitParametersData<ftype>, InitData<ftype>, PredictionData<ftype>,         \
         TrainingData<ftype>
 #define NetworkGraphIO 4, NetworkGraphIn, NetworkGraphOut
 
@@ -41,7 +41,9 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
     }
 
-    virtual ~NetworkGraph() { CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle)); }
+    virtual ~NetworkGraph() {
+        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
+    }
 
   public:
     template <typename LayerType, typename... Types>
@@ -97,11 +99,11 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * network if needed. The rest of the data required for the computation is
      * allocated in `init_state`.
      */
-    std::shared_ptr<NNState<ftype>> create_state() {
+    std::shared_ptr<NNState<ftype>> init_parameters() {
         auto state = std::make_shared<NNState<ftype>>();
 
-        this->pushData(std::make_shared<CreateParameterData<ftype>>(state));
-        (void)this->get<CreateParameterData<ftype>>();
+        this->pushData(std::make_shared<InitParametersData<ftype>>(state));
+        (void)this->get<InitParametersData<ftype>>();
         this->cleanGraph();
         return state;
     }
@@ -118,17 +120,18 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated and initialized, meaning that no allocation or initialization
      * will be done during the computation to ensure maximum performance.
      */
-    void init_state(std::shared_ptr<NNState<ftype>> state,
-                    tensor::dims_t input_dims) {
+    void init(std::shared_ptr<NNState<ftype>> state,
+              tensor::dims_t input_dims) {
         this->pushData(std::make_shared<InitData<ftype>>(state, input_dims));
         (void)this->get<InitData<ftype>>();
         this->cleanGraph();
     }
 
     tensor::Tensor<ftype> const &predict(std::shared_ptr<NNState<ftype>> state,
-                                 tensor::Tensor<ftype> const &input) {
+                                         tensor::Tensor<ftype> const &input) {
         this->pushData(std::make_shared<PredictionData<ftype>>(state, &input));
-        tensor::Tensor<ftype> const *output = this->get<PredictionData<ftype>>()->input;
+        tensor::Tensor<ftype> const *output =
+            this->get<PredictionData<ftype>>()->input;
         this->cleanGraph();
         return *output;
     }

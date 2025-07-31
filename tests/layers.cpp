@@ -391,8 +391,8 @@ UTest(inference) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.create_state();
-    graph.init_state(state, {1, 1, inputs, 1});
+    auto state = graph.init_parameters();
+    graph.init(state, {1, 1, inputs, 1});
 
     init_test_parameters(state->layers[0],
                          dims_t{.inputs = inputs, .outputs = outputs});
@@ -438,8 +438,8 @@ UTest(training) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.create_state();
-    graph.init_state(state, {1, 1, nb_inputs, 1});
+    auto state = graph.init_parameters();
+    graph.init(state, {1, 1, nb_inputs, 1});
 
     timer_start(training);
     graph.pushData(
@@ -481,8 +481,8 @@ UTest(mnist) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.create_state();
-    graph.init_state(state, {1, 1, 28, 28});
+    auto state = graph.init_parameters();
+    graph.init(state, {1, 1, 28, 28});
 
     INFO("Inference before training...");
     ftype accuracy_start = evaluate_mnist(graph, testing_set, state);
@@ -541,14 +541,14 @@ UTest(mnist_batched) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.create_state();
+    auto state = graph.init_parameters();
 
     INFO("Inference before training...");
-    graph.init_state(state, {test_batch_size, 1, 28, 28});
+    graph.init(state, {test_batch_size, 1, 28, 28});
     ftype accuracy_start =
         evaluate_mnist(graph, testing_set, state, test_batch_size);
 
-    graph.init_state(state, {batch_size, 1, 28, 28});
+    graph.init(state, {batch_size, 1, 28, 28});
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
@@ -559,7 +559,7 @@ UTest(mnist_batched) {
     timer_report_prec(batch_training, milliseconds);
 
     INFO("Evaluate the model...");
-    graph.init_state(state, {test_batch_size, 1, 28, 28});
+    graph.init(state, {test_batch_size, 1, 28, 28});
     ftype accuracy_end =
         evaluate_mnist(graph, testing_set, state, test_batch_size);
 
@@ -603,14 +603,14 @@ UTest(mnist_multi_node) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.create_state();
+    auto state = graph.init_parameters();
 
     INFO("Inference before training...");
-    graph.init_state(state, {test_batch_size, 1, 28, 28});
+    graph.init(state, {test_batch_size, 1, 28, 28});
     ftype accuracy_start =
         evaluate_mnist(graph, testing_set, state, test_batch_size);
 
-    graph.init_state(state, {batch_size, 1, 28, 28});
+    graph.init(state, {batch_size, 1, 28, 28});
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
@@ -621,7 +621,7 @@ UTest(mnist_multi_node) {
     timer_report_prec(batch_training, milliseconds);
 
     INFO("Evaluate the model...");
-    graph.init_state(state, {test_batch_size, 1, 28, 28});
+    graph.init(state, {test_batch_size, 1, 28, 28});
     ftype accuracy_end =
         evaluate_mnist(graph, testing_set, state, test_batch_size);
 
