@@ -4,14 +4,19 @@
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include "layer.hpp"
+#include <cassert>
 #include <cudnn.h>
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
 class LinearLayer : public Layer<ftype> {
   public:
-    LinearLayer(int input_dim, int output_dim)
-        : Layer(dims_t{.inputs = input_dim, .outputs = output_dim}) {
+    int nb_inputs;
+    int nb_outputs;
+
+    LinearLayer(int nb_inputs, int nb_outputs)
+        : Layer(dims_t{.inputs = nb_inputs, .outputs = nb_outputs}),
+          nb_inputs(nb_inputs), nb_outputs(nb_outputs) {
         CUDNN_CHECK(cudnnCreateReduceTensorDescriptor(&average_tensor));
         CUDNN_CHECK(cudnnSetReduceTensorDescriptor(
             average_tensor, CUDNN_REDUCE_TENSOR_AVG, CUDNN_DATA_TYPE,
@@ -25,72 +30,60 @@ class LinearLayer : public Layer<ftype> {
     }
 
   public:
-    /*
-     * Allocates memory for a layer state (output memory for the fwd pass, bwd
-     * pass, parameters and gradients).
-     */
-    Parameters<ftype> create_parameters() const override {
-        INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
-        int inputs = this->dims.inputs;
-        int outputs = this->dims.outputs;
-        Parameters<ftype> parameters({1, 1, outputs, inputs},
-                                     {1, 1, outputs, 1});
-
-        CUDA_CHECK(memset_random_uniform_gpu<ftype>(
-            parameters.weights.data(), outputs * inputs, -0.05, 0.05));
-        CUDA_CHECK(memset_random_uniform_gpu<ftype>(parameters.biases.data(),
-                                                    outputs, -0.05, 0.05));
-        return parameters;
+    LayerParametersShape parameters_shape() const override {
+        return LayerParametersShape{
+            .w = tensor::shape(1, 1, nb_outputs, nb_inputs),
+            .b = tensor::shape(1, 1, nb_outputs, 1),
+        };
     }
 
-    tensor::dims_t init(cuda_data_t cuda_data, LayerData<ftype> &state,
-                        tensor::dims_t input_dims) override {
-        int inputs = input_dims[1] * input_dims[2] * input_dims[3];
-        int outputs = this->dims.outputs;
-        auto batch_size = input_dims[0];
-        tensor::dims_t output_dims = {batch_size, 1, outputs, 1};
-
-        this->dims.inputs = inputs;
-        this->dims.batch_size = batch_size;
-
-        state.y.reshape(batch_size, 1, outputs, 1);
-        state.dx.reshape(batch_size, 1, inputs, 1);
-        return output_dims;
+    LayerIOShape io_shape(tensor::dims_t const &input_dims) const override {
+        int batch_size = input_dims[0];
+        return LayerIOShape{
+            .x = tensor::shape(batch_size, 1, nb_inputs, 1),
+            .y = tensor::shape(batch_size, 1, nb_outputs, 1),
+        };
     }
 
-    tensor::Tensor<ftype> const &
-    fwd(cuda_data_t cuda_data, LayerData<ftype> &state,
-        tensor::Tensor<ftype> const &input) override {
+    void init_parameters(cuda_data_t cuda,
+                         parameters_t<ftype> params) override {
+        params.w.random_init(-0.05, 0.05);
+        params.b.random_init(-0.05, 0.05);
+    }
+
+    void init_fwd(cuda_data_t cuda, LayerData<ftype> const &data) override {
+        this->dims.batch_size = data.x.dim(0);
+    }
+
+    void fwd(cuda_data_t cuda, fwd_data_t<ftype> const &data,
+             tensor::Tensor<const ftype> const &x,
+             tensor::Tensor<ftype> &y) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
-        CUDNN_CHECK(hhlpLinearForward(
-            cuda_data.cudnn_handle, state.w.data(), state.b.data(),
-            input.data(), state.y.data(), this->dims.inputs, this->dims.outputs,
-            this->dims.batch_size, CUDNN_DATA_TYPE));
-        return state.y;
+        CUDNN_CHECK(hhlpLinearForward(cuda.cudnn_handle, data.w.data(),
+                                      data.b.data(), x.data(), y.data(),
+                                      nb_inputs, nb_outputs,
+                                      this->dims.batch_size, CUDNN_DATA_TYPE));
     }
 
-    tensor::Tensor<ftype> const &
-    bwd(cuda_data_t cuda_data, LayerData<ftype> &state,
-        tensor::Tensor<ftype> const &input,
-        tensor::Tensor<ftype> const &output_gradient) override {
+    void bwd(cuda_data_t cuda, bwd_data_t<ftype> const &data,
+             tensor::Tensor<const ftype> const &dy,
+             tensor::Tensor<ftype> &dx) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
 
         // grads_b = error
         CUDNN_CHECK(hhlpLinearBackwardBias(
-            cuda_data.cudnn_handle, output_gradient.data(), state.db.data(),
+            cuda.cudnn_handle, dy.data(), data.db.data(),
             this->dims.outputs, this->dims.batch_size, CUDNN_DATA_TYPE));
         // w_grad = err * fwd_inputT
         CUDNN_CHECK(hhlpLinearBackwardWeights(
-            cuda_data.cudnn_handle, output_gradient.data(), input.data(),
-            state.dw.data(), this->dims.outputs, this->dims.inputs,
-            this->dims.batch_size, CUDNN_DATA_TYPE));
+            cuda.cudnn_handle, dy.data(), data.x.data(), data.dw.data(),
+            this->dims.outputs, this->dims.inputs, this->dims.batch_size,
+            CUDNN_DATA_TYPE));
         // output_err = errT * weights
         CUDNN_CHECK(hhlpLinearBackwardData(
-            cuda_data.cudnn_handle, output_gradient.data(), state.w.data(),
-            state.dx.data(), this->dims.outputs, this->dims.inputs,
-            this->dims.batch_size, CUDNN_DATA_TYPE));
-        return state.dx;
+            cuda.cudnn_handle, dy.data(), data.w.data(), dx.data(),
+            nb_outputs, nb_inputs, this->dims.batch_size, CUDNN_DATA_TYPE));
     }
 
   private:

@@ -5,6 +5,28 @@
 #include "../../model/data/layer_data.hpp"
 #include "../../model/data/parameters.hpp"
 
+template <typename T>
+struct parameters_t {
+    tensor::Tensor<T> &w;
+    tensor::Tensor<T> &b;
+};
+
+template <typename T>
+struct fwd_data_t {
+    tensor::Tensor<T> const &w;
+    tensor::Tensor<T> const &b;
+};
+
+template <typename T>
+struct bwd_data_t {
+    tensor::Tensor<const T> &x;
+    tensor::Tensor<T> &y;
+    tensor::Tensor<T> &w;
+    tensor::Tensor<T> &b;
+    tensor::Tensor<T> &dw;
+    tensor::Tensor<T> &db;
+};
+
 template <typename T> struct Layer {
     size_t idx = 0;
     dims_t dims;
@@ -12,25 +34,20 @@ template <typename T> struct Layer {
     Layer(dims_t dims) : dims(dims) {}
     virtual ~Layer() {}
 
-    // TODO: layers should use lists of tensors instead of the current struct
-    //       (more flexible in case a layer needs more data, like combined
-    //       layers)
-    // TODO: create_parameters should be removed and everything should be done
-    //       in `init`. However, initialization should not create tensors but
-    //       tensor views, and allocation should be done automatically in the
-    //       graph (this way, we can skip some allocations, like only use
-    //       weights for the inference as well as using only two memory spaces
-    //       for input and output). The graph or the network will deallocate
-    //       memory if needed.
+    virtual LayerParametersShape parameters_shape() const {
+        return {};
+    }
+    virtual LayerIOShape io_shape(tensor::dims_t const &input_dims) const = 0;
+    virtual void init_parameters(cuda_data_t cuda, parameters_t<T> params) {}
 
-    virtual Parameters<T> create_parameters() const = 0;
-    virtual tensor::dims_t init(cuda_data_t cuda_data, LayerData<T> &state,
-                               tensor::dims_t input_dims) = 0;
-    virtual tensor::Tensor<T> const &fwd(cuda_data_t cuda_data, LayerData<T> &states,
-                                 tensor::Tensor<T> const &input) = 0;
-    virtual tensor::Tensor<T> const &bwd(cuda_data_t cuda_data, LayerData<T> &states,
-                                 tensor::Tensor<T> const &input,
-                                 tensor::Tensor<T> const &output_gradient) = 0;
+    // override optional
+    virtual void init_fwd(cuda_data_t cuda, LayerData<T> const &data) {}
+    virtual void init_bwd(cuda_data_t cuda, LayerData<T> const &data) {}
+
+    virtual void fwd(cuda_data_t cuda, fwd_data_t<T> const &data,
+                     tensor::Tensor<const T> const &x, tensor::Tensor<T> &y) = 0;
+    virtual void bwd(cuda_data_t cuda, bwd_data_t<T> const &data,
+                     tensor::Tensor<const T> const &dy, tensor::Tensor<T> &dx) = 0;
 };
 
 #endif

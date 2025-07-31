@@ -32,10 +32,8 @@ struct PoolingLayer : Layer<ftype> {
         CUDNN_CHECK(cudnnDestroyTensorDescriptor(input_descriptor));
     }
 
-    Parameters<ftype> create_parameters() const override { return {}; }
-
-    tensor::dims_t init(cuda_data_t cuda_data, LayerData<ftype> &state,
-                        tensor::dims_t input_dims) override {
+    virtual LayerIOShape
+    io_shape(tensor::dims_t const &input_dims) const override {
         tensor::dims_t output_dims;
         cudnnSetTensorNdDescriptorEx(input_descriptor, CUDNN_TENSOR_NCHW,
                                      CUDNN_DATA_TYPE, input_dims.size(),
@@ -43,37 +41,44 @@ struct PoolingLayer : Layer<ftype> {
         cudnnGetPoolingNdForwardOutputDim(pooling_descriptor, input_descriptor,
                                           output_dims.size(),
                                           output_dims.data());
-        state.dx.reshape(input_dims);
-        state.y.reshape(output_dims);
-        return output_dims;
+        // here we are stuck and we need the full input
+        return {
+            .x = tensor::shape(input_dims),
+            .y = tensor::shape(output_dims),
+        };
     }
 
-    tensor::Tensor<ftype> const &
-    fwd(cuda_data_t cuda_data, LayerData<ftype> &state,
-        tensor::Tensor<ftype> const &input) override {
+    virtual void init_fwd(cuda_data_t cuda,
+                          LayerData<ftype> const &data) override {
+        tensor::dims_t input_dims = data.x.dims();
+        cudnnSetTensorNdDescriptorEx(input_descriptor, CUDNN_TENSOR_NCHW,
+                                     CUDNN_DATA_TYPE, input_dims.size(),
+                                     input_dims.data());
+    }
+
+    void fwd(cuda_data_t cuda, fwd_data_t<ftype> const &data,
+             tensor::Tensor<const ftype> const &x,
+             tensor::Tensor<ftype> &y) override {
         ftype alpha = 1;
         ftype beta = 0;
 
-        CUDNN_CHECK(cudnnPoolingForward(
-            cuda_data.cudnn_handle, pooling_descriptor, &alpha, input.desc(),
-            input.data(), &beta, state.y.desc(), state.y.data()));
-        return state.y;
+        CUDNN_CHECK(cudnnPoolingForward(cuda.cudnn_handle, pooling_descriptor,
+                                        &alpha, x.desc(), x.data(), &beta,
+                                        y.desc(), y.data()));
     }
 
-    tensor::Tensor<ftype> const &
-    bwd(cuda_data_t cuda_data, LayerData<ftype> &state,
-        tensor::Tensor<ftype> const &input,
-        tensor::Tensor<ftype> const &output_gradient) override {
-        auto error_descriptor = state.y.desc();
-        auto error_data = output_gradient.data();
+    void bwd(cuda_data_t cuda, bwd_data_t<ftype> const &data,
+             tensor::Tensor<const ftype> const &dy,
+             tensor::Tensor<ftype> &dx) override {
+        auto error_descriptor = dy.desc();
+        auto error_data = dy.data();
         ftype alpha = 1;
         ftype beta = 0;
 
         CUDNN_CHECK(cudnnPoolingBackward(
-            cuda_data.cudnn_handle, pooling_descriptor, &alpha, state.y.desc(),
-            state.y.data(), error_descriptor, error_data, input.desc(),
-            state.x.data(), &beta, state.dx.desc(), state.dx.data()));
-        return state.dx;
+            cuda.cudnn_handle, pooling_descriptor, &alpha, data.y.desc(),
+            data.y.data(), error_descriptor, error_data, data.x.desc(),
+            data.x.data(), &beta, dx.desc(), dx.data()));
     }
 };
 
