@@ -15,20 +15,6 @@
         InitData<ftype, InitTarget::Layer>
 #define InitTaskIO 2, InitTaskIn, InitTaskOut
 
-// TODO: tmp function
-template <typename T>
-LayerData<T> parameter_to_layer_data(Parameters<T> &&params) {
-    LayerData<T> ld;
-    if (!params.weights.empty()) {
-        ld.dw.reshape_like(params.weights);
-        ld.w = std::move(params.weights);
-    }
-    if (!params.biases.empty()) {
-        ld.db.reshape_like(params.biases);
-        ld.b = std::move(params.biases);
-    }
-    return ld;
-}
 
 class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
   public:
@@ -51,7 +37,11 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
                  CreateParameterData<ftype, CreateParameterTarget::Layer>>
                      data) override {
         for (auto &layer : layers_) {
-            LayerData<ftype> ld = parameter_to_layer_data(layer->create_parameters());
+            LayerData<ftype> ld;
+            auto param_shape = layer->parameters_shape();
+            ld.w = tensor::tensor<ftype>(param_shape.w);
+            ld.b = tensor::tensor<ftype>(param_shape.b);
+            layer->init_parameters(cuda_data_, {ld.w, ld.b});
             data->states->layers.push_back(ld);
         }
         this->addResult(data);
@@ -62,8 +52,25 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
         auto dims = data->input_dims;
         auto &states = data->states;
 
+        // TODO: do not allocate gradients during the inference
         for (auto layer : layers_) {
-            dims = layer->init(cuda_data_, states->layers[layer->idx], dims);
+            auto io_shape = layer->io_shape(dims);
+            auto &ld = states->layers[layer->idx];
+
+            // input dims of the next layer
+            dims = io_shape.y.dims;
+
+            // fwd init
+            ld.x = tensor::tensor_view<const ftype>(io_shape.x, nullptr);
+            ld.y = tensor::tensor<ftype>(io_shape.y);
+            layer->init_fwd(cuda_data_, ld);
+
+            // bwd init
+            ld.dx = tensor::tensor<ftype>(io_shape.x);
+            ld.dy = tensor::tensor_view<const ftype>(io_shape.y, nullptr);
+            ld.dw = tensor::tensor_like<ftype>(ld.w);
+            ld.db = tensor::tensor_like<ftype>(ld.b);
+            layer->init_bwd(cuda_data_, ld);
         }
         data->input_dims = dims;
         this->addResult(data);

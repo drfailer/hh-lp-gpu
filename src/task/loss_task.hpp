@@ -34,7 +34,7 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
 
     void
     execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
-        data->states->loss.tensor.reshape(data->input_dims);
+        data->states->loss.tensor = tensor::tensor<ftype>(data->input_dims);
         this->addResult(data);
     }
 

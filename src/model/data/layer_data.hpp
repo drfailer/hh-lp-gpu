@@ -3,14 +3,24 @@
 #include "../../tools/tensor/tensor.hpp"
 
 template <typename T> struct LayerData {
-    tensor::Tensor<T> x;
+    tensor::Tensor<const T> x;
     tensor::Tensor<T> y;
-    tensor::Tensor<T> dy;
+    tensor::Tensor<const T> dy;
     tensor::Tensor<T> dx;
     tensor::Tensor<T> w;
     tensor::Tensor<T> b;
     tensor::Tensor<T> dw;
     tensor::Tensor<T> db;
+};
+
+struct LayerParametersShape {
+    tensor::TensorShape w = {};
+    tensor::TensorShape b = {};
+};
+
+struct LayerIOShape {
+    tensor::TensorShape x = {};
+    tensor::TensorShape y = {};
 };
 
 #endif

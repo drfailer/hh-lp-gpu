@@ -15,29 +15,30 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
     FwdTask() : hh::AbstractCUDATask<FwdTaskIO>("FwdTask", 1) {}
 
     void initializeCuda() override {
-        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
-        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
-        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
+        CUDNN_CHECK(cudnnCreate(&cuda_.cudnn_handle));
+        CUDNN_CHECK(cudnnSetStream(cuda_.cudnn_handle, this->stream()));
+        CUBLAS_CHECK(cublasCreate_v2(&cuda_.cublas_handle));
         CUBLAS_CHECK(
-            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
+            cublasSetStream_v2(cuda_.cublas_handle, this->stream()));
     }
 
     void shutdownCuda() override {
-        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
-        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
+        CUDNN_CHECK(cudnnDestroy(cuda_.cudnn_handle));
+        CUBLAS_CHECK(cublasDestroy_v2(cuda_.cublas_handle));
     }
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
-        auto const *input = data->input;
-        auto states = data->states;
+        tensor::Tensor<ftype> const *x = data->input;
+        auto &lds = data->states;
 
         for (auto layer : layers_) {
-            auto &state = states->layers[layer->idx];
-            state.x = *input;
-            input = &layer->fwd(cuda_data_, state, *input);
+            LayerData<ftype> &ld = lds->layers[layer->idx];
+            ld.x.data(x->data());
+            layer->fwd(cuda_, {ld.w, ld.b}, ld.x, ld.y);
+            x = &ld.y;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         }
-        data->input = input;
+        data->input = x;
         this->addResult(data);
     }
 
@@ -55,7 +56,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    cuda_data_t cuda_data_;
+    cuda_data_t cuda_;
 };
 
 #endif
