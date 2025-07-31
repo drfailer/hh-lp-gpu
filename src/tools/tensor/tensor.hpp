@@ -2,46 +2,77 @@
 #define TOOLS_TENSOR_TENSOR
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
-#include "tensor_data.hpp"
+#include "abstract_tensor.hpp"
+#include "owning_tensor.hpp"
+#include "tensor_view.hpp"
 #include <cstdio>
 #include <cudnn_ops.h>
 #include <memory>
 
 namespace tensor {
 
-template <typename T> class Tensor {
-  public:
-    Tensor() = default;
-    Tensor(dims_t const &dims, dims_t const &strides)
-        : td_(std::make_shared<TensorData<T>>(dims, strides)) {}
-    Tensor(dims_t const &dims) : td_(std::make_shared<TensorData<T>>(dims)) {}
-    Tensor(int b, int c, int h, int w) : Tensor(dims_t{b, c, h, w}) {}
+// tensor interface ////////////////////////////////////////////////////////////
 
-    // TODO: add the possibility to borrow the pointer of an other tensor to
-    // view it with a different shape
+template <typename T> class TensorInterface {
+  public:
+    TensorInterface() = default;
+    TensorInterface(std::shared_ptr<AbstractTensor<T>> td) : td_(td) {}
+
+    TensorInterface(TensorInterface<T> const &tensor) : td_(tensor.td_) {}
+    TensorInterface<T> const &operator=(TensorInterface<T> const &tensor) {
+        if (&tensor == this) {
+            return *this;
+        }
+        this->td_ = tensor.td_;
+        return *this;
+    }
+
+    TensorInterface(TensorInterface<T> &&tensor) : td_(std::move(tensor.td_)) {}
+    TensorInterface<T> const &operator=(TensorInterface<T> &&tensor) {
+        this->td_ = std::move(tensor.td_);
+        return *this;
+    }
+
+    // data access /////////////////////////////////////////////////////////////
 
     T const *data() const { return td_->data; }
     T *data() { return td_->data; }
-    dims_t const &dims() const { return td_->dims; }
-    dims_t const &strides() const { return td_->strides; }
-    int dims(size_t i) const { return td_->dims[i]; }
-    int strides(size_t i) const { return td_->strides[i]; }
+    void data(T *data) { td_->data = data; }
+    dims_t const &dims() const { return td_->shape.dims; }
+    dims_t const &strides() const { return td_->shape.strides; }
+    int dim(size_t i) const { return td_->shape.dims[i]; }
+    int stride(size_t i) const { return td_->shape.strides[i]; }
+    TensorShape const &shape() const { return td_->shape; }
     desc_t desc() const { return td_->desc; }
     size_t size() const { return td_->size; }
-
     bool empty() const { return td_ == nullptr; }
 
-    template <typename... Types> void reshape(Types... args) {
+    // reshape /////////////////////////////////////////////////////////////////
+
+    void reshape(TensorShape const &shape) {
         if (empty()) {
-            td_ = std::make_shared<TensorData<T>>(args...);
-        } else {
-            td_->reshape(args...);
+            throw std::runtime_error("error: cannot reshape empty tensor.");
         }
+        td_->reshape(shape);
     }
 
-    void reshape_like(Tensor<T> other) {
-        this->reshape(other.dims(), other.strides());
+    template <typename... Types> void reshape(Types... args) {
+        this->reshape(TensorShape(std::forward<Types>(args)...));
     }
+
+    void reshape_like(TensorInterface<T> other) { this->reshape(other.shape()); }
+
+    // view ////////////////////////////////////////////////////////////////////
+
+    TensorInterface<T> view() {
+        return tensor_view(this->td_.shape(), this->td_.data());
+    }
+
+    TensorInterface<T> view_as(TensorShape const &shape) {
+        return tensor_view(shape, this->td_.data());
+    }
+
+    // init ////////////////////////////////////////////////////////////////////
 
     auto random_init(T lower_bound, T higher_bound, int seed = 0) {
         return memset_random_uniform_gpu<ftype>(
@@ -49,6 +80,8 @@ template <typename T> class Tensor {
     }
 
     auto zero() { return memset_gpu<ftype>(td_->data, td_->size, 0); }
+
+    // host data transfer //////////////////////////////////////////////////////
 
     // assums that the host array has the proper size
     auto from_host(T *host) {
@@ -61,13 +94,50 @@ template <typename T> class Tensor {
     }
 
   private:
-    std::shared_ptr<TensorData<T>> td_ = nullptr;
+    std::shared_ptr<AbstractTensor<T>> td_ = nullptr;
 };
+
+// tensor types ////////////////////////////////////////////////////////////////
+
+// TODO: remove the templates and use void* as a type
+// using Tensor = TensorInterface<void>;
+// using ConstTensor = TensorInterface<const void>;
+
+template <typename T>
+using Tensor = TensorInterface<T>;
+template <typename T>
+using ConstTensor = TensorInterface<const T>;
+
+// helper functions ////////////////////////////////////////////////////////////
+
+template <typename T, typename... Types> Tensor<T> tensor(Types... args) {
+    std::shared_ptr<AbstractTensor<T>> to =
+        std::make_shared<OwningTensor<T>>(std::forward<Types>(args)...);
+    return Tensor<T>(to);
+}
+
+template <typename T> Tensor<T> tensor_like(Tensor<T> const &tensor) {
+    std::shared_ptr<AbstractTensor<T>> to =
+        std::make_shared<OwningTensor<T>>(tensor.shape());
+    return Tensor<T>(to);
+}
+
+template <typename T> Tensor<T> tensor_view(TensorShape const &shape, T *data) {
+    std::shared_ptr<AbstractTensor<T>> tv =
+        std::make_shared<BorrowingTensor<T>>(shape, data);
+    return Tensor<T>(tv);
+}
+
+template <typename T> Tensor<T> tensor_view_of(Tensor<T> const &tensor) {
+    std::shared_ptr<AbstractTensor<T>> tv =
+        std::make_shared<BorrowingTensor<T>>(tensor.shape(), tensor.data());
+    return Tensor<T>(tv);
+}
 
 } // end namespace tensor
 
 #define print_tensor_descriptor(desc)                                          \
-    {                                                                          \
+    do {                                                                       \
         int n, c, h, w;                                                        \
         int ns, cs, hs, ws;                                                    \
         cudnnDataType_t data_type;                                             \
@@ -75,6 +145,6 @@ template <typename T> class Tensor {
                                    &hs, &ws);                                  \
         printf(#desc ": [%d, %d, %d, %d]%d : (%d, %d, %d, %d)\n", n, c, h, w,  \
                data_type, ns, cs, hs, ws);                                     \
-    }
+    } while (0);
 
 #endif
