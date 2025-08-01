@@ -46,7 +46,7 @@ class LinearLayer : public Layer<ftype> {
     }
 
     void init_parameters(cuda_data_t cuda,
-                         parameters_t<ftype> params) override {
+                         Parameters<ftype> params) override {
         params.w.random_init(-0.05, 0.05);
         params.b.random_init(-0.05, 0.05);
     }

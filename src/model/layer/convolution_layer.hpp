@@ -122,7 +122,7 @@ struct ConvolutionLayer : Layer<ftype> {
     }
 
     void init_parameters(cuda_data_t cuda,
-                         parameters_t<ftype> params) override {
+                         Parameters<ftype> params) override {
         CUDA_CHECK(params.w.random_init(-0.05, 0.05));
         if (use_biases) {
             CUDA_CHECK(params.b.random_init(-0.05, 0.05));

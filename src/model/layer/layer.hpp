@@ -3,10 +3,9 @@
 #include "../../model/data/cuda_data.hpp"
 #include "../../model/data/dims.hpp"
 #include "../../model/data/layer_data.hpp"
-#include "../../model/data/parameters.hpp"
 
 template <typename T>
-struct parameters_t {
+struct Parameters {
     tensor::Tensor<T> &w;
     tensor::Tensor<T> &b;
 };
@@ -38,7 +37,7 @@ template <typename T> struct Layer {
         return {};
     }
     virtual LayerIOShape io_shape(tensor::dims_t const &input_dims) const = 0;
-    virtual void init_parameters(cuda_data_t cuda, parameters_t<T> params) {}
+    virtual void init_parameters(cuda_data_t cuda, Parameters<T> params) {}
 
     // override optional
     virtual void init_fwd(cuda_data_t cuda, LayerData<T> const &data) {}
