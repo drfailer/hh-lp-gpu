@@ -20,34 +20,32 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
         : hh::AbstractCUDATask<LossTaskIO>("LossTask", 1), loss_(loss) {}
 
     void initializeCuda() override {
-        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
-        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
-        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
-        CUBLAS_CHECK(
-            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
+        CUDNN_CHECK(cudnnCreate(&cuda_.cudnn_handle));
+        CUDNN_CHECK(cudnnSetStream(cuda_.cudnn_handle, this->stream()));
+        CUBLAS_CHECK(cublasCreate_v2(&cuda_.cublas_handle));
+        CUBLAS_CHECK(cublasSetStream_v2(cuda_.cublas_handle, this->stream()));
     }
 
     void shutdownCuda() override {
-        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
-        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
+        CUDNN_CHECK(cudnnDestroy(cuda_.cudnn_handle));
+        CUBLAS_CHECK(cublasDestroy_v2(cuda_.cublas_handle));
     }
 
     void
     execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
-        data->states->loss.tensor = tensor::tensor<ftype>(data->input_dims);
+        data->network_data->loss.tensor = tensor::tensor<ftype>(data->input_dims);
         this->addResult(data);
     }
 
     void execute(std::shared_ptr<LossFwdData<ftype>> data) override {
-        loss_->fwd(cuda_data_, data->states->loss, *data->input,
-                   *data->ground_truth);
+        loss_->fwd(cuda_, {*data->input}, {data->states->loss.tensor});
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }
 
     void execute(std::shared_ptr<LossBwdData<ftype>> data) override {
-        loss_->bwd(cuda_data_, data->states->loss, *data->input,
-                   *data->ground_truth);
+        loss_->bwd(cuda_, {*data->y_true, *data->y_pred},
+                   {data->states->loss.tensor});
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(std::make_shared<BwdData<ftype>>(
             data->states, &data->states->loss.tensor));
@@ -55,7 +53,7 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
 
   private:
     std::shared_ptr<Loss<ftype>> loss_ = nullptr;
-    CUDA cuda_data_;
+    CUDA cuda_;
 };
 
 #endif

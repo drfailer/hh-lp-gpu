@@ -20,32 +20,23 @@ class QuadraticLoss : public Loss<ftype> {
     ~QuadraticLoss() { cudnnDestroyOpTensorDescriptor(addition_); }
 
   public:
-    tensor::Tensor<ftype> const &
-    fwd(CUDA cuda_data, LossState<ftype> &state,
-        tensor::Tensor<ftype> const &model_output,
-        tensor::Tensor<ftype> const &ground_truth) override {
+    void fwd(CUDA cuda, LossFwdIn const &in, LossFwdOut const &out) override {
         INFO_GRP("QuadraticLossTask FWD", INFO_GRP_LAYER_TASK);
         ERROR("unimplemented");
         exit(1);
         // ftype diff = ground_truth - output;
         // return 0.5 * diff * diff;
-        return state.tensor;
     }
 
-    tensor::Tensor<ftype> const &
-    bwd(CUDA cuda_data, LossState<ftype> &state,
-        tensor::Tensor<ftype> const &model_output,
-        tensor::Tensor<ftype> const &ground_truth) override {
+    void bwd(CUDA cuda, LossBwdIn const &in, LossBwdOut const &out) override {
         INFO_GRP("QuadraticLossTask BWD", INFO_GRP_LAYER_TASK);
         // return output - ground_truth;
         ftype alpha1 = 1, alpha2 = -1, beta = 0;
 
-        CUDNN_CHECK(cudnnOpTensor(cuda_data.cudnn_handle, addition_, &alpha1,
-                                  model_output.desc(), model_output.data(),
-                                  &alpha2, ground_truth.desc(),
-                                  ground_truth.data(), &beta,
-                                  state.tensor.desc(), state.tensor.data()));
-        return state.tensor;
+        CUDNN_CHECK(cudnnOpTensor(cuda.cudnn_handle, addition_, &alpha1,
+                                  in.y_pred.desc(), in.y_pred.data(), &alpha2,
+                                  in.y_true.desc(), in.y_true.data(), &beta,
+                                  out.dy.desc(), out.dy.data()));
     }
 
   private:

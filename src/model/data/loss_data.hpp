@@ -2,7 +2,7 @@
 #define MODEL_DATA_LOSS_STATE
 #include "../../tools/tensor/tensor.hpp"
 
-template <typename T> struct LossState {
+template <typename T> struct LossData {
     tensor::Tensor<T> tensor;
 };
 
