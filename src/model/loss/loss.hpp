@@ -5,10 +5,10 @@
 #include "../../tools/tensor/tensor.hpp"
 
 template <typename T> struct Loss {
-    virtual tensor::Tensor<T> const &fwd(cuda_data_t cuda_data, LossState<T> &state,
+    virtual tensor::Tensor<T> const &fwd(CUDA cuda_data, LossState<T> &state,
                                  tensor::Tensor<T> const &model_output,
                                  tensor::Tensor<T> const &ground_truth) = 0;
-    virtual tensor::Tensor<T> const &bwd(cuda_data_t cuda_data, LossState<T> &state,
+    virtual tensor::Tensor<T> const &bwd(CUDA cuda_data, LossState<T> &state,
                                  tensor::Tensor<T> const &model_output,
                                  tensor::Tensor<T> const &ground_truth) = 0;
 };

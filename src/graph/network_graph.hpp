@@ -169,7 +169,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     std::shared_ptr<OptimizerState> optimizer_state_ = nullptr;
     std::shared_ptr<OptimizerStateManager> optimizer_state_manager_ = nullptr;
     LayerTasks layer_tasks_;
-    cuda_data_t cuda_data_;
+    CUDA cuda_data_;
 };
 
 #endif

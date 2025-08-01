@@ -45,7 +45,7 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
 
   private:
     std::shared_ptr<Optimizer<ftype>> optimizer_ = nullptr;
-    cuda_data_t cuda_data_;
+    CUDA cuda_data_;
 };
 
 #endif

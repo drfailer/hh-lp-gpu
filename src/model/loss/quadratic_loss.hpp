@@ -21,7 +21,7 @@ class QuadraticLoss : public Loss<ftype> {
 
   public:
     tensor::Tensor<ftype> const &
-    fwd(cuda_data_t cuda_data, LossState<ftype> &state,
+    fwd(CUDA cuda_data, LossState<ftype> &state,
         tensor::Tensor<ftype> const &model_output,
         tensor::Tensor<ftype> const &ground_truth) override {
         INFO_GRP("QuadraticLossTask FWD", INFO_GRP_LAYER_TASK);
@@ -33,7 +33,7 @@ class QuadraticLoss : public Loss<ftype> {
     }
 
     tensor::Tensor<ftype> const &
-    bwd(cuda_data_t cuda_data, LossState<ftype> &state,
+    bwd(CUDA cuda_data, LossState<ftype> &state,
         tensor::Tensor<ftype> const &model_output,
         tensor::Tensor<ftype> const &ground_truth) override {
         INFO_GRP("QuadraticLossTask BWD", INFO_GRP_LAYER_TASK);

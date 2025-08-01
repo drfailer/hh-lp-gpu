@@ -29,27 +29,23 @@ struct SigmoidActivationLayer : Layer<ftype> {
         };
     }
 
-    void fwd(cuda_data_t cuda, fwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &x,
-             tensor::Tensor<ftype> &y) override {
+    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
         INFO_GRP("SigmoidActivationLayer FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnActivationForward(cuda.cudnn_handle, sigmoid_, &alpha,
-                                           x.desc(), x.data(), &beta, y.desc(),
-                                           y.data()));
+                                           in.x.desc(), in.x.data(), &beta,
+                                           out.y.desc(), out.y.data()));
     }
 
-    void bwd(cuda_data_t cuda, bwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &dy,
-             tensor::Tensor<ftype> &dx) override {
+    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnActivationBackward(
-            cuda.cudnn_handle, sigmoid_, &alpha, data.y.desc(), data.y.data(),
-            dy.desc(), dy.data(), data.x.desc(), data.x.data(), &beta,
-            dx.desc(), dx.data()));
+            cuda.cudnn_handle, sigmoid_, &alpha, in.y.desc(), in.y.data(),
+            in.dy.desc(), in.dy.data(), in.x.desc(), in.x.data(), &beta,
+            out.dx.desc(), out.dx.data()));
     }
 
   private:

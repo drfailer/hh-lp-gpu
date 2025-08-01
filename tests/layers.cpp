@@ -20,7 +20,7 @@ template <typename T>
 LayerData<T> init_layer_and_get_layer_data(auto layer,
                                            tensor::dims_t const &input_dims,
                                            bool bwd) {
-    cuda_data_t cuda{CUDNN_HANDLE, CUBLAS_HANDLE};
+    CUDA cuda{CUDNN_HANDLE, CUBLAS_HANDLE};
     LayerData<ftype> data;
 
     // create and init parameters
@@ -141,7 +141,7 @@ UTest(linear_layer_fwd) {
     init_test_parameters(ld, dims, 1);
 
     ld.x.data(input_gpu.data());
-    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
     ld.y.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -168,10 +168,10 @@ UTest(linear_layer_bwd) {
     init_test_parameters(ld, dims);
 
     ld.x.data(input_gpu.data());
-    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
     ld.dy.data(err_gpu.data());
-    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE},
-              {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db}, ld.dy, ld.dx);
+    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.dy, ld.x, ld.y, ld.w, ld.b},
+              {ld.dx, ld.dw, ld.db});
     ld.dx.to_host(output_err_host);
 
     uassert_equal(output_err_host[0], 123);
@@ -201,7 +201,7 @@ UTest(linear_layer_fwd_batched) {
     init_test_parameters(ld, dims, 1);
 
     ld.x.data(input_gpu.data());
-    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
     ld.y.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -242,10 +242,10 @@ UTest(linear_layer_bwd_batched) {
     init_test_parameters(ld, dims);
 
     ld.x.data(input_gpu.data());
-    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
     ld.dy.data(input_err_gpu.data());
-    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE},
-              {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db}, ld.dy, ld.dx);
+    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.dy, ld.x, ld.y, ld.w, ld.b},
+              {ld.dx, ld.dw, ld.db});
     ld.dx.to_host(output_err_host);
 
     uassert_equal(output_err_host[0], 321);
@@ -295,7 +295,7 @@ UTest(sigmoid_activation_fwd) {
         init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
 
     ld.x.data(input_gpu.data());
-    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
     ld.y.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {
@@ -320,10 +320,10 @@ UTest(sigmoid_activation_bwd) {
         init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
 
     ld.x.data(input_gpu.data());
-    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.w, ld.b}, ld.x, ld.y);
+    layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
     ld.dy.data(input_err_gpu.data());
-    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE},
-              {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db}, ld.dy, ld.dx);
+    layer.bwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.dy, ld.x, ld.y, ld.w, ld.b},
+              {ld.dx, ld.dw, ld.db});
     ld.dx.to_host(output_host);
 
     for (size_t i = 0; i < outputs; ++i) {

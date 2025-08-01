@@ -84,7 +84,7 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    cuda_data_t cuda_data_;
+    CUDA cuda_data_;
 };
 
 #endif

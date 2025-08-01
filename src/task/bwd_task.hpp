@@ -35,8 +35,8 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
         for (int i = layers_.size() - 1; i >= 0; --i) {
             auto &ld = states->layers[layers_[i]->idx];
             ld.dy.data(dy->data());
-            layers_[i]->bwd(cuda_data_, {ld.x, ld.y, ld.w, ld.b, ld.dw, ld.db},
-                            ld.dy, ld.dx);
+            layers_[i]->bwd(cuda_data_, {ld.dy, ld.x, ld.y, ld.w, ld.b},
+                            {ld.dx, ld.dw, ld.db});
             dy = &ld.dx;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
             this->addResult(std::make_shared<OptLayerData<ftype>>(
@@ -56,7 +56,7 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    cuda_data_t cuda_data_;
+    CUDA cuda_data_;
 };
 
 #endif

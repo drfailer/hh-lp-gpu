@@ -45,44 +45,39 @@ class LinearLayer : public Layer<ftype> {
         };
     }
 
-    void init_parameters(cuda_data_t cuda,
-                         Parameters<ftype> params) override {
+    void init_parameters(CUDA cuda, Parameters const &params) override {
         params.w.random_init(-0.05, 0.05);
         params.b.random_init(-0.05, 0.05);
     }
 
-    void init_fwd(cuda_data_t cuda, LayerData<ftype> const &data) override {
+    void init_fwd(CUDA cuda, InitFwdData const &data) override {
         this->dims.batch_size = data.x.dim(0);
     }
 
-    void fwd(cuda_data_t cuda, fwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &x,
-             tensor::Tensor<ftype> &y) override {
+    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
-        CUDNN_CHECK(hhlpLinearForward(cuda.cudnn_handle, data.w.data(),
-                                      data.b.data(), x.data(), y.data(),
+        CUDNN_CHECK(hhlpLinearForward(cuda.cudnn_handle, in.w.data(),
+                                      in.b.data(), in.x.data(), out.y.data(),
                                       nb_inputs, nb_outputs,
                                       this->dims.batch_size, CUDNN_DATA_TYPE));
     }
 
-    void bwd(cuda_data_t cuda, bwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &dy,
-             tensor::Tensor<ftype> &dx) override {
+    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
 
         // grads_b = error
         CUDNN_CHECK(hhlpLinearBackwardBias(
-            cuda.cudnn_handle, dy.data(), data.db.data(),
-            this->dims.outputs, this->dims.batch_size, CUDNN_DATA_TYPE));
+            cuda.cudnn_handle, in.dy.data(), out.db.data(), this->dims.outputs,
+            this->dims.batch_size, CUDNN_DATA_TYPE));
         // w_grad = err * fwd_inputT
         CUDNN_CHECK(hhlpLinearBackwardWeights(
-            cuda.cudnn_handle, dy.data(), data.x.data(), data.dw.data(),
+            cuda.cudnn_handle, in.dy.data(), in.x.data(), out.dw.data(),
             this->dims.outputs, this->dims.inputs, this->dims.batch_size,
             CUDNN_DATA_TYPE));
         // output_err = errT * weights
         CUDNN_CHECK(hhlpLinearBackwardData(
-            cuda.cudnn_handle, dy.data(), data.w.data(), dx.data(),
+            cuda.cudnn_handle, in.dy.data(), in.w.data(), out.dx.data(),
             nb_outputs, nb_inputs, this->dims.batch_size, CUDNN_DATA_TYPE));
     }
 

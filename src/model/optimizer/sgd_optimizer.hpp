@@ -13,7 +13,7 @@ struct SGDOptimizer : Optimizer<ftype> {
 
     SGDOptimizer(ftype learning_rate) : learning_rate(learning_rate) {}
 
-    void optimize(cuda_data_t cuda, LayerData<ftype> &data) override {
+    void optimize(CUDA cuda, LayerData<ftype> &data) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
 
         // params = params - learning_rate * gradients

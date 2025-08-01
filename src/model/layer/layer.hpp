@@ -4,26 +4,36 @@
 #include "../../model/data/dims.hpp"
 #include "../../model/data/layer_data.hpp"
 
-template <typename T>
 struct Parameters {
-    tensor::Tensor<T> &w;
-    tensor::Tensor<T> &b;
+    tensor::Tensor<ftype> &w;
+    tensor::Tensor<ftype> &b;
 };
 
-template <typename T>
-struct fwd_data_t {
-    tensor::Tensor<T> const &w;
-    tensor::Tensor<T> const &b;
+using InitFwdData = LayerData<ftype>;
+using InitBwdData = LayerData<ftype>;
+
+struct FwdIn {
+    tensor::Tensor<const ftype> &x;
+    tensor::Tensor<ftype> &w;
+    tensor::Tensor<ftype> &b;
 };
 
-template <typename T>
-struct bwd_data_t {
-    tensor::Tensor<const T> &x;
-    tensor::Tensor<T> &y;
-    tensor::Tensor<T> &w;
-    tensor::Tensor<T> &b;
-    tensor::Tensor<T> &dw;
-    tensor::Tensor<T> &db;
+struct FwdOut {
+    tensor::Tensor<ftype> &y;
+};
+
+struct BwdIn {
+    tensor::Tensor<const ftype> &dy;
+    tensor::Tensor<const ftype> &x;
+    tensor::Tensor<ftype> &y;
+    tensor::Tensor<ftype> &w;
+    tensor::Tensor<ftype> &b;
+};
+
+struct BwdOut {
+    tensor::Tensor<ftype> &dx;
+    tensor::Tensor<ftype> &dw;
+    tensor::Tensor<ftype> &db;
 };
 
 template <typename T> struct Layer {
@@ -33,20 +43,18 @@ template <typename T> struct Layer {
     Layer(dims_t dims) : dims(dims) {}
     virtual ~Layer() {}
 
-    virtual LayerParametersShape parameters_shape() const {
-        return {};
-    }
+    // get shapes
+    virtual LayerParametersShape parameters_shape() const { return {}; }
     virtual LayerIOShape io_shape(tensor::dims_t const &input_dims) const = 0;
-    virtual void init_parameters(cuda_data_t cuda, Parameters<T> params) {}
 
-    // override optional
-    virtual void init_fwd(cuda_data_t cuda, LayerData<T> const &data) {}
-    virtual void init_bwd(cuda_data_t cuda, LayerData<T> const &data) {}
+    // init functions
+    virtual void init_parameters(CUDA cuda, Parameters const &params) {}
+    virtual void init_fwd(CUDA cuda, InitFwdData const &data) {}
+    virtual void init_bwd(CUDA cuda, InitFwdData const &data) {}
 
-    virtual void fwd(cuda_data_t cuda, fwd_data_t<T> const &data,
-                     tensor::Tensor<const T> const &x, tensor::Tensor<T> &y) = 0;
-    virtual void bwd(cuda_data_t cuda, bwd_data_t<T> const &data,
-                     tensor::Tensor<const T> const &dy, tensor::Tensor<T> &dx) = 0;
+    // fwd and bwd implementation
+    virtual void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) = 0;
+    virtual void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) = 0;
 };
 
 #endif

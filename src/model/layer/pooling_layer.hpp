@@ -32,8 +32,7 @@ struct PoolingLayer : Layer<ftype> {
         CUDNN_CHECK(cudnnDestroyTensorDescriptor(input_descriptor));
     }
 
-    virtual LayerIOShape
-    io_shape(tensor::dims_t const &input_dims) const override {
+    LayerIOShape io_shape(tensor::dims_t const &input_dims) const override {
         tensor::dims_t output_dims;
         cudnnSetTensorNdDescriptorEx(input_descriptor, CUDNN_TENSOR_NCHW,
                                      CUDNN_DATA_TYPE, input_dims.size(),
@@ -48,37 +47,32 @@ struct PoolingLayer : Layer<ftype> {
         };
     }
 
-    virtual void init_fwd(cuda_data_t cuda,
-                          LayerData<ftype> const &data) override {
+    void init_fwd(CUDA cuda, InitFwdData const &data) override {
         tensor::dims_t input_dims = data.x.dims();
         cudnnSetTensorNdDescriptorEx(input_descriptor, CUDNN_TENSOR_NCHW,
                                      CUDNN_DATA_TYPE, input_dims.size(),
                                      input_dims.data());
     }
 
-    void fwd(cuda_data_t cuda, fwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &x,
-             tensor::Tensor<ftype> &y) override {
+    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
         ftype alpha = 1;
         ftype beta = 0;
 
         CUDNN_CHECK(cudnnPoolingForward(cuda.cudnn_handle, pooling_descriptor,
-                                        &alpha, x.desc(), x.data(), &beta,
-                                        y.desc(), y.data()));
+                                        &alpha, in.x.desc(), in.x.data(), &beta,
+                                        out.y.desc(), out.y.data()));
     }
 
-    void bwd(cuda_data_t cuda, bwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &dy,
-             tensor::Tensor<ftype> &dx) override {
-        auto error_descriptor = dy.desc();
-        auto error_data = dy.data();
+    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
+        auto error_descriptor = in.dy.desc();
+        auto error_data = in.dy.data();
         ftype alpha = 1;
         ftype beta = 0;
 
         CUDNN_CHECK(cudnnPoolingBackward(
-            cuda.cudnn_handle, pooling_descriptor, &alpha, data.y.desc(),
-            data.y.data(), error_descriptor, error_data, data.x.desc(),
-            data.x.data(), &beta, dx.desc(), dx.data()));
+            cuda.cudnn_handle, pooling_descriptor, &alpha, in.y.desc(),
+            in.y.data(), error_descriptor, error_data, in.x.desc(), in.x.data(),
+            &beta, out.dx.desc(), out.dx.data()));
     }
 };
 

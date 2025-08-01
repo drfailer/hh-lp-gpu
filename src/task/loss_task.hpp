@@ -55,7 +55,7 @@ class LossTask : public hh::AbstractCUDATask<LossTaskIO> {
 
   private:
     std::shared_ptr<Loss<ftype>> loss_ = nullptr;
-    cuda_data_t cuda_data_;
+    CUDA cuda_data_;
 };
 
 #endif

@@ -18,8 +18,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
         CUDNN_CHECK(cudnnCreate(&cuda_.cudnn_handle));
         CUDNN_CHECK(cudnnSetStream(cuda_.cudnn_handle, this->stream()));
         CUBLAS_CHECK(cublasCreate_v2(&cuda_.cublas_handle));
-        CUBLAS_CHECK(
-            cublasSetStream_v2(cuda_.cublas_handle, this->stream()));
+        CUBLAS_CHECK(cublasSetStream_v2(cuda_.cublas_handle, this->stream()));
     }
 
     void shutdownCuda() override {
@@ -34,7 +33,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
         for (auto layer : layers_) {
             LayerData<ftype> &ld = lds->layers[layer->idx];
             ld.x.data(x->data());
-            layer->fwd(cuda_, {ld.w, ld.b}, ld.x, ld.y);
+            layer->fwd(cuda_, {ld.x, ld.w, ld.b}, {ld.y});
             x = &ld.y;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         }
@@ -56,7 +55,7 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    cuda_data_t cuda_;
+    CUDA cuda_;
 };
 
 #endif

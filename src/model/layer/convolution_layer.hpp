@@ -104,8 +104,8 @@ struct ConvolutionLayer : Layer<ftype> {
         // TODO: we should be able to remove this at some point
         // properly set the input descriptor
         CUDNN_CHECK(cudnnSetTensor4dDescriptor(
-            input_descriptor, CUDNN_TENSOR_NCHW, CUDNN_DATA_TYPE,
-            input_dims[0], input_dims[1], input_dims[2], input_dims[3]));
+            input_descriptor, CUDNN_TENSOR_NCHW, CUDNN_DATA_TYPE, input_dims[0],
+            input_dims[1], input_dims[2], input_dims[3]));
         assert(input_height == input_dims[2]);
         assert(input_width == input_dims[3]);
 
@@ -121,15 +121,14 @@ struct ConvolutionLayer : Layer<ftype> {
         };
     }
 
-    void init_parameters(cuda_data_t cuda,
-                         Parameters<ftype> params) override {
+    void init_parameters(CUDA cuda, Parameters const &params) override {
         CUDA_CHECK(params.w.random_init(-0.05, 0.05));
         if (use_biases) {
             CUDA_CHECK(params.b.random_init(-0.05, 0.05));
         }
     }
 
-    void init_fwd(cuda_data_t cuda, LayerData<ftype> const &data) override {
+    void init_fwd(CUDA cuda, InitFwdData const &data) override {
         CUDNN_CHECK(cudnnGetConvolutionForwardWorkspaceSize(
             cuda.cudnn_handle, input_descriptor, filter_descriptor,
             convolution_descriptor, data.y.desc(), fwd_algo,
@@ -138,7 +137,7 @@ struct ConvolutionLayer : Layer<ftype> {
         CUDA_CHECK(alloc_gpu(&convolution_fw_ws, convolution_fw_ws_size));
     }
 
-    void init_bwd(cuda_data_t cuda, LayerData<ftype> const &data) override {
+    void init_bwd(CUDA cuda, LayerData<ftype> const &data) override {
         CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(
             cuda.cudnn_handle, filter_descriptor, data.y.desc(),
             convolution_descriptor, input_descriptor, bwd_data_algo,
@@ -156,15 +155,14 @@ struct ConvolutionLayer : Layer<ftype> {
                              convolution_bw_filter_ws_size));
     }
 
-    void fwd(cuda_data_t cuda, fwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &x,
-             tensor::Tensor<ftype> &y) override {
+    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnConvolutionForward(
-            cuda.cudnn_handle, &alpha, x.desc(), x.data(), filter_descriptor,
-            data.w.data(), convolution_descriptor, fwd_algo, convolution_fw_ws,
-            convolution_fw_ws_size, &beta, y.desc(), y.data()));
+            cuda.cudnn_handle, &alpha, in.x.desc(), in.x.data(),
+            filter_descriptor, in.w.data(), convolution_descriptor, fwd_algo,
+            convolution_fw_ws, convolution_fw_ws_size, &beta, out.y.desc(),
+            out.y.data()));
 
         if (!use_biases) {
             return;
@@ -172,39 +170,38 @@ struct ConvolutionLayer : Layer<ftype> {
 
         alpha = 1;
         beta = 1;
-        CUDNN_CHECK(cudnnAddTensor(cuda.cudnn_handle, &alpha, data.b.desc(),
-                                   data.b.data(), &beta, y.desc(), y.data()));
+        CUDNN_CHECK(cudnnAddTensor(cuda.cudnn_handle, &alpha, in.b.desc(),
+                                   in.b.data(), &beta, out.y.desc(),
+                                   out.y.data()));
     }
 
-    void bwd(cuda_data_t cuda, bwd_data_t<ftype> const &data,
-             tensor::Tensor<const ftype> const &dy,
-             tensor::Tensor<ftype> &dx) override {
+    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
         ftype alpha = 1.0 / dims.batch_size, beta = 0;
         // The shape of the input error might be wrong if the next layer is
         // linear, so we need to use the shape of the output.
-        auto output_gradient_descriptor = dy.desc();
-        auto output_gradient_data = dy.data();
+        auto output_gradient_descriptor = in.dy.desc();
+        auto output_gradient_data = in.dy.data();
 
         // compute biases gradient (gradient / biases)
         CUDNN_CHECK(cudnnConvolutionBackwardBias(
             cuda.cudnn_handle, &alpha, output_gradient_descriptor,
-            output_gradient_data, &beta, data.db.desc(), data.db.data()));
+            output_gradient_data, &beta, out.db.desc(), out.db.data()));
 
         // compute weights gradient (gradient / weights)
         CUDNN_CHECK(cudnnConvolutionBackwardFilter(
-            cuda.cudnn_handle, &alpha, data.x.desc(), data.x.data(),
+            cuda.cudnn_handle, &alpha, in.x.desc(), in.x.data(),
             output_gradient_descriptor, output_gradient_data,
             convolution_descriptor, bwd_filter_algo, convolution_bw_filter_ws,
             convolution_bw_filter_ws_size, &beta, filter_descriptor,
-            data.dw.data()));
+            out.dw.data()));
 
         // compute the output error (gradient / data)
         alpha = 1;
         CUDNN_CHECK(cudnnConvolutionBackwardData(
-            cuda.cudnn_handle, &alpha, filter_descriptor, data.w.data(),
+            cuda.cudnn_handle, &alpha, filter_descriptor, in.w.data(),
             output_gradient_descriptor, output_gradient_data,
             convolution_descriptor, bwd_data_algo, convolution_bw_data_ws,
-            convolution_bw_data_ws_size, &beta, dx.desc(), dx.data()));
+            convolution_bw_data_ws_size, &beta, out.dx.desc(), out.dx.data()));
     }
 };
 
