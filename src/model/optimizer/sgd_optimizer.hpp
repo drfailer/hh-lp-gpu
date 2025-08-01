@@ -13,23 +13,23 @@ struct SGDOptimizer : Optimizer<ftype> {
 
     SGDOptimizer(ftype learning_rate) : learning_rate(learning_rate) {}
 
-    void optimize(CUDA cuda, LayerData<ftype> &data) override {
+    void optimize(CUDA cuda, OptimizerIn const &in, OptimizerOut const &out) override {
         INFO_GRP("Optimizer", INFO_GRP_LAYER_TASK);
 
         // params = params - learning_rate * gradients
 
         ftype alpha = -learning_rate, beta = 1;
 
-        if (!data.w.empty() && data.w.size() > 0) {
+        if (!out.w.empty() && out.w.size() > 0) {
             CUDNN_CHECK(cudnnAddTensor(cuda.cudnn_handle, &alpha,
-                                       data.dw.desc(), data.dw.data(), &beta,
-                                       data.w.desc(), data.w.data()));
+                                       in.dw.desc(), in.dw.data(), &beta,
+                                       out.w.desc(), out.w.data()));
         }
 
-        if (!data.b.empty() && data.b.size() > 0) {
+        if (!out.b.empty() && out.b.size() > 0) {
             CUDNN_CHECK(cudnnAddTensor(cuda.cudnn_handle, &alpha,
-                                       data.db.desc(), data.db.data(), &beta,
-                                       data.b.desc(), data.b.data()));
+                                       in.db.desc(), in.db.data(), &beta,
+                                       out.b.desc(), out.b.data()));
         }
     }
 

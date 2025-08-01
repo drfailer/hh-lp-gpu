@@ -357,7 +357,7 @@ UTest(sgd_optimizer) {
     CUDA_CHECK(ld.db.from_host(biases_gradients));
 
     auto sgd = optimizer_factory.copy();
-    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, ld);
+    sgd->optimize({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.dw, ld.db}, {ld.w, ld.b});
 
     ftype result_weights[inputs * outputs] = {0}, result_biases[outputs] = {0};
     CUDA_CHECK(ld.w.to_host(result_weights));

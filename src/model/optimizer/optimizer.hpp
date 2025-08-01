@@ -4,9 +4,21 @@
 #include "../../model/data/layer_data.hpp"
 #include <memory>
 
+using OptimizerInitData = LayerData<ftype>;
+
+struct OptimizerIn {
+    tensor::Tensor<ftype> &dw;
+    tensor::Tensor<ftype> &db;
+};
+
+struct OptimizerOut {
+    tensor::Tensor<ftype> &w;
+    tensor::Tensor<ftype> &b;
+};
+
 template <typename T> struct Optimizer {
-    virtual void init(CUDA cuda_data, LayerData<T> &state) {}
-    virtual void optimize(CUDA cuda_data, LayerData<T> &state) = 0;
+    virtual void init(CUDA cuda, OptimizerInitData const &data) {}
+    virtual void optimize(CUDA cuda, OptimizerIn const &in, OptimizerOut const &out) = 0;
     virtual std::shared_ptr<Optimizer<T>> copy() const = 0;
 };
 
