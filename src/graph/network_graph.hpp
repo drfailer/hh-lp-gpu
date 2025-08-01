@@ -95,17 +95,17 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
   public:
     /*
-     * Create the NNState with allocated parameters and the gradient for the
+     * Create the NetworkData with allocated parameters and the gradient for the
      * network if needed. The rest of the data required for the computation is
      * allocated in `init_state`.
      */
-    std::shared_ptr<NNState<ftype>> init_parameters() {
-        auto state = std::make_shared<NNState<ftype>>();
+    std::shared_ptr<NetworkData<ftype>> init_parameters() {
+        auto nn = std::make_shared<NetworkData<ftype>>();
 
-        this->pushData(std::make_shared<InitParametersData<ftype>>(state));
+        this->pushData(std::make_shared<InitParametersData<ftype>>(nn));
         (void)this->get<InitParametersData<ftype>>();
         this->cleanGraph();
-        return state;
+        return nn;
     }
 
     /*
@@ -120,30 +120,29 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated and initialized, meaning that no allocation or initialization
      * will be done during the computation to ensure maximum performance.
      */
-    void init(std::shared_ptr<NNState<ftype>> state,
+    void init(std::shared_ptr<NetworkData<ftype>> nn,
               tensor::dims_t input_dims) {
-        this->pushData(std::make_shared<InitData<ftype>>(state, input_dims));
+        this->pushData(std::make_shared<InitData<ftype>>(nn, input_dims));
         (void)this->get<InitData<ftype>>();
         this->cleanGraph();
     }
 
-    tensor::Tensor<ftype> const &predict(std::shared_ptr<NNState<ftype>> state,
+    tensor::Tensor<ftype> const &predict(std::shared_ptr<NetworkData<ftype>> nn,
                                          tensor::Tensor<ftype> const &input) {
-        this->pushData(std::make_shared<PredictionData<ftype>>(state, &input));
+        this->pushData(std::make_shared<PredictionData<ftype>>(nn, &input));
         tensor::Tensor<ftype> const *output =
             this->get<PredictionData<ftype>>()->input;
         this->cleanGraph();
         return *output;
     }
 
-    std::shared_ptr<NNState<ftype>> train(std::shared_ptr<NNState<ftype>> state,
-                                          DataSet<ftype> const &ds,
-                                          size_t epochs) {
-        this->pushData(
-            std::make_shared<TrainingData<ftype>>(state, ds, epochs));
+    std::shared_ptr<NetworkData<ftype>>
+    train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> const &ds,
+          size_t epochs) {
+        this->pushData(std::make_shared<TrainingData<ftype>>(nn, ds, epochs));
         (void)this->get<TrainingData<ftype>>();
         this->cleanGraph();
-        return state;
+        return nn;
     }
 
   public:

@@ -28,10 +28,10 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         tensor::Tensor<ftype> const *x = data->input;
-        auto &lds = data->states;
+        auto &nn = data->network_data;
 
         for (auto layer : layers_) {
-            LayerData<ftype> &ld = lds->layers[layer->idx];
+            LayerData<ftype> &ld = nn->layers_datas[layer->idx];
             ld.x.data(x->data());
             layer->fwd(cuda_, {ld.x, ld.w, ld.b}, {ld.y});
             x = &ld.y;

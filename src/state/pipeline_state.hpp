@@ -57,13 +57,12 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
             // we might remove this
             step_from_to(Step_::Fwd, Step_::Bwd);
             this->addResult(std::make_shared<LossBwdData<ftype>>(
-                data->states, data->input,
-                &train_data_.data_set->datas[data_set_idx_].ground_truth,
-                nullptr));
+                data->network_data, data->input,
+                &train_data_.data_set->datas[data_set_idx_].ground_truth));
         } else {
             step_from_to(Step_::Inference, Step_::Idle);
             this->addResult(std::make_shared<PredictionData<ftype>>(
-                data->states, data->input));
+                data->network_data, data->input));
         }
     }
 

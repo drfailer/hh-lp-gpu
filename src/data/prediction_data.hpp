@@ -1,11 +1,11 @@
 #ifndef DATA_PREDICTION_DATA_H
 #define DATA_PREDICTION_DATA_H
-#include "../model/data/nn_state.hpp"
+#include "../model/data/network_data.hpp"
 #include <memory>
 
 template <typename T>
 struct PredictionData {
-    std::shared_ptr<NNState<T>> states;
+    std::shared_ptr<NetworkData<T>> states;
     tensor::Tensor<T> const *input;
 };
 

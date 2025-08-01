@@ -30,17 +30,17 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
         auto const *dy = data->error;
-        auto &states = data->states;
+        auto &nn = data->network_data;
 
         for (int i = layers_.size() - 1; i >= 0; --i) {
-            auto &ld = states->layers[layers_[i]->idx];
+            auto &ld = nn->layers_datas[layers_[i]->idx];
             ld.dy.data(dy->data());
             layers_[i]->bwd(cuda_data_, {ld.dy, ld.x, ld.y, ld.w, ld.b},
                             {ld.dx, ld.dw, ld.db});
             dy = &ld.dx;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
             this->addResult(std::make_shared<OptLayerData<ftype>>(
-                data->states, layers_[i]->idx));
+                data->network_data, layers_[i]->idx));
         }
         data->error = dy;
         this->addResult(data);

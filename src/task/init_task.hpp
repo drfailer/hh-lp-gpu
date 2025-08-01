@@ -40,7 +40,7 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
             ld.w = tensor::tensor<ftype>(param_shape.w);
             ld.b = tensor::tensor<ftype>(param_shape.b);
             layer->init_parameters(cuda_data_, {ld.w, ld.b});
-            data->states->layers.push_back(ld);
+            data->states->layers_datas.push_back(ld);
         }
         this->addResult(data);
     }
@@ -48,12 +48,12 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
     void
     execute(std::shared_ptr<InitData<ftype, InitTarget::Layer>> data) override {
         auto dims = data->input_dims;
-        auto &states = data->states;
+        auto &nn = data->network_data;
 
         // TODO: do not allocate gradients during the inference
         for (auto layer : layers_) {
             auto io_shape = layer->io_shape(dims);
-            auto &ld = states->layers[layer->idx];
+            auto &ld = nn->layers_datas[layer->idx];
 
             // input dims of the next layer
             dims = io_shape.y.dims;

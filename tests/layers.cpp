@@ -54,15 +54,15 @@ ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
 
-void init_test_parameters(LayerData<ftype> &state, dims_t dims, ftype value) {
+void init_test_parameters(LayerData<ftype> &data, dims_t dims, ftype value) {
     int weights_size = dims.inputs * dims.outputs;
     std::vector<ftype> weights(weights_size, value);
     std::vector<ftype> biases(dims.outputs, value);
-    state.w.from_host(weights.data());
-    state.b.from_host(biases.data());
+    data.w.from_host(weights.data());
+    data.b.from_host(biases.data());
 }
 
-void init_test_parameters(LayerData<ftype> &state, dims_t dims) {
+void init_test_parameters(LayerData<ftype> &data, dims_t dims) {
     std::vector<ftype> weights(dims.inputs * dims.outputs);
     std::vector<ftype> biases(dims.outputs);
 
@@ -76,8 +76,8 @@ void init_test_parameters(LayerData<ftype> &state, dims_t dims) {
     for (int i = 0; i < dims.outputs; ++i) {
         biases[i] = i + 1;
     }
-    state.w.from_host(weights.data());
-    state.b.from_host(biases.data());
+    data.w.from_host(weights.data());
+    data.b.from_host(biases.data());
 }
 
 int mnist_get_label(ftype *arr) {
@@ -92,16 +92,16 @@ int mnist_get_label(ftype *arr) {
 }
 
 float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
-                     std::shared_ptr<NNState<ftype>> &state,
+                     std::shared_ptr<NetworkData<ftype>> &data,
                      int batch_size = 1) {
     int success = 0;
     int errors = 0;
     std::vector<ftype> expected(batch_size * 10, 0), found(batch_size * 10, 0);
 
     timer_start(evaluate_mnist);
-    for (auto &data : testing_set.datas) {
-        auto &output = graph.predict(state, data.input);
-        CUDA_CHECK(data.ground_truth.to_host(expected.data()));
+    for (auto &test_data : testing_set.datas) {
+        auto &output = graph.predict(data, test_data.input);
+        CUDA_CHECK(test_data.ground_truth.to_host(expected.data()));
         CUDA_CHECK(output.to_host(found.data()));
 
         for (size_t i = 0; i < batch_size; ++i) {
@@ -391,13 +391,13 @@ UTest(inference) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.init_parameters();
-    graph.init(state, {1, 1, inputs, 1});
+    auto data = graph.init_parameters();
+    graph.init(data, {1, 1, inputs, 1});
 
-    init_test_parameters(state->layers[0],
+    init_test_parameters(data->layers_datas[0],
                          dims_t{.inputs = inputs, .outputs = outputs});
 
-    graph.pushData(std::make_shared<PredictionData<ftype>>(state, &input_gpu));
+    graph.pushData(std::make_shared<PredictionData<ftype>>(data, &input_gpu));
     auto output_gpu = graph.get<PredictionData<ftype>>()->input;
     graph.terminate();
 
@@ -438,12 +438,12 @@ UTest(training) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.init_parameters();
-    graph.init(state, {1, 1, nb_inputs, 1});
+    auto data = graph.init_parameters();
+    graph.init(data, {1, 1, nb_inputs, 1});
 
     timer_start(training);
     graph.pushData(
-        std::make_shared<TrainingData<ftype>>(state, data_set, epochs));
+        std::make_shared<TrainingData<ftype>>(data, data_set, epochs));
     (void)graph.get<TrainingData<ftype>>();
     timer_end(training);
     graph.terminate();
@@ -481,17 +481,17 @@ UTest(mnist) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.init_parameters();
-    graph.init(state, {1, 1, 28, 28});
+    auto data = graph.init_parameters();
+    graph.init(data, {1, 1, 28, 28});
 
     INFO("Inference before training...");
-    ftype accuracy_start = evaluate_mnist(graph, testing_set, state);
+    ftype accuracy_start = evaluate_mnist(graph, testing_set, data);
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     timer_start(online_training);
     graph.pushData(
-        std::make_shared<TrainingData<ftype>>(state, training_set, epochs));
+        std::make_shared<TrainingData<ftype>>(data, training_set, epochs));
     (void)graph.get<TrainingData<ftype>>();
     timer_end(online_training);
     graph.cleanGraph();
@@ -499,7 +499,7 @@ UTest(mnist) {
     timer_report_prec(online_training, milliseconds);
 
     INFO("Evaluate the model...");
-    ftype accuracy_end = evaluate_mnist(graph, testing_set, state);
+    ftype accuracy_end = evaluate_mnist(graph, testing_set, data);
 
     graph.terminate();
 
@@ -541,27 +541,27 @@ UTest(mnist_batched) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.init_parameters();
+    auto data = graph.init_parameters();
 
     INFO("Inference before training...");
-    graph.init(state, {test_batch_size, 1, 28, 28});
+    graph.init(data, {test_batch_size, 1, 28, 28});
     ftype accuracy_start =
-        evaluate_mnist(graph, testing_set, state, test_batch_size);
+        evaluate_mnist(graph, testing_set, data, test_batch_size);
 
-    graph.init(state, {batch_size, 1, 28, 28});
+    graph.init(data, {batch_size, 1, 28, 28});
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     timer_start(batch_training);
-    graph.train(state, training_set, epochs);
+    graph.train(data, training_set, epochs);
     timer_end(batch_training);
 
     timer_report_prec(batch_training, milliseconds);
 
     INFO("Evaluate the model...");
-    graph.init(state, {test_batch_size, 1, 28, 28});
+    graph.init(data, {test_batch_size, 1, 28, 28});
     ftype accuracy_end =
-        evaluate_mnist(graph, testing_set, state, test_batch_size);
+        evaluate_mnist(graph, testing_set, data, test_batch_size);
 
     graph.terminate();
 
@@ -603,27 +603,27 @@ UTest(mnist_multi_node) {
     graph.build();
     graph.executeGraph(true);
 
-    auto state = graph.init_parameters();
+    auto data = graph.init_parameters();
 
     INFO("Inference before training...");
-    graph.init(state, {test_batch_size, 1, 28, 28});
+    graph.init(data, {test_batch_size, 1, 28, 28});
     ftype accuracy_start =
-        evaluate_mnist(graph, testing_set, state, test_batch_size);
+        evaluate_mnist(graph, testing_set, data, test_batch_size);
 
-    graph.init(state, {batch_size, 1, 28, 28});
+    graph.init(data, {batch_size, 1, 28, 28});
 
     INFO("start training (learning_rate = " << learning_rate
                                             << ", epochs = " << epochs << ")");
     timer_start(batch_training);
-    graph.train(state, training_set, epochs);
+    graph.train(data, training_set, epochs);
     timer_end(batch_training);
 
     timer_report_prec(batch_training, milliseconds);
 
     INFO("Evaluate the model...");
-    graph.init(state, {test_batch_size, 1, 28, 28});
+    graph.init(data, {test_batch_size, 1, 28, 28});
     ftype accuracy_end =
-        evaluate_mnist(graph, testing_set, state, test_batch_size);
+        evaluate_mnist(graph, testing_set, data, test_batch_size);
 
     graph.terminate();
 

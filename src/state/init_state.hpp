@@ -52,7 +52,7 @@ class InitState : public hh::AbstractState<InitStateIO> {
         std::shared_ptr<InitData<ftype, InitTarget::Network>> data) override {
         step_from_to(Step::Idle, Step::InitLayer);
         this->addResult(std::make_shared<InitData<ftype, InitTarget::Layer>>(
-            data->states, data->input_dims));
+            data->network_data, data->input_dims));
     }
 
     void
@@ -61,11 +61,11 @@ class InitState : public hh::AbstractState<InitStateIO> {
             step_from_to(Step::InitLayer, Step::Idle);
             this->addResult(
                 std::make_shared<InitData<ftype, InitTarget::Network>>(
-                    data->states, data->input_dims));
+                    data->network_data, data->input_dims));
         } else {
             step_from_to(Step::InitLayer, Step::InitLoss);
             this->addResult(std::make_shared<InitData<ftype, InitTarget::Loss>>(
-                data->states, data->input_dims));
+                data->network_data, data->input_dims));
         }
     }
 
@@ -73,7 +73,7 @@ class InitState : public hh::AbstractState<InitStateIO> {
     execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
         step_from_to(Step::InitLoss, Step::Idle);
         this->addResult(std::make_shared<InitData<ftype, InitTarget::Network>>(
-            data->states, data->input_dims));
+            data->network_data, data->input_dims));
     }
 
     void terminate() { step_ = Step::Finish; }
