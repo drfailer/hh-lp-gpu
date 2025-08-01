@@ -1,9 +1,10 @@
 #ifndef TASK_INIT_TASK
 #define TASK_INIT_TASK
-#include "../data/init_parameters_data.hpp"
 #include "../data/init_data.hpp"
+#include "../data/init_parameters_data.hpp"
 #include "../model/layer/layer.hpp"
 #include "../types.hpp"
+#include "cuda_task.hpp"
 #include <hedgehog/hedgehog.h>
 #include <memory>
 
@@ -15,22 +16,9 @@
         InitData<ftype, InitTarget::Layer>
 #define InitTaskIO 2, InitTaskIn, InitTaskOut
 
-class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
+class InitTask : public CUDATask<InitTaskIO> {
   public:
-    InitTask() : hh::AbstractCUDATask<InitTaskIO>("InitTask") {}
-
-    void initializeCuda() override {
-        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
-        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
-        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
-        CUBLAS_CHECK(
-            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
-    }
-
-    void shutdownCuda() override {
-        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
-        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
-    }
+    InitTask() : CUDATask<InitTaskIO>("InitTask") {}
 
     void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Layer>>
                      data) override {
@@ -39,7 +27,7 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
             auto param_shape = layer->parameters_shape();
             ld.w = tensor::tensor<ftype>(param_shape.w);
             ld.b = tensor::tensor<ftype>(param_shape.b);
-            layer->init_parameters(cuda_data_, {ld.w, ld.b});
+            layer->init_parameters(cuda_, {ld.w, ld.b});
             data->states->layers_datas.push_back(ld);
         }
         this->addResult(data);
@@ -61,14 +49,14 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
             // fwd init
             ld.x = tensor::tensor_view<const ftype>(io_shape.x, nullptr);
             ld.y = tensor::tensor<ftype>(io_shape.y);
-            layer->init_fwd(cuda_data_, ld);
+            layer->init_fwd(cuda_, ld);
 
             // bwd init
             ld.dx = tensor::tensor<ftype>(io_shape.x);
             ld.dy = tensor::tensor_view<const ftype>(io_shape.y, nullptr);
             ld.dw = tensor::tensor_like<ftype>(ld.w);
             ld.db = tensor::tensor_like<ftype>(ld.b);
-            layer->init_bwd(cuda_data_, ld);
+            layer->init_bwd(cuda_, ld);
         }
         data->input_dims = dims;
         this->addResult(data);
@@ -84,7 +72,6 @@ class InitTask : public hh::AbstractCUDATask<InitTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    CUDA cuda_data_;
 };
 
 #endif

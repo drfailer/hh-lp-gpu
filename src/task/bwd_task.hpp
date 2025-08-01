@@ -4,6 +4,7 @@
 #include "../data/opt_layer_data.hpp"
 #include "../model/layer/layer.hpp"
 #include "../types.hpp"
+#include "cuda_task.hpp"
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
@@ -11,22 +12,9 @@
 #define BwdTaskOut BwdData<ftype>, OptLayerData<ftype>
 #define BwdTaskIO 1, BwdTaskIn, BwdTaskOut
 
-class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
+class BwdTask : public CUDATask<BwdTaskIO> {
   public:
-    BwdTask() : hh::AbstractCUDATask<BwdTaskIO>("BwdTask", 1) {}
-
-    void initializeCuda() override {
-        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
-        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
-        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
-        CUBLAS_CHECK(
-            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
-    }
-
-    void shutdownCuda() override {
-        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
-        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
-    }
+    BwdTask() : CUDATask<BwdTaskIO>("BwdTask", 1) {}
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
         auto const *dy = data->error;
@@ -35,7 +23,7 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
         for (int i = layers_.size() - 1; i >= 0; --i) {
             auto &ld = nn->layers_datas[layers_[i]->idx];
             ld.dy.data(dy->data());
-            layers_[i]->bwd(cuda_data_, {ld.dy, ld.x, ld.y, ld.w, ld.b},
+            layers_[i]->bwd(cuda_, {ld.dy, ld.x, ld.y, ld.w, ld.b},
                             {ld.dx, ld.dw, ld.db});
             dy = &ld.dx;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
@@ -56,7 +44,6 @@ class BwdTask : public hh::AbstractCUDATask<BwdTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    CUDA cuda_data_;
 };
 
 #endif

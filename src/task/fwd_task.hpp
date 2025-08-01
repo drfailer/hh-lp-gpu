@@ -3,6 +3,7 @@
 #include "../data/fwd_data.hpp"
 #include "../model/layer/layer.hpp"
 #include "../types.hpp"
+#include "cuda_task.hpp"
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
@@ -10,21 +11,9 @@
 #define FwdTaskOut FwdData<ftype>
 #define FwdTaskIO 1, FwdTaskIn, FwdTaskOut
 
-class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
+class FwdTask : public CUDATask<FwdTaskIO> {
   public:
-    FwdTask() : hh::AbstractCUDATask<FwdTaskIO>("FwdTask", 1) {}
-
-    void initializeCuda() override {
-        CUDNN_CHECK(cudnnCreate(&cuda_.cudnn_handle));
-        CUDNN_CHECK(cudnnSetStream(cuda_.cudnn_handle, this->stream()));
-        CUBLAS_CHECK(cublasCreate_v2(&cuda_.cublas_handle));
-        CUBLAS_CHECK(cublasSetStream_v2(cuda_.cublas_handle, this->stream()));
-    }
-
-    void shutdownCuda() override {
-        CUDNN_CHECK(cudnnDestroy(cuda_.cudnn_handle));
-        CUBLAS_CHECK(cublasDestroy_v2(cuda_.cublas_handle));
-    }
+    FwdTask() : CUDATask<FwdTaskIO>("FwdTask", 1) {}
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
         tensor::Tensor<ftype> const *x = data->input;
@@ -55,7 +44,6 @@ class FwdTask : public hh::AbstractCUDATask<FwdTaskIO> {
 
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
-    CUDA cuda_;
 };
 
 #endif

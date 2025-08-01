@@ -3,38 +3,26 @@
 #include "../data/opt_layer_data.hpp"
 #include "../model/optimizer/optimizer.hpp"
 #include "../types.hpp"
+#include "cuda_task.hpp"
 #include <hedgehog/hedgehog.h>
 
 #define OptimizerTaskIn OptLayerData<ftype>
 #define OptimizerTaskOut OptLayerData<ftype>
 #define OptimizerTaskIO 1, OptimizerTaskIn, OptimizerTaskOut
 
-class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
+class OptimizerTask : public CUDATask<OptimizerTaskIO> {
   public:
     using OptimizerList = std::vector<std::shared_ptr<Optimizer<ftype>>>;
 
   public:
     OptimizerTask(std::shared_ptr<Optimizer<ftype>> optimizer,
                   size_t nb_threads)
-        : hh::AbstractCUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
+        : CUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
           optimizer_(optimizer) {}
-
-    void initializeCuda() override {
-        CUDNN_CHECK(cudnnCreate(&cuda_data_.cudnn_handle));
-        CUDNN_CHECK(cudnnSetStream(cuda_data_.cudnn_handle, this->stream()));
-        CUBLAS_CHECK(cublasCreate_v2(&cuda_data_.cublas_handle));
-        CUBLAS_CHECK(
-            cublasSetStream_v2(cuda_data_.cublas_handle, this->stream()));
-    }
-
-    void shutdownCuda() override {
-        CUDNN_CHECK(cudnnDestroy(cuda_data_.cudnn_handle));
-        CUBLAS_CHECK(cublasDestroy_v2(cuda_data_.cublas_handle));
-    }
 
     void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
         auto &ld = data->state->layers_datas[data->idx];
-        optimizer_->optimize(cuda_data_, {ld.dw, ld.db}, {ld.w, ld.b});
+        optimizer_->optimize(cuda_, {ld.dw, ld.db}, {ld.w, ld.b});
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }
@@ -46,7 +34,6 @@ class OptimizerTask : public hh::AbstractCUDATask<OptimizerTaskIO> {
 
   private:
     std::shared_ptr<Optimizer<ftype>> optimizer_ = nullptr;
-    CUDA cuda_data_;
 };
 
 #endif
