@@ -155,7 +155,7 @@ struct ConvolutionLayer : Layer<ftype> {
                              convolution_bw_filter_ws_size));
     }
 
-    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
+    void fwd(CUDA cuda, LayerFwdIn const &in, LayerFwdOut const &out) override {
         ftype alpha = 1, beta = 0;
 
         CUDNN_CHECK(cudnnConvolutionForward(
@@ -175,7 +175,7 @@ struct ConvolutionLayer : Layer<ftype> {
                                    out.y.data()));
     }
 
-    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
+    void bwd(CUDA cuda, LayerBwdIn const &in, LayerBwdOut const &out) override {
         ftype alpha = 1.0 / dims.batch_size, beta = 0;
         // The shape of the input error might be wrong if the next layer is
         // linear, so we need to use the shape of the output.

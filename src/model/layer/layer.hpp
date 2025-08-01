@@ -12,17 +12,17 @@ struct Parameters {
 using InitFwdData = LayerData<ftype>;
 using InitBwdData = LayerData<ftype>;
 
-struct FwdIn {
+struct LayerFwdIn {
     tensor::Tensor<const ftype> &x;
     tensor::Tensor<ftype> &w;
     tensor::Tensor<ftype> &b;
 };
 
-struct FwdOut {
+struct LayerFwdOut {
     tensor::Tensor<ftype> &y;
 };
 
-struct BwdIn {
+struct LayerBwdIn {
     tensor::Tensor<const ftype> &dy;
     tensor::Tensor<const ftype> &x;
     tensor::Tensor<ftype> &y;
@@ -30,7 +30,7 @@ struct BwdIn {
     tensor::Tensor<ftype> &b;
 };
 
-struct BwdOut {
+struct LayerBwdOut {
     tensor::Tensor<ftype> &dx;
     tensor::Tensor<ftype> &dw;
     tensor::Tensor<ftype> &db;
@@ -53,8 +53,8 @@ template <typename T> struct Layer {
     virtual void init_bwd(CUDA cuda, InitFwdData const &data) {}
 
     // fwd and bwd implementation
-    virtual void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) = 0;
-    virtual void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) = 0;
+    virtual void fwd(CUDA cuda, LayerFwdIn const &in, LayerFwdOut const &out) = 0;
+    virtual void bwd(CUDA cuda, LayerBwdIn const &in, LayerBwdOut const &out) = 0;
 };
 
 #endif

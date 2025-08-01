@@ -54,7 +54,7 @@ class LinearLayer : public Layer<ftype> {
         this->dims.batch_size = data.x.dim(0);
     }
 
-    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
+    void fwd(CUDA cuda, LayerFwdIn const &in, LayerFwdOut const &out) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
         CUDNN_CHECK(hhlpLinearForward(cuda.cudnn_handle, in.w.data(),
@@ -63,7 +63,7 @@ class LinearLayer : public Layer<ftype> {
                                       this->dims.batch_size, CUDNN_DATA_TYPE));
     }
 
-    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
+    void bwd(CUDA cuda, LayerBwdIn const &in, LayerBwdOut const &out) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
 
         // grads_b = error

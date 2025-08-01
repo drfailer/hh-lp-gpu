@@ -54,7 +54,7 @@ struct PoolingLayer : Layer<ftype> {
                                      input_dims.data());
     }
 
-    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
+    void fwd(CUDA cuda, LayerFwdIn const &in, LayerFwdOut const &out) override {
         ftype alpha = 1;
         ftype beta = 0;
 
@@ -63,7 +63,7 @@ struct PoolingLayer : Layer<ftype> {
                                         out.y.desc(), out.y.data()));
     }
 
-    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
+    void bwd(CUDA cuda, LayerBwdIn const &in, LayerBwdOut const &out) override {
         auto error_descriptor = in.dy.desc();
         auto error_data = in.dy.data();
         ftype alpha = 1;

@@ -29,7 +29,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
         };
     }
 
-    void fwd(CUDA cuda, FwdIn const &in, FwdOut const &out) override {
+    void fwd(CUDA cuda, LayerFwdIn const &in, LayerFwdOut const &out) override {
         INFO_GRP("SigmoidActivationLayer FWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
@@ -38,7 +38,7 @@ struct SigmoidActivationLayer : Layer<ftype> {
                                            out.y.desc(), out.y.data()));
     }
 
-    void bwd(CUDA cuda, BwdIn const &in, BwdOut const &out) override {
+    void bwd(CUDA cuda, LayerBwdIn const &in, LayerBwdOut const &out) override {
         INFO_GRP("SigmoidActivationLayer BWD", INFO_GRP_LAYER_TASK);
         ftype alpha = 1, beta = 0;
 
