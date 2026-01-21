@@ -28,7 +28,7 @@ class InitTask : public CUDATask<InitTaskIO> {
             ld.w = tensor::tensor<ftype>(param_shape.w);
             ld.b = tensor::tensor<ftype>(param_shape.b);
             layer->init_parameters(cuda_, {ld.w, ld.b});
-            data->states->layers_datas.push_back(ld);
+            data->states->layers_datas.push_back(std::move(ld));
         }
         this->addResult(data);
     }
@@ -47,13 +47,13 @@ class InitTask : public CUDATask<InitTaskIO> {
             dims = io_shape.y.dims;
 
             // fwd init
-            ld.x = tensor::tensor_view<const ftype>(io_shape.x, nullptr);
+            ld.x = tensor::tensor_view<ftype>(io_shape.x, nullptr);
             ld.y = tensor::tensor<ftype>(io_shape.y);
             layer->init_fwd(cuda_, ld);
 
             // bwd init
             ld.dx = tensor::tensor<ftype>(io_shape.x);
-            ld.dy = tensor::tensor_view<const ftype>(io_shape.y, nullptr);
+            ld.dy = tensor::tensor_view<ftype>(io_shape.y, nullptr);
             ld.dw = tensor::tensor_like<ftype>(ld.w);
             ld.db = tensor::tensor_like<ftype>(ld.b);
             layer->init_bwd(cuda_, ld);

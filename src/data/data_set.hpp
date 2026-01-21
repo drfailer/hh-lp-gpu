@@ -2,7 +2,7 @@
 #define DATA_DATA_SET_H
 #include <vector>
 #include <cuda_runtime_api.h>
-#include "../tools/tensor/tensor.hpp"
+#include "../tools/tensor/tensors.hpp"
 
 template <typename T>
 struct Data {

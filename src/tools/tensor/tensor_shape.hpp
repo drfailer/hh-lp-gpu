@@ -2,6 +2,8 @@
 #define TOOLS_TENSOR_TENSOR_SHAPE
 #include <array>
 #include <cstddef>
+#include "../../tools/gpu.hpp"
+#include "../../types.hpp"
 
 namespace tensor {
 

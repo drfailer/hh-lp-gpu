@@ -1,7 +1,7 @@
 #ifndef MODEL_LOSS_LOSS_H
 #define MODEL_LOSS_LOSS_H
 #include "../data/cuda_data.hpp"
-#include "../../tools/tensor/tensor.hpp"
+#include "../../tools/tensor/tensors.hpp"
 
 struct LossFwdIn {
     tensor::Tensor<ftype> &x;

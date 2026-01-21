@@ -1,7 +1,7 @@
 #ifndef MODEL_LOSS_QUADRATIC_LOSS_H
 #define MODEL_LOSS_QUADRATIC_LOSS_H
 #include "../../tools/gpu.hpp"
-#include "../../tools/tensor/tensor.hpp"
+#include "../../tools/tensor/tensors.hpp"
 #include "../../types.hpp"
 #include "loss.hpp"
 #include <cudnn.h>

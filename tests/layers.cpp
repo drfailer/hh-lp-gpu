@@ -33,7 +33,7 @@ LayerData<T> init_layer_and_get_layer_data(auto layer,
     auto io_shape = layer->io_shape(input_dims);
 
     // fwd init
-    data.x = tensor::tensor_view<const ftype>(io_shape.x, nullptr);
+    data.x = tensor::tensor_view<ftype>(io_shape.x, nullptr);
     data.y = tensor::tensor<ftype>(io_shape.y);
     layer->init_fwd(cuda, data);
 
@@ -43,7 +43,7 @@ LayerData<T> init_layer_and_get_layer_data(auto layer,
 
     // bwd init
     data.dx = tensor::tensor<ftype>(io_shape.x);
-    data.dy = tensor::tensor_view<const ftype>(io_shape.y, nullptr);
+    data.dy = tensor::tensor_view<ftype>(io_shape.y, nullptr);
     data.dw = tensor::tensor_like<ftype>(data.w);
     data.db = tensor::tensor_like<ftype>(data.b);
     layer->init_bwd(cuda, data);

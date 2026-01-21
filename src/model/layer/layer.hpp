@@ -13,7 +13,7 @@ using InitFwdData = LayerData<ftype>;
 using InitBwdData = LayerData<ftype>;
 
 struct LayerFwdIn {
-    tensor::Tensor<const ftype> &x;
+    tensor::TensorView<ftype> &x;
     tensor::Tensor<ftype> &w;
     tensor::Tensor<ftype> &b;
 };
@@ -23,8 +23,8 @@ struct LayerFwdOut {
 };
 
 struct LayerBwdIn {
-    tensor::Tensor<const ftype> &dy;
-    tensor::Tensor<const ftype> &x;
+    tensor::TensorView<ftype> &dy;
+    tensor::TensorView<ftype> &x;
     tensor::Tensor<ftype> &y;
     tensor::Tensor<ftype> &w;
     tensor::Tensor<ftype> &b;

@@ -1,7 +1,7 @@
 #ifndef MODEL_OPTIMIZER_SGD_OPTIMIZER_H
 #define MODEL_OPTIMIZER_SGD_OPTIMIZER_H
 #include "../../tools/gpu.hpp"
-#include "../../tools/tensor/tensor.hpp"
+#include "../../tools/tensor/tensors.hpp"
 #include "../../types.hpp"
 #include "optimizer.hpp"
 #include <cudnn.h>
@@ -20,13 +20,13 @@ struct SGDOptimizer : Optimizer<ftype> {
 
         ftype alpha = -learning_rate, beta = 1;
 
-        if (!out.w.empty() && out.w.size() > 0) {
+        if (out.w.size() > 0) {
             CUDNN_CHECK(cudnnAddTensor(cuda.cudnn_handle, &alpha,
                                        in.dw.desc(), in.dw.data(), &beta,
                                        out.w.desc(), out.w.data()));
         }
 
-        if (!out.b.empty() && out.b.size() > 0) {
+        if (out.b.size() > 0) {
             CUDNN_CHECK(cudnnAddTensor(cuda.cudnn_handle, &alpha,
                                        in.db.desc(), in.db.data(), &beta,
                                        out.b.desc(), out.b.data()));

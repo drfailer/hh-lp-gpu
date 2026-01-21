@@ -23,7 +23,7 @@ class BwdTask : public CUDATask<BwdTaskIO> {
         for (int i = layers_.size() - 1; i >= 0; --i) {
             auto &ld = nn->layers_datas[layers_[i]->idx];
             ld.dy.data(dy->data());
-            layers_[i]->bwd(cuda_, {ld.dy, ld.x, ld.y, ld.w, ld.b},
+            layers_[i]->bwd(cuda_, LayerBwdIn{ld.dy, ld.x, ld.y, ld.w, ld.b},
                             {ld.dx, ld.dw, ld.db});
             dy = &ld.dx;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
