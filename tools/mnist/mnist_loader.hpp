@@ -2,7 +2,7 @@
 #define MNIST_MNIST_LOADER_H
 #include "../../src/data/data_set.hpp"
 #include "../../src/tools/gpu.hpp"
-#include "../../src/tools/tensor/tensor.hpp"
+#include "../../src/tools/tensor/tensors.hpp"
 #include "../../src/types.hpp"
 #include <cassert>
 #include <fstream>
