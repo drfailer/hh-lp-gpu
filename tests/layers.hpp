@@ -1,6 +1,7 @@
 #ifndef CUDNN_TESTS_LAYERS
 #define CUDNN_TESTS_LAYERS
 #include "../src/tools/gpu.hpp"
+#include "../src/tools/communicator.hpp"
 #include "utest.hpp"
 #include <cublas_v2.h>
 #include <cudnn.h>
@@ -19,6 +20,6 @@ UTest(inference);
 UTest(training);
 UTest(mnist);
 UTest(mnist_batched);
-UTest(mnist_multi_node);
+UTestArgs(mnist_multi_node, CommService *service);
 
 #endif

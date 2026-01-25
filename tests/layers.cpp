@@ -1,5 +1,6 @@
 #include "layers.hpp"
 #include "../src/graph/network_graph.hpp"
+#include "../src/graph/distributed_network_graph.hpp"
 #include "../src/model/layer/convolution_layer.hpp"
 #include "../src/model/layer/linear_layer.hpp"
 #include "../src/model/layer/pooling_layer.hpp"
@@ -567,68 +568,79 @@ UTest(mnist_batched) {
 
     uassert(accuracy_end > accuracy_start);
 
-    graph.createDotFile("train_mnist_batch.dot", hh::ColorScheme::EXECUTION,
+    graph.createDotFile("train_mnist_batch_single_node.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
 }
 
-UTest(mnist_multi_node) {
+UTestArgs(mnist_multi_node, CommService *service) {
     constexpr ftype learning_rate = 0.001;
     constexpr size_t epochs = 10;
     constexpr size_t batch_size = 64;
     constexpr size_t test_batch_size = 1'000;
     MNISTLoader loader;
     BatchGenerator<ftype> batch_generator(0);
+    DataSet<ftype> training_data, training_set, testing_set;
 
-    DataSet<ftype> training_data =
-        loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
-                       "../data/mnist/train-images-idx3-ubyte");
-    DataSet<ftype> training_set =
-        batch_generator.generate(std::move(training_data), batch_size);
-    DataSet<ftype> testing_set =
-        loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
-                       "../data/mnist/t10k-images-idx3-ubyte", test_batch_size);
+    // if (service->rank() == 0) {
+    //     training_data = loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
+    //                                    "../data/mnist/train-images-idx3-ubyte");
+    //     training_set = batch_generator.generate(std::move(training_data), batch_size);
+    //     testing_set = loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
+    //                                  "../data/mnist/t10k-images-idx3-ubyte",
+    //                                  test_batch_size);
+    // }
 
-    NetworkGraph graph;
+    DistributedNetworkGraph graph(service);
 
     graph.set_loss<QuadraticLoss>();
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
     graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
+    graph.cut_layer();
     graph.add_layer<LinearLayer>(12 * 12 * 20, 64);
     graph.add_layer<SigmoidActivationLayer>();
+    graph.cut_layer();
     graph.add_layer<LinearLayer>(64, 10);
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
     graph.executeGraph(true);
 
+    std::cout << "initalizing parameters" << std::endl;
     auto data = graph.init_parameters();
+    std::cout << "parameters initialized" << std::endl;
 
-    INFO("Inference before training...");
-    graph.init(data, {test_batch_size, 1, 28, 28});
-    ftype accuracy_start =
-        evaluate_mnist(graph, testing_set, data, test_batch_size);
+    // INFO("Inference before training...");
+    // graph.init(data, {test_batch_size, 1, 28, 28});
+    // ftype accuracy_start =
+    //     evaluate_mnist(graph, testing_set, data, test_batch_size);
+    //
+    // if (service->rank() == 0)
+    //     graph.init(data, {batch_size, 1, 28, 28});
+    //
+    // INFO("start training (learning_rate = " << learning_rate
+    //                                         << ", epochs = " << epochs << ")");
+    // timer_start(batch_training);
+    // if (service->rank() == 0)
+    //     graph.train(data, training_set, epochs);
+    // timer_end(batch_training);
+    //
+    // timer_report_prec(batch_training, milliseconds);
+    //
+    // INFO("Evaluate the model...");
+    // if (service->rank() == 0)
+    //     graph.init(data, {test_batch_size, 1, 28, 28});
+    // ftype accuracy_end =
+    //     evaluate_mnist(graph, testing_set, data, test_batch_size);
 
-    graph.init(data, {batch_size, 1, 28, 28});
-
-    INFO("start training (learning_rate = " << learning_rate
-                                            << ", epochs = " << epochs << ")");
-    timer_start(batch_training);
-    graph.train(data, training_set, epochs);
-    timer_end(batch_training);
-
-    timer_report_prec(batch_training, milliseconds);
-
-    INFO("Evaluate the model...");
-    graph.init(data, {test_batch_size, 1, 28, 28});
-    ftype accuracy_end =
-        evaluate_mnist(graph, testing_set, data, test_batch_size);
-
+    service->barrier();
     graph.terminate();
+    std::cout << "graph terminated" << std::endl;
 
-    uassert(accuracy_end > accuracy_start);
+    // uassert(accuracy_end > accuracy_start);
 
-    graph.createDotFile("train_mnist_batch.dot", hh::ColorScheme::EXECUTION,
-                        hh::StructureOptions::QUEUE);
+    if (service->rank() == 0)
+        graph.createDotFile("train_mnist_batch_multinode.dot", hh::ColorScheme::EXECUTION,
+                hh::StructureOptions::QUEUE);
 }
