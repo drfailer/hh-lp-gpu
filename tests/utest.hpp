@@ -19,11 +19,21 @@
 
 #define UTest(name)                                                            \
     void test_function_##name(                                                 \
-        [[maybe_unused]] utest::test_status_t &__test_status__)
+            [[maybe_unused]] utest::test_status_t &__test_status__)
+
+#define UTestArgs(name, ...)                                                    \
+    void test_function_##name(                                                 \
+        [[maybe_unused]] utest::test_status_t &__test_status__, __VA_ARGS__)
 
 #define urun_test(name)                                                        \
     ++__utest_nb_test__;                                                       \
     if (utest::run(test_function_##name, #name)) {                             \
+        ++__utest_nb_test_failed__;                                            \
+    }
+
+#define urun_test_args(name, ...)                                              \
+    ++__utest_nb_test__;                                                       \
+    if (utest::run(test_function_##name, #name, __VA_ARGS__)) {                \
         ++__utest_nb_test_failed__;                                            \
     }
 
@@ -33,12 +43,14 @@
     }
 #define uassert_equal(found, expect)                                           \
     if (utest::assert_equal_("ASSERT", found, expect, #found, #expect,         \
-                             __FILE__, __LINE__) != 0) {                       \
+                             __FILE__, __LINE__)                               \
+        != 0) {                                                                \
         ++__test_status__.nb_assert_failed;                                    \
     }
 #define uassert_float_equal(found, expect, prec)                               \
     if (utest::assert_float_equal_("ASSERT", found, expect, prec, #found,      \
-                                   #expect, __FILE__, __LINE__) != 0) {        \
+                                   #expect, __FILE__, __LINE__)                \
+        != 0) {                                                                \
         ++__test_status__.nb_assert_failed;                                    \
     }
 #define urequire(expr)                                                         \
@@ -50,7 +62,7 @@
 namespace utest {
 
 struct test_status_t {
-    bool require_failed = false;
+    bool   require_failed = false;
     size_t nb_assert_failed = 0;
 };
 
@@ -76,9 +88,9 @@ inline void error(std::string const &group, std::string const filename,
               << line << ": " << msg << std::endl;
 }
 
-inline bool run(auto test_function, std::string const test_name) {
+inline bool run(auto test_function, std::string const test_name, auto &&...args) {
     utest::test_status_t status{false, 0};
-    test_function(status);
+    test_function(status, std::forward<decltype(args)>(args)...);
     utest::report(test_name, status);
     return status.nb_assert_failed > 0 || status.require_failed;
 }
