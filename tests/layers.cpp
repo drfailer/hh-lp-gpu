@@ -607,9 +607,9 @@ UTestArgs(mnist_multi_node, CommService *service) {
     graph.build();
     graph.executeGraph(true);
 
-    std::cout << "initalizing parameters" << std::endl;
-    auto data = graph.init_parameters();
-    std::cout << "parameters initialized" << std::endl;
+    // std::cout << "initalizing parameters" << std::endl;
+    // auto data = graph.init_parameters();
+    // std::cout << "parameters initialized" << std::endl;
 
     // INFO("Inference before training...");
     // graph.init(data, {test_batch_size, 1, 28, 28});
