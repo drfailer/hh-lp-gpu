@@ -99,7 +99,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * network if needed. The rest of the data required for the computation is
      * allocated in `init_state`.
      */
-    std::shared_ptr<NetworkData<ftype>> init_parameters() {
+    virtual std::shared_ptr<NetworkData<ftype>> init_parameters() {
         auto nn = std::make_shared<NetworkData<ftype>>();
 
         this->pushData(std::make_shared<InitParametersData<ftype>>(nn));
@@ -120,7 +120,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated and initialized, meaning that no allocation or initialization
      * will be done during the computation to ensure maximum performance.
      */
-    void init(std::shared_ptr<NetworkData<ftype>> nn,
+    virtual void init(std::shared_ptr<NetworkData<ftype>> nn,
               tensor::dims_t input_dims) {
         this->pushData(std::make_shared<InitData<ftype>>(nn, input_dims));
         (void)this->get<InitData<ftype>>();
@@ -136,7 +136,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
         return *output;
     }
 
-    std::shared_ptr<NetworkData<ftype>>
+    virtual std::shared_ptr<NetworkData<ftype>>
     train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> const &ds,
           size_t epochs) {
         this->pushData(std::make_shared<TrainingData<ftype>>(nn, ds, epochs));
@@ -146,7 +146,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   public:
-    void terminate() {
+    virtual void terminate() {
         pipeline_state_->terminate();
         init_state_->terminate();
         this->finishPushingData();
