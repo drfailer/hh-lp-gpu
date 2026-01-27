@@ -5,7 +5,7 @@
 
 template <typename T> struct FwdData {
     std::shared_ptr<NetworkData<T>> network_data;
-    tensor::Tensor<T> const *input;
+    tensor::Tensor<T> *input;
 };
 
 #endif
