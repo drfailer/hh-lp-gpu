@@ -611,13 +611,13 @@ UTestArgs(mnist_multi_node, CommService *service) {
     auto data = graph.init_parameters();
     std::cout << "parameters initialized" << std::endl;
 
-    // INFO("Inference before training...");
-    // graph.init(data, {test_batch_size, 1, 28, 28});
+    INFO("Inference before training...");
+    graph.init(data, {test_batch_size, 1, 28, 28});
     // ftype accuracy_start =
     //     evaluate_mnist(graph, testing_set, data, test_batch_size);
     //
     //  graph.init(data, {batch_size, 1, 28, 28});
-    //
+
     // INFO("start training (learning_rate = " << learning_rate
     //                                         << ", epochs = " << epochs << ")");
     // timer_start(batch_training);
