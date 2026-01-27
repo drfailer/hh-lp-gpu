@@ -607,30 +607,27 @@ UTestArgs(mnist_multi_node, CommService *service) {
     graph.build();
     graph.executeGraph(true);
 
-    // std::cout << "initalizing parameters" << std::endl;
-    // auto data = graph.init_parameters();
-    // std::cout << "parameters initialized" << std::endl;
+    std::cout << "initalizing parameters" << std::endl;
+    auto data = graph.init_parameters();
+    std::cout << "parameters initialized" << std::endl;
 
     // INFO("Inference before training...");
     // graph.init(data, {test_batch_size, 1, 28, 28});
     // ftype accuracy_start =
     //     evaluate_mnist(graph, testing_set, data, test_batch_size);
     //
-    // if (service->rank() == 0)
-    //     graph.init(data, {batch_size, 1, 28, 28});
+    //  graph.init(data, {batch_size, 1, 28, 28});
     //
     // INFO("start training (learning_rate = " << learning_rate
     //                                         << ", epochs = " << epochs << ")");
     // timer_start(batch_training);
-    // if (service->rank() == 0)
-    //     graph.train(data, training_set, epochs);
+    // graph.train(data, training_set, epochs);
     // timer_end(batch_training);
     //
     // timer_report_prec(batch_training, milliseconds);
     //
     // INFO("Evaluate the model...");
-    // if (service->rank() == 0)
-    //     graph.init(data, {test_batch_size, 1, 28, 28});
+    // graph.init(data, {test_batch_size, 1, 28, 28});
     // ftype accuracy_end =
     //     evaluate_mnist(graph, testing_set, data, test_batch_size);
 
@@ -640,7 +637,8 @@ UTestArgs(mnist_multi_node, CommService *service) {
 
     // uassert(accuracy_end > accuracy_start);
 
-    if (service->rank() == 0)
-        graph.createDotFile("train_mnist_batch_multinode.dot", hh::ColorScheme::EXECUTION,
-                hh::StructureOptions::QUEUE);
+    std::ostringstream oss;
+    oss << "train_mnist_batch_multinode_" << service->rank() << ".dot";
+    graph.createDotFile(oss.str(), hh::ColorScheme::EXECUTION,
+            hh::StructureOptions::QUEUE);
 }
