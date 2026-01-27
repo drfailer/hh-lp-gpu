@@ -39,8 +39,8 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set send strategy
         hh::comm::rank_t dest = 1;
-        this->init_comms_.back()->template strategy<InitParametersData<ftype>>(SEND_TO(dest));
-        this->init_comms_.back()->template strategy<InitData<ftype>>(SEND_TO(dest));
+        this->init_comms_.back()->template strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
+        this->init_comms_.back()->template strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
         this->fwd_comms_.back()->template strategy<FwdData<ftype>>(SEND_TO(dest));
         this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(dest));
     }
@@ -64,8 +64,8 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set the strategies
         hh::comm::rank_t dest = this->init_comms_.size() % this->service_->nbProcesses();
-        this->init_comms_.back()->template strategy<InitParametersData<ftype>>(SEND_TO(dest));
-        this->init_comms_.back()->template strategy<InitData<ftype>>(SEND_TO(dest));
+        this->init_comms_.back()->template strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
+        this->init_comms_.back()->template strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
         this->fwd_comms_.back()->template strategy<FwdData<ftype>>(SEND_TO(dest));
         this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(dest));
     }
@@ -131,7 +131,7 @@ class DistributedNetworkGraph : public NetworkGraph {
 
   public:
     std::shared_ptr<NetworkData<ftype>> init_parameters() override {
-        auto nn = std::make_shared<NetworkData<ftype>>();
+        auto nn = std::make_shared<NetworkData<ftype>>(this->layer_tasks_.layer_count);
 
         this->init_mm_.init(nn);
         this->service_->barrier();
