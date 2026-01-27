@@ -28,7 +28,7 @@ class InitTask : public CUDATask<InitTaskIO> {
             ld.w = tensor::tensor<ftype>(param_shape.w);
             ld.b = tensor::tensor<ftype>(param_shape.b);
             layer->init_parameters(cuda_, {ld.w, ld.b});
-            data->states->layers_datas.push_back(std::move(ld));
+            data->states->layers_datas[layer->idx] = std::move(ld);
         }
         this->addResult(data);
     }
@@ -40,6 +40,7 @@ class InitTask : public CUDATask<InitTaskIO> {
 
         // TODO: do not allocate gradients during the inference
         for (auto layer : layers_) {
+            assert(layer->idx < nn->layers_datas.size());
             auto io_shape = layer->io_shape(dims);
             auto &ld = nn->layers_datas[layer->idx];
 

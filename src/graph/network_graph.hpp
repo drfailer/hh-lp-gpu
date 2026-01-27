@@ -100,7 +100,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated in `init_state`.
      */
     virtual std::shared_ptr<NetworkData<ftype>> init_parameters() {
-        auto nn = std::make_shared<NetworkData<ftype>>();
+        auto nn = std::make_shared<NetworkData<ftype>>(this->layer_tasks_.layer_count);
 
         this->pushData(std::make_shared<InitParametersData<ftype>>(nn));
         (void)this->get<InitParametersData<ftype>>();
