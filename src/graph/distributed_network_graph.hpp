@@ -152,6 +152,12 @@ class DistributedNetworkGraph : public NetworkGraph {
             (void)this->get<InitData<ftype>>();
         }
         this->service_->barrier();
+        auto rank = this->service_->rank();
+        auto input_shape = this->layer_tasks_.inits[rank]->input_shape(nn);
+        auto error_shape = this->layer_tasks_.inits[rank]->error_shape(nn);
+        this->fwd_mm_.init(nn, input_shape);
+        this->bwd_mm_.init(nn, error_shape);
+        this->service_->barrier();
         this->cleanGraph();
     }
 

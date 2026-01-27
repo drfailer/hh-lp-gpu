@@ -71,6 +71,19 @@ class InitTask : public CUDATask<InitTaskIO> {
         throw std::logic_error("error: InitTask should not be copied.");
     }
 
+    tensor::TensorShape input_shape(std::shared_ptr<NetworkData<ftype>> nn) const {
+        assert(layers_.front()->idx < nn->layers_datas.size());
+        assert(nn->layers_datas[layers_.front()->idx].x.size() > 0);
+        return nn->layers_datas[layers_.front()->idx].x.shape();
+    }
+
+    tensor::TensorShape error_shape(std::shared_ptr<NetworkData<ftype>> nn) const {
+        assert(layers_.front()->idx < nn->layers_datas.size());
+        assert(nn->layers_datas[layers_.back()->idx].dy.size() > 0);
+        return nn->layers_datas[layers_.back()->idx].dy.shape();
+    }
+
+
   private:
     std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
 };
