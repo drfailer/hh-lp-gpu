@@ -13,6 +13,26 @@ enum class InitTarget {
 template <typename T, InitTarget target = InitTarget::Network> struct InitData {
     std::shared_ptr<NetworkData<T>> network_data;
     tensor::dims_t input_dims;
+
+    hh::comm::Package pack() {
+        return hh::comm::Package{
+            .data = {
+                hh::comm::Buffer{
+                    (char*)(&this->input_dims), sizeof(this->input_dims),
+                }
+            },
+        };
+    }
+    void unpack(hh::comm::Package) {}
+    hh::comm::Package package() {
+        return hh::comm::Package{
+            .data = {
+                hh::comm::Buffer{
+                    (char*)(&this->input_dims), sizeof(this->input_dims),
+                }
+            },
+        };
+    }
 };
 
 #endif
