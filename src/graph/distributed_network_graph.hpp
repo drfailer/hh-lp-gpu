@@ -33,8 +33,6 @@ class DistributedNetworkGraph : public NetworkGraph {
           optimizer_comm_(std::make_shared<hh::CommunicatorTask<OptLayerData<ftype>>>(service)) {
         // set the memory managers
         this->init_comms_.back()->setMemoryManager(&this->init_mm_);
-        this->fwd_comms_.back()->setMemoryManager(&this->fwd_mm_);
-        this->bwd_comms_.back()->setMemoryManager(&this->bwd_mm_);
         this->optimizer_comm_->setMemoryManager(&this->opt_mm_);
 
         // set send strategy
@@ -59,8 +57,6 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set the memory managers
         this->init_comms_.back()->setMemoryManager(&this->init_mm_);
-        this->fwd_comms_.back()->setMemoryManager(&this->fwd_mm_);
-        this->bwd_comms_.back()->setMemoryManager(&this->bwd_mm_);
 
         // set the strategies
         hh::comm::rank_t dest = this->init_comms_.size() % this->service_->nbProcesses();
@@ -145,24 +141,48 @@ class DistributedNetworkGraph : public NetworkGraph {
     }
 
     void init(std::shared_ptr<NetworkData<ftype>> nn, tensor::dims_t input_dims) override {
+        std::shared_ptr<InitData<ftype>> init_data = nullptr;
         this->init_mm_.init(nn);
         this->service_->barrier();
         if (this->service_->rank() == 0) {
             this->pushData(std::make_shared<InitData<ftype>>(nn, input_dims));
-            (void)this->get<InitData<ftype>>();
+            init_data = this->get<InitData<ftype>>();
         }
         this->service_->barrier();
+
         auto rank = this->service_->rank();
-        auto input_shape = this->layer_tasks_.inits[rank]->input_shape(nn);
-        auto error_shape = this->layer_tasks_.inits[rank]->error_shape(nn);
-        this->fwd_mm_.init(nn, input_shape);
-        this->bwd_mm_.init(nn, error_shape);
+
+        // init and set memory managers for fwd tasks
+        if (this->service_->rank() == 0) {
+            this->fwd_mm_.init(nn, tensor::TensorShape(init_data->input_dims));
+            this->fwd_comms_.back()->setMemoryManager(&this->fwd_mm_);
+        } else {
+            this->fwd_mm_.init(nn, this->layer_tasks_.inits[rank]->input_shape(nn));
+            this->fwd_comms_[rank - 1]->setMemoryManager(&this->fwd_mm_);
+        }
+        // the release function does nothing
+        this->fwd_comms_[rank]->setMemoryManager(&this->fwd_mm_);
+
+        // TODO
+        // auto error_shape = this->layer_tasks_.inits[rank]->error_shape(nn);
+        // this->bwd_mm_.init(nn, error_shape);
         this->service_->barrier();
         this->cleanGraph();
     }
 
-    // TODO: do not forget to initialize the memory manger for the optimizer in
-    //       the train function!
+    tensor::Tensor<ftype> const *predict(std::shared_ptr<NetworkData<ftype>> nn,
+                                         tensor::Tensor<ftype> &input) override {
+        tensor::Tensor<ftype> *output = nullptr;
+
+        // this->service_->barrier();
+        if (this->service_->rank() == 0) {
+            this->pushData(std::make_shared<PredictionData<ftype>>(nn, &input));
+            output = this->get<PredictionData<ftype>>()->input;
+        }
+        // this->service_->barrier();
+        // this->cleanGraph();
+        return output;
+    }
 
   private:
     hh::comm::CommService *service_;
