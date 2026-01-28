@@ -101,9 +101,18 @@ float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
 
     timer_start(evaluate_mnist);
     for (auto &test_data : testing_set.datas) {
-        auto &output = graph.predict(data, test_data.input);
+        auto output = graph.predict(data, test_data.input);
+        if (output == nullptr) {
+            continue;
+        }
+        if (output->size() != found.size()) {
+            std::cerr << "error: expected output of size "
+                      << found.size() << " but "
+                      << output->size() << " was found." << std::endl;
+            continue;
+        }
         CUDA_CHECK(test_data.ground_truth.to_host(expected.data()));
-        CUDA_CHECK(output.to_host(found.data()));
+        CUDA_CHECK(output->to_host(found.data()));
 
         for (size_t i = 0; i < batch_size; ++i) {
             int expected_label = mnist_get_label(&expected.data()[i * 10]);
@@ -581,14 +590,14 @@ UTestArgs(mnist_multi_node, CommService *service) {
     BatchGenerator<ftype> batch_generator(0);
     DataSet<ftype> training_data, training_set, testing_set;
 
-    // if (service->rank() == 0) {
-    //     training_data = loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
-    //                                    "../data/mnist/train-images-idx3-ubyte");
-    //     training_set = batch_generator.generate(std::move(training_data), batch_size);
-    //     testing_set = loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
-    //                                  "../data/mnist/t10k-images-idx3-ubyte",
-    //                                  test_batch_size);
-    // }
+    if (service->rank() == 0) {
+        training_data = loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
+                                       "../data/mnist/train-images-idx3-ubyte");
+        training_set = batch_generator.generate(std::move(training_data), batch_size);
+        testing_set = loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
+                                     "../data/mnist/t10k-images-idx3-ubyte",
+                                     test_batch_size);
+    }
 
     DistributedNetworkGraph graph(service);
 
@@ -607,15 +616,13 @@ UTestArgs(mnist_multi_node, CommService *service) {
     graph.build();
     graph.executeGraph(true);
 
-    std::cout << "initalizing parameters" << std::endl;
     auto data = graph.init_parameters();
-    std::cout << "parameters initialized" << std::endl;
 
     INFO("Inference before training...");
     graph.init(data, {test_batch_size, 1, 28, 28});
-    // ftype accuracy_start =
-    //     evaluate_mnist(graph, testing_set, data, test_batch_size);
-    //
+    ftype accuracy_start =
+        evaluate_mnist(graph, testing_set, data, test_batch_size);
+
     //  graph.init(data, {batch_size, 1, 28, 28});
 
     // INFO("start training (learning_rate = " << learning_rate
