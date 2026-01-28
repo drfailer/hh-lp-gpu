@@ -105,6 +105,7 @@ class FwdDataMemoryManager
     }
 
     ManagedType allocate(AllocMode = AllocMode::Fail, LOC) override {
+        fwd_->input = &this->input_tensor_;
         return fwd_;
     }
 
