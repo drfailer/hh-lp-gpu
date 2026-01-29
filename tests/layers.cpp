@@ -623,14 +623,14 @@ UTestArgs(mnist_multi_node, CommService *service) {
     ftype accuracy_start =
         evaluate_mnist(graph, testing_set, data, test_batch_size);
 
-    //  graph.init(data, {batch_size, 1, 28, 28});
+    graph.init(data, {batch_size, 1, 28, 28});
 
-    // INFO("start training (learning_rate = " << learning_rate
-    //                                         << ", epochs = " << epochs << ")");
-    // timer_start(batch_training);
-    // graph.train(data, training_set, epochs);
-    // timer_end(batch_training);
-    //
+    INFO("start training (learning_rate = " << learning_rate
+                                            << ", epochs = " << epochs << ")");
+    timer_start(batch_training);
+    graph.train(data, training_set, epochs);
+    timer_end(batch_training);
+
     // timer_report_prec(batch_training, milliseconds);
     //
     // INFO("Evaluate the model...");
