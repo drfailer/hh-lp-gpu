@@ -105,8 +105,8 @@ class FwdDataMemoryManager
     }
 
     ManagedType allocate(AllocMode = AllocMode::Fail, LOC) override {
-        fwd_->input = &this->input_tensor_;
-        return fwd_;
+        this->fwd_->input = &this->input_tensor_;
+        return this->fwd_;
     }
 
     void release(ManagedType &&, LOC) override {}
@@ -135,7 +135,8 @@ class BwdDataMemoryManager
     }
 
     ManagedType allocate(AllocMode = AllocMode::Fail, LOC) override {
-        return bwd_;
+        this->bwd_->error = &this->error_tensor_;
+        return this->bwd_;
     }
 
     void release(ManagedType &&, LOC) override {}
@@ -158,18 +159,17 @@ class OptLayerDataMemoryManager
     OptLayerDataMemoryManager() = default;
 
     void init(std::shared_ptr<NetworkData<ftype>> nn) {
-        // the idx is not used in this direction
-        this->opt_ = std::make_shared<OptLayerData<ftype>>(nn, 0);
+        this->nn_ = nn;
     }
 
     ManagedType allocate(AllocMode = AllocMode::Fail, LOC) override {
-        return opt_;
+        return std::make_shared<OptLayerData<ftype>>(this->nn_, 0);
     }
 
     void release(ManagedType &&, LOC) override {}
 
   private:
-    ManagedType opt_ = nullptr;
+    std::shared_ptr<NetworkData<ftype>> nn_;
 };
 
 #undef LOC

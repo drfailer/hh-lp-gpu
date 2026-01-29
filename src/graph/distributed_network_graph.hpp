@@ -40,7 +40,8 @@ class DistributedNetworkGraph : public NetworkGraph {
         this->init_comms_.back()->template strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
         this->init_comms_.back()->template strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
         this->fwd_comms_.back()->template strategy<FwdData<ftype>>(SEND_TO(dest));
-        this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(dest));
+        this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(0));
+        this->optimizer_comm_->template strategy<OptLayerData<ftype>>(SEND_TO(0));
     }
 
   public:
@@ -63,6 +64,7 @@ class DistributedNetworkGraph : public NetworkGraph {
         this->init_comms_.back()->template strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
         this->init_comms_.back()->template strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
         this->fwd_comms_.back()->template strategy<FwdData<ftype>>(SEND_TO(dest));
+        dest = this->init_comms_.size() - 1;
         this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(dest));
     }
 
@@ -96,31 +98,30 @@ class DistributedNetworkGraph : public NetworkGraph {
         this->edges(this->layer_tasks_.fwds.back(), this->fwd_comms_.back());
         this->edges(this->fwd_comms_.back(), pipeline_state_manager_);
 
-        // TODO: this is wrong v
+        // connect loss and bwds tasks
+        if (loss_task_) {
+            this->edges(this->pipeline_state_manager_, this->loss_task_);
+            this->edges(this->loss_task_, this->bwd_comms_.back());
+            this->edges(this->init_state_manager_, this->loss_task_);
+            this->edges(this->loss_task_, this->init_state_manager_);
+            this->init_state_->has_loss = true;
+        }
 
-        // // connect loss and bwds tasks
-        // if (loss_task_) {
-        //     this->edges(this->pipeline_state_manager_, this->loss_task_);
-        //     this->edges(this->loss_task_, this->layer_tasks_.bwds.back());
-        //     this->edges(this->init_state_manager_, this->loss_task_);
-        //     this->edges(this->loss_task_, this->init_state_manager_);
-        //     this->init_state_->has_loss = true;
-        // }
-        //
-        // // connect the bwds tasks
-        // for (size_t i = this->service_->nbProcesses() - 1; i > 0; --i) {
-        //     this->edges(this->layer_tasks_.bwds.at(i), this->bwd_comms_.at(i));
-        //     this->edges(this->bwd_comms_.at(i), this->layer_tasks_.bwds.at(i - 1));
-        // }
-        //
-        // // connect optimizer
-        // if (this->optimizer_task_) {
-        //     this->optimizer_state_->nb_layers(this->layer_tasks_.layer_count);
-        //     this->edges(this->layer_tasks_.bwds.at(this->service_->rank()), this->optimizer_task_);
-        //     this->edges(this->optimizer_task_, this->optimizer_comm_);
-        //     this->edges(this->optimizer_comm_, this->optimizer_state_manager_);
-        //     this->edges(this->optimizer_state_manager_, this->pipeline_state_manager_);
-        // }
+        // connect the bwds tasks
+        for (size_t i = this->service_->nbProcesses() - 1; i > 0; --i) {
+            this->edges(this->bwd_comms_.at(i), this->layer_tasks_.bwds.at(i));
+            this->edges(this->layer_tasks_.bwds.at(i), this->bwd_comms_.at(i - 1));
+        }
+        this->edges(this->bwd_comms_.front(), this->layer_tasks_.bwds.front());
+
+        // connect optimizer
+        if (this->optimizer_task_) {
+            this->optimizer_state_->nb_layers(this->layer_tasks_.layer_count);
+            this->edges(this->layer_tasks_.bwds.at(this->service_->rank()), this->optimizer_task_);
+            this->edges(this->optimizer_task_, this->optimizer_comm_);
+            this->edges(this->optimizer_comm_, this->optimizer_state_manager_);
+            this->edges(this->optimizer_state_manager_, this->pipeline_state_manager_);
+        }
 
         this->service_->barrier();
     }
@@ -153,19 +154,24 @@ class DistributedNetworkGraph : public NetworkGraph {
         auto rank = this->service_->rank();
 
         // init and set memory managers for fwd tasks
-        if (this->service_->rank() == 0) {
+        if (rank == 0) {
             this->fwd_mm_.init(nn, tensor::TensorShape(init_data->input_dims));
             this->fwd_comms_.back()->setMemoryManager(&this->fwd_mm_);
         } else {
             this->fwd_mm_.init(nn, this->layer_tasks_.inits[rank]->input_shape(nn));
             this->fwd_comms_[rank - 1]->setMemoryManager(&this->fwd_mm_);
         }
-        // the release function does nothing
         this->fwd_comms_[rank]->setMemoryManager(&this->fwd_mm_);
 
-        // TODO
-        // auto error_shape = this->layer_tasks_.inits[rank]->error_shape(nn);
-        // this->bwd_mm_.init(nn, error_shape);
+        // init and set memory managers for bwd tasks
+        this->bwd_mm_.init(nn, this->layer_tasks_.inits[rank]->output_shape(nn));
+        if (rank == 0) {
+            this->bwd_comms_.back()->setMemoryManager(&this->bwd_mm_);
+        } else {
+            this->bwd_comms_[rank - 1]->setMemoryManager(&this->bwd_mm_);
+        }
+        this->bwd_comms_[rank]->setMemoryManager(&this->bwd_mm_);
+
         this->service_->barrier();
         this->cleanGraph();
     }
@@ -183,6 +189,21 @@ class DistributedNetworkGraph : public NetworkGraph {
         // this->cleanGraph();
         return output;
     }
+
+    std::shared_ptr<NetworkData<ftype>>
+    train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> &ds, size_t epochs) override {
+        printf("start training!\n");
+        this->service_->barrier();
+        if (this->service_->rank() == 0) {
+            this->pushData(std::make_shared<TrainingData<ftype>>(nn, ds, epochs));
+            (void)this->get<TrainingData<ftype>>();
+        }
+        this->service_->barrier();
+        this->cleanGraph();
+        printf("end training!\n");
+        return nn;
+    }
+
 
   private:
     hh::comm::CommService *service_;
