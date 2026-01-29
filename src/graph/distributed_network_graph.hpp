@@ -192,7 +192,6 @@ class DistributedNetworkGraph : public NetworkGraph {
 
     std::shared_ptr<NetworkData<ftype>>
     train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> &ds, size_t epochs) override {
-        printf("start training!\n");
         this->service_->barrier();
         if (this->service_->rank() == 0) {
             this->pushData(std::make_shared<TrainingData<ftype>>(nn, ds, epochs));
@@ -200,7 +199,6 @@ class DistributedNetworkGraph : public NetworkGraph {
         }
         this->service_->barrier();
         this->cleanGraph();
-        printf("end training!\n");
         return nn;
     }
 

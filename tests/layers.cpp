@@ -604,13 +604,20 @@ UTestArgs(mnist_multi_node, CommService *service) {
     graph.set_loss<QuadraticLoss>();
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
+    // graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    // graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
+    // graph.cut_layer();
+    // graph.add_layer<LinearLayer>(12 * 12 * 20, 64);
+    // graph.add_layer<SigmoidActivationLayer>();
+    // graph.cut_layer();
+    // graph.add_layer<LinearLayer>(64, 10);
+    // graph.add_layer<SigmoidActivationLayer>();
+
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    graph.cut_layer();
     graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
     graph.cut_layer();
-    graph.add_layer<LinearLayer>(12 * 12 * 20, 64);
-    graph.add_layer<SigmoidActivationLayer>();
-    graph.cut_layer();
-    graph.add_layer<LinearLayer>(64, 10);
+    graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
@@ -631,18 +638,20 @@ UTestArgs(mnist_multi_node, CommService *service) {
     graph.train(data, training_set, epochs);
     timer_end(batch_training);
 
-    // timer_report_prec(batch_training, milliseconds);
-    //
-    // INFO("Evaluate the model...");
-    // graph.init(data, {test_batch_size, 1, 28, 28});
-    // ftype accuracy_end =
-    //     evaluate_mnist(graph, testing_set, data, test_batch_size);
+    timer_report_prec(batch_training, milliseconds);
+
+    INFO("Evaluate the model...");
+    graph.init(data, {test_batch_size, 1, 28, 28});
+    ftype accuracy_end =
+        evaluate_mnist(graph, testing_set, data, test_batch_size);
 
     service->barrier();
     graph.terminate();
     std::cout << "graph terminated" << std::endl;
 
-    // uassert(accuracy_end > accuracy_start);
+    if (service->rank() == 0) {
+        uassert(accuracy_end > accuracy_start);
+    }
 
     std::ostringstream oss;
     oss << "train_mnist_batch_multinode_" << service->rank() << ".dot";
