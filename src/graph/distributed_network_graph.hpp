@@ -172,6 +172,9 @@ class DistributedNetworkGraph : public NetworkGraph {
         }
         this->bwd_comms_[rank]->setMemoryManager(&this->bwd_mm_);
 
+        // initializing the optimizer's memory manager
+        this->opt_mm_.init(nn);
+
         this->service_->barrier();
         this->cleanGraph();
     }
