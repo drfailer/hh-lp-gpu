@@ -7,21 +7,7 @@
 #include <hedgehog/communicator/communicator_task.hpp>
 #include "../tools/network_memory_manager.hpp"
 
-// TODO: to facilitate the data transmission, we should have intermediate tasks
-//       that would be use to prepare the data. This way, we can use a global
-//       bank to store tensors, and only transmit tensor IDs when needed. Const
-//       data will also be an issue on the recver end (does the intermediate
-//       tasks solve this?). NetworkData<T> is also an issue since the current
-//       implementation contains the actual weights tensors which should never
-//       be shared between processes.
-//       Finally, we will need to use several memory pool that will each
-//       contain one element. Therefore, I think that the implementation of the
-//       memory pool should be changed to facilitate this. Having a callback
-//       instead of the pool in the core would make things easier, however, we
-//       cannot add another template parameter here which makes things
-//       challenging.
-
-#define SEND_TO(...) [=](auto) { return std::vector<hh::comm::rank_t>({__VA_ARGS__}); }
+#define SEND_TO(...) hh::comm::strategy::SendTo(__VA_ARGS__)
 
 class DistributedNetworkGraph : public NetworkGraph {
   public:
@@ -37,11 +23,11 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set send strategy
         hh::comm::rank_t dest = 1;
-        this->init_comms_.back()->template strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->init_comms_.back()->template strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->fwd_comms_.back()->template strategy<FwdData<ftype>>(SEND_TO(dest));
-        this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(0));
-        this->optimizer_comm_->template strategy<OptLayerData<ftype>>(SEND_TO(0));
+        this->init_comms_.back()->strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
+        this->init_comms_.back()->strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
+        this->fwd_comms_.back()->strategy<FwdData<ftype>>(SEND_TO(dest));
+        this->bwd_comms_.back()->strategy<BwdData<ftype>>(SEND_TO(0));
+        this->optimizer_comm_->strategy<OptLayerData<ftype>>(SEND_TO(0));
     }
 
   public:
@@ -61,11 +47,11 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set the strategies
         hh::comm::rank_t dest = this->init_comms_.size() % this->service_->nbProcesses();
-        this->init_comms_.back()->template strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->init_comms_.back()->template strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->fwd_comms_.back()->template strategy<FwdData<ftype>>(SEND_TO(dest));
+        this->init_comms_.back()->strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
+        this->init_comms_.back()->strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
+        this->fwd_comms_.back()->strategy<FwdData<ftype>>(SEND_TO(dest));
         dest = this->init_comms_.size() - 1;
-        this->bwd_comms_.back()->template strategy<BwdData<ftype>>(SEND_TO(dest));
+        this->bwd_comms_.back()->strategy<BwdData<ftype>>(SEND_TO(dest));
     }
 
     template <typename LayerType, typename... Types>
@@ -76,8 +62,12 @@ class DistributedNetworkGraph : public NetworkGraph {
 
     void build() override {
         if (this->service_->nbProcesses() != this->layer_tasks_.inits.size()) {
-            // TODO: properly format the error message and specify the numbers!
-            std::logic_error("error: the number of processes is different from the number of cut layers.");
+            std::ostringstream oss;
+            oss << "error: " << this->service_->nbProcesses()
+                << " processes created but the network has "
+                << this->layer_tasks_.inits.size()
+                << "cut layers (the number of processes must macth the number of cut layer).";
+            throw std::logic_error(oss.str());
         }
 
         // connect the init tasks
