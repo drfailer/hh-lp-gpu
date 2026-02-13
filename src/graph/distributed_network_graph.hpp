@@ -10,12 +10,20 @@
 #define SEND_TO(...) hh::comm::strategy::SendTo(__VA_ARGS__)
 
 class DistributedNetworkGraph : public NetworkGraph {
+  using InitParametersCommData = InitParametersData<ftype, InitTarget::Layer>;
+  using InitCommData = InitData<ftype, InitTarget::Layer>;
+  using FwdCommData = FwdData<ftype>;
+  using BwdCommData = BwdData<ftype>;
+  using InitComm = hh::CommunicatorTask<InitParametersCommData, InitCommData>;
+  using FwdComm = hh::CommunicatorTask<FwdCommData>;
+  using BwdComm = hh::CommunicatorTask<BwdCommData>;
+
   public:
     DistributedNetworkGraph(hh::comm::CommService *service)
         : service_(service),
-          init_comms_({std::make_shared<hh::CommunicatorTask<InitTaskIn>>(service)}),
-          fwd_comms_({std::make_shared<hh::CommunicatorTask<FwdData<ftype>>>(service)}),
-          bwd_comms_({std::make_shared<hh::CommunicatorTask<BwdData<ftype>>>(service)}),
+          init_comms_({std::make_shared<InitComm>(service)}),
+          fwd_comms_({std::make_shared<FwdComm>(service)}),
+          bwd_comms_({std::make_shared<BwdComm>(service)}),
           optimizer_comm_(std::make_shared<hh::CommunicatorTask<OptLayerData<ftype>>>(service)) {
         // set the memory managers
         this->init_comms_.back()->setMemoryManager(&this->init_mm_);
@@ -23,10 +31,10 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set send strategy
         hh::comm::rank_t dest = 1;
-        this->init_comms_.back()->strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->init_comms_.back()->strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->fwd_comms_.back()->strategy<FwdData<ftype>>(SEND_TO(dest));
-        this->bwd_comms_.back()->strategy<BwdData<ftype>>(SEND_TO(0));
+        this->init_comms_.back()->strategy<InitParametersCommData>(SEND_TO(dest));
+        this->init_comms_.back()->strategy<InitCommData>(SEND_TO(dest));
+        this->fwd_comms_.back()->strategy<FwdCommData>(SEND_TO(dest));
+        this->bwd_comms_.back()->strategy<BwdCommData>(SEND_TO(0));
         this->optimizer_comm_->strategy<OptLayerData<ftype>>(SEND_TO(0));
     }
 
@@ -35,23 +43,20 @@ class DistributedNetworkGraph : public NetworkGraph {
         this->layer_tasks_.cut_layer();
 
         // create the communicators
-        this->init_comms_.push_back(
-                std::make_shared<hh::CommunicatorTask<InitTaskIn>>(this->service_));
-        this->fwd_comms_.push_back(
-                std::make_shared<hh::CommunicatorTask<FwdData<ftype>>>(this->service_));
-        this->bwd_comms_.push_back(
-                std::make_shared<hh::CommunicatorTask<BwdData<ftype>>>(this->service_));
+        this->init_comms_.push_back(std::make_shared<InitComm>(this->service_));
+        this->fwd_comms_.push_back(std::make_shared<FwdComm>(this->service_));
+        this->bwd_comms_.push_back(std::make_shared<BwdComm>(this->service_));
 
         // set the memory managers
         this->init_comms_.back()->setMemoryManager(&this->init_mm_);
 
         // set the strategies
         hh::comm::rank_t dest = this->init_comms_.size() % this->service_->nbProcesses();
-        this->init_comms_.back()->strategy<InitParametersData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->init_comms_.back()->strategy<InitData<ftype, InitTarget::Layer>>(SEND_TO(dest));
-        this->fwd_comms_.back()->strategy<FwdData<ftype>>(SEND_TO(dest));
+        this->init_comms_.back()->strategy<InitParametersCommData>(SEND_TO(dest));
+        this->init_comms_.back()->strategy<InitCommData>(SEND_TO(dest));
+        this->fwd_comms_.back()->strategy<FwdCommData>(SEND_TO(dest));
         dest = this->init_comms_.size() - 1;
-        this->bwd_comms_.back()->strategy<BwdData<ftype>>(SEND_TO(dest));
+        this->bwd_comms_.back()->strategy<BwdCommData>(SEND_TO(dest));
     }
 
     template <typename LayerType, typename... Types>
