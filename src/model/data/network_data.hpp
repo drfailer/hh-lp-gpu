@@ -5,6 +5,8 @@
 
 template <typename T>
 struct NetworkData {
+    NetworkData(size_t nb_layers) : layers_datas(nb_layers) {}
+
     std::vector<LayerData<T>> layers_datas = {};
     LossData<T> loss;
 };

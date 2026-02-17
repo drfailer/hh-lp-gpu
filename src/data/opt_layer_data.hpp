@@ -6,6 +6,30 @@
 template <typename T> struct OptLayerData {
     std::shared_ptr<NetworkData<T>> state;
     size_t idx;
+
+    hh::comm::Package pack() {
+        // printf("OptLayerData::pack()\n");
+        return hh::comm::Package{
+            .data = {
+                hh::comm::Buffer{
+                    (char*)&this->idx, sizeof(this->idx),
+                },
+            },
+        };
+    }
+    void unpack(hh::comm::Package) {
+        // printf("OptLayerData::unpack()\n");
+    }
+    hh::comm::Package package() {
+        // printf("OptLayerData::package()\n");
+        return hh::comm::Package{
+            .data = {
+                hh::comm::Buffer{
+                    (char*)&this->idx, sizeof(this->idx),
+                },
+            },
+        };
+    }
 };
 
 #endif

@@ -99,8 +99,8 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * network if needed. The rest of the data required for the computation is
      * allocated in `init_state`.
      */
-    std::shared_ptr<NetworkData<ftype>> init_parameters() {
-        auto nn = std::make_shared<NetworkData<ftype>>();
+    virtual std::shared_ptr<NetworkData<ftype>> init_parameters() {
+        auto nn = std::make_shared<NetworkData<ftype>>(this->layer_tasks_.layer_count);
 
         this->pushData(std::make_shared<InitParametersData<ftype>>(nn));
         (void)this->get<InitParametersData<ftype>>();
@@ -120,25 +120,25 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
      * allocated and initialized, meaning that no allocation or initialization
      * will be done during the computation to ensure maximum performance.
      */
-    void init(std::shared_ptr<NetworkData<ftype>> nn,
+    virtual void init(std::shared_ptr<NetworkData<ftype>> nn,
               tensor::dims_t input_dims) {
         this->pushData(std::make_shared<InitData<ftype>>(nn, input_dims));
         (void)this->get<InitData<ftype>>();
         this->cleanGraph();
     }
 
-    tensor::Tensor<ftype> const &predict(std::shared_ptr<NetworkData<ftype>> nn,
-                                         tensor::Tensor<ftype> const &input) {
+    // TODO: the data set system will be changed to allow taking const input!
+
+    virtual tensor::Tensor<ftype> const *predict(std::shared_ptr<NetworkData<ftype>> nn,
+                                         tensor::Tensor<ftype> &input) {
         this->pushData(std::make_shared<PredictionData<ftype>>(nn, &input));
-        tensor::Tensor<ftype> const *output =
-            this->get<PredictionData<ftype>>()->input;
+        tensor::Tensor<ftype> *output = this->get<PredictionData<ftype>>()->input;
         this->cleanGraph();
-        return *output;
+        return output;
     }
 
-    std::shared_ptr<NetworkData<ftype>>
-    train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> const &ds,
-          size_t epochs) {
+    virtual std::shared_ptr<NetworkData<ftype>>
+    train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> &ds, size_t epochs) {
         this->pushData(std::make_shared<TrainingData<ftype>>(nn, ds, epochs));
         (void)this->get<TrainingData<ftype>>();
         this->cleanGraph();
@@ -146,7 +146,7 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
     }
 
   public:
-    void terminate() {
+    virtual void terminate() {
         pipeline_state_->terminate();
         init_state_->terminate();
         this->finishPushingData();

@@ -1,5 +1,6 @@
 #include "layers.hpp"
 #include "../src/graph/network_graph.hpp"
+#include "../src/graph/distributed_network_graph.hpp"
 #include "../src/model/layer/convolution_layer.hpp"
 #include "../src/model/layer/linear_layer.hpp"
 #include "../src/model/layer/pooling_layer.hpp"
@@ -100,9 +101,18 @@ float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
 
     timer_start(evaluate_mnist);
     for (auto &test_data : testing_set.datas) {
-        auto &output = graph.predict(data, test_data.input);
+        auto output = graph.predict(data, test_data.input);
+        if (output == nullptr) {
+            continue;
+        }
+        if (output->size() != found.size()) {
+            std::cerr << "error: expected output of size "
+                      << found.size() << " but "
+                      << output->size() << " was found." << std::endl;
+            continue;
+        }
         CUDA_CHECK(test_data.ground_truth.to_host(expected.data()));
-        CUDA_CHECK(output.to_host(found.data()));
+        CUDA_CHECK(output->to_host(found.data()));
 
         for (size_t i = 0; i < batch_size; ++i) {
             int expected_label = mnist_get_label(&expected.data()[i * 10]);
@@ -567,37 +577,47 @@ UTest(mnist_batched) {
 
     uassert(accuracy_end > accuracy_start);
 
-    graph.createDotFile("train_mnist_batch.dot", hh::ColorScheme::EXECUTION,
+    graph.createDotFile("train_mnist_batch_single_node.dot", hh::ColorScheme::EXECUTION,
                         hh::StructureOptions::QUEUE);
 }
 
-UTest(mnist_multi_node) {
+UTestArgs(mnist_multi_node, CommService *service) {
     constexpr ftype learning_rate = 0.001;
     constexpr size_t epochs = 10;
     constexpr size_t batch_size = 64;
     constexpr size_t test_batch_size = 1'000;
     MNISTLoader loader;
     BatchGenerator<ftype> batch_generator(0);
+    DataSet<ftype> training_data, training_set, testing_set;
 
-    DataSet<ftype> training_data =
-        loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
-                       "../data/mnist/train-images-idx3-ubyte");
-    DataSet<ftype> training_set =
-        batch_generator.generate(std::move(training_data), batch_size);
-    DataSet<ftype> testing_set =
-        loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
-                       "../data/mnist/t10k-images-idx3-ubyte", test_batch_size);
+    if (service->rank() == 0) {
+        training_data = loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
+                                       "../data/mnist/train-images-idx3-ubyte");
+        training_set = batch_generator.generate(std::move(training_data), batch_size);
+        testing_set = loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
+                                     "../data/mnist/t10k-images-idx3-ubyte",
+                                     test_batch_size);
+    }
 
-    NetworkGraph graph;
+    DistributedNetworkGraph graph(service);
 
     graph.set_loss<QuadraticLoss>();
     graph.set_optimizer<SGDOptimizer>(1, learning_rate);
 
+    // graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    // graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
+    // graph.cut_layer();
+    // graph.add_layer<LinearLayer>(12 * 12 * 20, 64);
+    // graph.add_layer<SigmoidActivationLayer>();
+    // graph.cut_layer();
+    // graph.add_layer<LinearLayer>(64, 10);
+    // graph.add_layer<SigmoidActivationLayer>();
+
     graph.add_layer<ConvolutionLayer>(1, 20, 28, 28, 5, 5);
+    graph.cut_layer();
     graph.add_layer<PoolingLayer>(CUDNN_POOLING_MAX, 2, 2);
-    graph.add_layer<LinearLayer>(12 * 12 * 20, 64);
-    graph.add_layer<SigmoidActivationLayer>();
-    graph.add_layer<LinearLayer>(64, 10);
+    graph.cut_layer();
+    graph.add_layer<LinearLayer>(12 * 12 * 20, 10);
     graph.add_layer<SigmoidActivationLayer>();
 
     graph.build();
@@ -625,10 +645,16 @@ UTest(mnist_multi_node) {
     ftype accuracy_end =
         evaluate_mnist(graph, testing_set, data, test_batch_size);
 
+    service->barrier();
     graph.terminate();
+    std::cout << "graph terminated" << std::endl;
 
-    uassert(accuracy_end > accuracy_start);
+    if (service->rank() == 0) {
+        uassert(accuracy_end > accuracy_start);
+    }
 
-    graph.createDotFile("train_mnist_batch.dot", hh::ColorScheme::EXECUTION,
-                        hh::StructureOptions::QUEUE);
+    std::ostringstream oss;
+    oss << "train_mnist_batch_multinode_" << service->rank() << ".dot";
+    graph.createDotFile(oss.str(), hh::ColorScheme::EXECUTION,
+            hh::StructureOptions::QUEUE);
 }

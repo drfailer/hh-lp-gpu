@@ -108,7 +108,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     Step_ step_ = Step_::Idle;
     struct {
         size_t epochs = 0;
-        DataSet<ftype> const *data_set;
+        DataSet<ftype> *data_set;
     } train_data_;
 };
 

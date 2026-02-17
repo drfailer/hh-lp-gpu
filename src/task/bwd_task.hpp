@@ -17,7 +17,7 @@ class BwdTask : public CUDATask<BwdTaskIO> {
     BwdTask() : CUDATask<BwdTaskIO>("BwdTask", 1) {}
 
     void execute(std::shared_ptr<BwdData<ftype>> data) override {
-        auto const *dy = data->error;
+        auto *dy = data->error;
         auto &nn = data->network_data;
 
         for (int i = layers_.size() - 1; i >= 0; --i) {

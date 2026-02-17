@@ -3,8 +3,8 @@
  * who like debug prints. Modify this file directly to customize log levels.
  */
 
-#ifndef LOG_H
-#define LOG_H
+#ifndef LP_LOG_H
+#define LP_LOG_H
 #include <iostream>
 #include <type_traits>
 
@@ -13,12 +13,12 @@
 // use preprocessor constants to toggle features
 
 // log levels (comment to deactivate)
-#define LOG
-#define LOG_INFO
-#define LOG_WARN
-#define LOG_ERR
-#define LOG_TODO
-#define LOG_DBG
+#define HH_LP_LOG
+#define HH_LP_LOG_INFO
+#define HH_LP_LOG_WARN
+#define HH_LP_LOG_ERR
+#define HH_LP_LOG_TODO
+#define HH_LP_LOG_DBG
 
 // if defined, the log module will contain functions to print containers
 // (requires C++20 and usable only with the DBG macro)
@@ -45,7 +45,7 @@
 /******************************************************************************/
 
 // colors and metafunctions
-#if defined(LOG)
+#if defined(HH_LP_LOG)
 #define BRED "\033[1;31m"
 #define BYEL "\033[1;33m"
 #define BGRN "\033[1;32m"
@@ -57,7 +57,7 @@
 #include <tuple> // required for std::get
 #endif
 
-namespace logh {
+namespace hhlp::log {
 
 template <size_t... Ids> struct GroupList {};
 
@@ -125,16 +125,16 @@ std::ostream &operator<<(std::ostream &os, Container const &container) {
 
 #endif // DBG_CONTAINERS
 
-} // namespace logh
+} // namespace hhlp::log
 
-#endif // defined(LOG)
+#endif // defined(HH_LP_LOG)
 
-// INFO is displayed all the time when LOG_INFO is defined
+// INFO is displayed all the time when HH_LP_LOG_INFO is defined
 // INFO_GRP takes the id of a group, only the groups that are in INFO_GRPS are
 // displayed
-#if defined(LOG) && defined(LOG_INFO)
+#if defined(HH_LP_LOG) && defined(HH_LP_LOG_INFO)
 #define INFO_GRP(msg, id)                                                      \
-  if constexpr (logh::isInfoIdActive<id, logh::GroupList<INFO_GRPS>>::value) { \
+  if constexpr (hhlp::log::isInfoIdActive<id, hhlp::log::GroupList<INFO_GRPS>>::value) { \
     std::cout << BBLU "INFO[" #id "]: " CRESET << msg << std::endl;            \
   }
 #define INFO(msg) INFO_GRP(msg, 0)
@@ -144,35 +144,35 @@ std::ostream &operator<<(std::ostream &os, Container const &container) {
 #endif
 
 // WARN
-#if defined(LOG) && defined(LOG_WARN)
+#if defined(HH_LP_LOG) && defined(HH_LP_LOG_WARN)
 #define WARN(msg) std::cout << BYEL "WARN: " CRESET << msg << std::endl;
 #else
 #define WARN(msg)
 #endif
 
 // ERROR
-#if defined(LOG) && defined(LOG_ERR)
+#if defined(HH_LP_LOG) && defined(HH_LP_LOG_ERR)
 #define ERROR(msg) std::cout << BRED "ERROR: " CRESET << msg << std::endl;
 #else
 #define ERROR(msg)
 #endif
 
 // TODO
-#if defined(LOG) && defined(LOG_TODO)
+#if defined(HH_LP_LOG) && defined(HH_LP_LOG_TODO)
 #define TODO(msg) std::cout << BGRN "TODO: " CRESET << msg << std::endl;
 #else
 #define TODO(msg)
 #endif
 
 // DBG
-#if defined(LOG) && defined(LOG_DBG)
+#if defined(HH_LP_LOG) && defined(HH_LP_LOG_DBG)
 #ifdef DBG_CONTAINERS
 #define DBG(var)                                                               \
   if constexpr (!std::is_same_v<const char(&)[sizeof(var)], decltype(var)>) {  \
-    using logh::operator<<;                                                    \
+    using hhlp::log::operator<<;                                                    \
     std::cout << MAG "DBG: " CRESET #var " = " << var << std::endl;            \
   } else { /* if not variable */                                               \
-    using logh::operator<<;                                                    \
+    using hhlp::log::operator<<;                                                    \
     std::cout << MAG "DBG: " CRESET << var << std::endl;                       \
   }
 #else // DBG_CONTAINERS
