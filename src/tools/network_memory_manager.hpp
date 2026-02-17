@@ -29,7 +29,7 @@ class InitParameterDataMemoryManager
     }
 
     std::shared_ptr<ManagedType> allocate(AllocMode = AllocMode::Fail, LOC) override {
-        assert(this->init_parameters_ != nullptr);
+        // assert(this->init_parameters_ != nullptr);
         return this->init_parameters_;
     }
 
@@ -102,6 +102,9 @@ class FwdDataMemoryManager
     }
 
     std::shared_ptr<ManagedType> allocate(AllocMode = AllocMode::Fail, LOC) override {
+        if (this->fwd_ == nullptr) {
+            return nullptr;
+        }
         this->fwd_->input = &this->input_tensor_;
         return this->fwd_;
     }
@@ -132,6 +135,9 @@ class BwdDataMemoryManager
     }
 
     std::shared_ptr<ManagedType> allocate(AllocMode = AllocMode::Fail, LOC) override {
+        if (this->bwd_ == nullptr) {
+            return nullptr;
+        }
         this->bwd_->error = &this->error_tensor_;
         return this->bwd_;
     }
@@ -160,6 +166,9 @@ class OptLayerDataMemoryManager
     }
 
     std::shared_ptr<ManagedType> allocate(AllocMode = AllocMode::Fail, LOC) override {
+        if (this->opt_ == nullptr) {
+            return nullptr;
+        }
         this->opt_->idx = 0;
         return this->opt_;
     }

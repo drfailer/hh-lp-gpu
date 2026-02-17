@@ -30,11 +30,14 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set send strategy
         hh::comm::rank_t dest = 1;
+
         this->init_comms_.back()->strategy<InitParametersCommData>(SEND_TO(dest));
         this->init_comms_.back()->strategy<InitCommData>(SEND_TO(dest));
         this->fwd_comms_.back()->strategy<FwdCommData>(SEND_TO(dest));
-        this->bwd_comms_.back()->strategy<BwdCommData>(SEND_TO(0));
-        this->optimizer_comm_->strategy<OptLayerData<ftype>>(SEND_TO(0));
+
+        dest = 0;
+        this->bwd_comms_.back()->strategy<BwdCommData>(SEND_TO(dest));
+        this->optimizer_comm_->strategy<OptLayerData<ftype>>(SEND_TO(dest));
     }
 
   public:
@@ -51,9 +54,11 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         // set the strategies
         hh::comm::rank_t dest = this->init_comms_.size() % this->service_->nbProcesses();
+
         this->init_comms_.back()->strategy<InitParametersCommData>(SEND_TO(dest));
         this->init_comms_.back()->strategy<InitCommData>(SEND_TO(dest));
         this->fwd_comms_.back()->strategy<FwdCommData>(SEND_TO(dest));
+
         dest = this->init_comms_.size() - 1;
         this->bwd_comms_.back()->strategy<BwdCommData>(SEND_TO(dest));
     }
@@ -117,6 +122,18 @@ class DistributedNetworkGraph : public NetworkGraph {
             this->edges(this->optimizer_state_manager_, this->pipeline_state_manager_);
         }
 
+        // memory managers and hints
+        auto rank = this->service_->rank();
+        auto prank = rank == 0 ? this->service_->nbProcesses() - 1 : rank - 1;
+
+        this->fwd_comms_[prank]->setMemoryManager(&this->fwd_mm_);
+        this->fwd_comms_[rank]->setMemoryManager(&this->fwd_mm_);
+        this->fwd_comms_[rank]->addHint<FwdCommData>(hh::comm::hint::continuousRecvFrom(prank, 1));
+
+        this->bwd_comms_[prank]->setMemoryManager(&this->bwd_mm_);
+        this->bwd_comms_[rank]->setMemoryManager(&this->bwd_mm_);
+        this->fwd_comms_[rank]->addHint<BwdCommData>(hh::comm::hint::continuousRecvFrom(prank, 1));
+
         this->service_->barrier();
     }
 
@@ -147,24 +164,14 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         auto rank = this->service_->rank();
 
-        // init and set memory managers for fwd tasks
+        // init memory managers for fwd tasks
         if (rank == 0) {
             this->fwd_mm_.init(nn, tensor::TensorShape(init_data->input_dims));
-            this->fwd_comms_.back()->setMemoryManager(&this->fwd_mm_);
         } else {
             this->fwd_mm_.init(nn, this->layer_tasks_.inits[rank]->input_shape(nn));
-            this->fwd_comms_[rank - 1]->setMemoryManager(&this->fwd_mm_);
         }
-        this->fwd_comms_[rank]->setMemoryManager(&this->fwd_mm_);
-
-        // init and set memory managers for bwd tasks
+        // init memory managers for bwd tasks
         this->bwd_mm_.init(nn, this->layer_tasks_.inits[rank]->output_shape(nn));
-        if (rank == 0) {
-            this->bwd_comms_.back()->setMemoryManager(&this->bwd_mm_);
-        } else {
-            this->bwd_comms_[rank - 1]->setMemoryManager(&this->bwd_mm_);
-        }
-        this->bwd_comms_[rank]->setMemoryManager(&this->bwd_mm_);
 
         // initializing the optimizer's memory manager
         this->opt_mm_.init(nn);
