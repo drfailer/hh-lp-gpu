@@ -4,7 +4,6 @@
 #include "../tools/communicator.hpp"
 #include <memory>
 #include <vector>
-#include <hedgehog/communicator/communicator_task.hpp>
 #include "../tools/network_memory_manager.hpp"
 
 #define SEND_TO(...) hh::comm::strategy::SendTo(__VA_ARGS__)

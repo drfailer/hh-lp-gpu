@@ -26,8 +26,7 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 # add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
-# add_compile_options(-g)
-add_compile_options(-O3)
+add_compile_options(-g -O3)
 
 add_library(linear_layer_kernel src/kernels/linear_layer_kernel.cu)
 
@@ -41,6 +40,7 @@ target_include_directories(hh-lp-gpu
     PUBLIC
     lib
     lib/serializer-cpp/
+    lib/hh_communicator_draft/src/
     ~/Programming/usr/include/
     lib/hedgehog/
     ${MPI_INCLUDE_PATH}

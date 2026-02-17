@@ -7,3 +7,6 @@
 [submodule "lib/serializer-cpp"]
 	path = lib/serializer-cpp
 	url = https://github.com/drfailer/serializer-cpp.git
+[submodule "lib/hh_communicator_draft"]
+	path = lib/hh_communicator_draft
+	url = https://github.com/drfailer/hh_communicator_draft.git
