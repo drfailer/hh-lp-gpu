@@ -25,8 +25,8 @@ class InitTask : public CUDATask<InitTaskIO> {
         for (auto &layer : layers_) {
             LayerData<ftype> ld;
             auto param_shape = layer->parameters_shape();
-            ld.w = tensor::tensor<ftype>(param_shape.w);
-            ld.b = tensor::tensor<ftype>(param_shape.b);
+            ld.w = tensor::tensor(param_shape.w);
+            ld.b = tensor::tensor(param_shape.b);
             layer->init_parameters(cuda_, {ld.w, ld.b});
             data->states->layers_datas[layer->idx] = std::move(ld);
         }
@@ -48,15 +48,15 @@ class InitTask : public CUDATask<InitTaskIO> {
             dims = io_shape.y.dims;
 
             // fwd init
-            ld.x = tensor::tensor_view<ftype>(io_shape.x, nullptr);
-            ld.y = tensor::tensor<ftype>(io_shape.y);
+            ld.x = tensor::tensor_view(io_shape.x, nullptr);
+            ld.y = tensor::tensor(io_shape.y);
             layer->init_fwd(cuda_, ld);
 
             // bwd init
-            ld.dx = tensor::tensor<ftype>(io_shape.x);
-            ld.dy = tensor::tensor_view<ftype>(io_shape.y, nullptr);
-            ld.dw = tensor::tensor_like<ftype>(ld.w);
-            ld.db = tensor::tensor_like<ftype>(ld.b);
+            ld.dx = tensor::tensor(io_shape.x);
+            ld.dy = tensor::tensor_view(io_shape.y, nullptr);
+            ld.dw = tensor::tensor_like(ld.w);
+            ld.db = tensor::tensor_like(ld.b);
             layer->init_bwd(cuda_, ld);
         }
         data->input_dims = dims;

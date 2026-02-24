@@ -129,10 +129,10 @@ class NetworkGraph : public hh::Graph<NetworkGraphIO> {
 
     // TODO: the data set system will be changed to allow taking const input!
 
-    virtual tensor::Tensor<ftype> const *predict(std::shared_ptr<NetworkData<ftype>> nn,
-                                         tensor::Tensor<ftype> &input) {
+    virtual tensor::Tensor const *predict(std::shared_ptr<NetworkData<ftype>> nn,
+                                         tensor::Tensor &input) {
         this->pushData(std::make_shared<PredictionData<ftype>>(nn, &input));
-        tensor::Tensor<ftype> *output = this->get<PredictionData<ftype>>()->input;
+        tensor::Tensor *output = this->get<PredictionData<ftype>>()->input;
         this->cleanGraph();
         return output;
     }

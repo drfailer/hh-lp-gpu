@@ -3,14 +3,14 @@
 #include "../../tools/tensor/tensors.hpp"
 
 template <typename T> struct LayerData {
-    tensor::TensorView<T> x;
-    tensor::Tensor<T> y;
-    tensor::TensorView<T> dy;
-    tensor::Tensor<T> dx;
-    tensor::Tensor<T> w;
-    tensor::Tensor<T> b;
-    tensor::Tensor<T> dw;
-    tensor::Tensor<T> db;
+    tensor::TensorView x;
+    tensor::Tensor y;
+    tensor::TensorView dy;
+    tensor::Tensor dx;
+    tensor::Tensor w;
+    tensor::Tensor b;
+    tensor::Tensor dw;
+    tensor::Tensor db;
 };
 
 struct LayerParametersShape {

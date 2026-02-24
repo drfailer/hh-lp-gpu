@@ -16,20 +16,20 @@
 
 namespace tensor {
 
-template <typename T, typename... Types> Tensor<T> tensor(Types... args) {
-    return Tensor<T>(std::forward<Types>(args)...);
+template <typename... Types> Tensor tensor(Types... args) {
+    return Tensor(TensorShape(std::forward<Types>(args)...), CUDNN_DATA_TYPE);
 }
 
-template <typename T> Tensor<T> tensor_like(Tensor<T> const &tensor) {
-    return Tensor<T>(tensor.shape());
+inline Tensor tensor_like(Tensor const &tensor) {
+    return Tensor(tensor.shape(), tensor.data_type());
 }
 
-template <typename T> TensorView<T> tensor_view(TensorShape const &shape, T *data) {
-    return TensorView<T>(shape, data);
+inline TensorView tensor_view(TensorShape const &shape, void *data, data_type_t data_type = CUDNN_DATA_TYPE) {
+    return TensorView(shape, data, data_type);
 }
 
-template <typename T> TensorView<T> tensor_view_of(Tensor<T> const &tensor) {
-    return TensorView<T>(tensor.shape(), tensor.data());
+inline TensorView tensor_view_of(Tensor const &tensor) {
+    return TensorView(tensor.shape(), tensor.data(), tensor.data_type());
 }
 
 } // end namespace tensor

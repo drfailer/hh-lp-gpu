@@ -6,21 +6,20 @@
 
 namespace tensor {
 
-template <typename T>
-class TensorView : public TensorBase<const T> {
+class TensorView : public TensorBase<const void> {
   public:
     // constructors & destructor ///////////////////////////////////////////////
 
     TensorView() = default;
 
-    TensorView(TensorShape const &shape, T const *data) : TensorBase<const T>(shape) {
+    TensorView(TensorShape const &shape, void const *data, data_type_t data_type) : TensorBase<const void>(shape, data_type) {
         this->data_ = data;
     }
 
-    TensorView(TensorView<T> &&view) : TensorBase<const T>(std::move(view)) {}
+    TensorView(TensorView &&view) : TensorBase<const void>(std::move(view)) {}
 
-    TensorView<T> const &operator=(TensorView<T> &&view) {
-        TensorBase<const T>::operator=(std::move(view));
+    TensorView const &operator=(TensorView &&view) {
+        TensorBase<const void>::operator=(std::move(view));
         return *this;
     }
 

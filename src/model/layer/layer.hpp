@@ -5,35 +5,35 @@
 #include "../../model/data/layer_data.hpp"
 
 struct Parameters {
-    tensor::Tensor<ftype> &w;
-    tensor::Tensor<ftype> &b;
+    tensor::Tensor &w;
+    tensor::Tensor &b;
 };
 
 using InitFwdData = LayerData<ftype>;
 using InitBwdData = LayerData<ftype>;
 
 struct LayerFwdIn {
-    tensor::TensorView<ftype> &x;
-    tensor::Tensor<ftype> &w;
-    tensor::Tensor<ftype> &b;
+    tensor::TensorView &x;
+    tensor::Tensor &w;
+    tensor::Tensor &b;
 };
 
 struct LayerFwdOut {
-    tensor::Tensor<ftype> &y;
+    tensor::Tensor &y;
 };
 
 struct LayerBwdIn {
-    tensor::TensorView<ftype> &dy;
-    tensor::TensorView<ftype> &x;
-    tensor::Tensor<ftype> &y;
-    tensor::Tensor<ftype> &w;
-    tensor::Tensor<ftype> &b;
+    tensor::TensorView &dy;
+    tensor::TensorView &x;
+    tensor::Tensor &y;
+    tensor::Tensor &w;
+    tensor::Tensor &b;
 };
 
 struct LayerBwdOut {
-    tensor::Tensor<ftype> &dx;
-    tensor::Tensor<ftype> &dw;
-    tensor::Tensor<ftype> &db;
+    tensor::Tensor &dx;
+    tensor::Tensor &dw;
+    tensor::Tensor &db;
 };
 
 template <typename T> struct Layer {

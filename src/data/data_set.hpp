@@ -6,8 +6,8 @@
 
 template <typename T>
 struct Data {
-    tensor::Tensor<T> input;
-    tensor::Tensor<T> ground_truth;
+    tensor::Tensor input;
+    tensor::Tensor ground_truth;
 };
 
 template <typename T>

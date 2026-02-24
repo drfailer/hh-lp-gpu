@@ -6,7 +6,7 @@
 template <typename T>
 struct PredictionData {
     std::shared_ptr<NetworkData<T>> states;
-    tensor::Tensor<T> *input;
+    tensor::Tensor *input;
 };
 
 #endif

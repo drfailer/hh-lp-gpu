@@ -26,7 +26,8 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} ${Hedgehog_CXX_FLAGS})
 
 # add_compile_options(-Wall -Wextra -Wuninitialized -fsanitize=address -fno-omit-frame-pointer -pedantic -g)
 # add_compile_options(-Wall -Wextra -Wuninitialized -pedantic -g)
-add_compile_options(-g -O3)
+# add_compile_options(-g -O3)
+add_compile_options(-g)
 
 add_library(linear_layer_kernel src/kernels/linear_layer_kernel.cu)
 

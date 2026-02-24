@@ -97,7 +97,7 @@ class FwdDataMemoryManager
 
     void init(std::shared_ptr<NetworkData<ftype>> nn,
          tensor::TensorShape const          &input_shape) {
-        this->input_tensor_ = tensor::Tensor<ftype>(input_shape);
+        this->input_tensor_ = tensor::tensor(input_shape);
         this->fwd_ = std::make_shared<ManagedType>(nn, &this->input_tensor_);
     }
 
@@ -112,7 +112,7 @@ class FwdDataMemoryManager
     void release(std::shared_ptr<ManagedType> &&, LOC) override {}
 
   private:
-    tensor::Tensor<ftype>        input_tensor_ = {};
+    tensor::Tensor        input_tensor_ = {};
     std::shared_ptr<ManagedType> fwd_ = nullptr;
 };
 
@@ -130,7 +130,7 @@ class BwdDataMemoryManager
 
     void init(std::shared_ptr<NetworkData<ftype>> nn,
          tensor::TensorShape const          &error_shape) {
-        this->error_tensor_ = tensor::Tensor<ftype>(error_shape);
+        this->error_tensor_ = tensor::tensor(error_shape);
         this->bwd_ = std::make_shared<ManagedType>(nn, &this->error_tensor_);
     }
 
@@ -145,7 +145,7 @@ class BwdDataMemoryManager
     void release(std::shared_ptr<ManagedType> &&, LOC) override {}
 
   private:
-    tensor::Tensor<ftype>        error_tensor_ = {};
+    tensor::Tensor        error_tensor_ = {};
     std::shared_ptr<ManagedType> bwd_ = nullptr;
 };
 

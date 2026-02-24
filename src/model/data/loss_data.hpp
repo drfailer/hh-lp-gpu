@@ -3,7 +3,7 @@
 #include "../../tools/tensor/tensors.hpp"
 
 template <typename T> struct LossData {
-    tensor::Tensor<T> tensor;
+    tensor::Tensor tensor;
 };
 
 #endif

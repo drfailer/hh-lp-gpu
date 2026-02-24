@@ -26,16 +26,16 @@ LayerData<T> init_layer_and_get_layer_data(auto layer,
 
     // create and init parameters
     auto param_shape = layer->parameters_shape();
-    data.w = tensor::tensor<ftype>(param_shape.w);
-    data.b = tensor::tensor<ftype>(param_shape.b);
+    data.w = tensor::tensor(param_shape.w);
+    data.b = tensor::tensor(param_shape.b);
     layer->init_parameters(cuda, {data.w, data.b});
 
     // data initialization
     auto io_shape = layer->io_shape(input_dims);
 
     // fwd init
-    data.x = tensor::tensor_view<ftype>(io_shape.x, nullptr);
-    data.y = tensor::tensor<ftype>(io_shape.y);
+    data.x = tensor::tensor_view(io_shape.x, nullptr);
+    data.y = tensor::tensor(io_shape.y);
     layer->init_fwd(cuda, data);
 
     if (!bwd) {
@@ -43,10 +43,10 @@ LayerData<T> init_layer_and_get_layer_data(auto layer,
     }
 
     // bwd init
-    data.dx = tensor::tensor<ftype>(io_shape.x);
-    data.dy = tensor::tensor_view<ftype>(io_shape.y, nullptr);
-    data.dw = tensor::tensor_like<ftype>(data.w);
-    data.db = tensor::tensor_like<ftype>(data.b);
+    data.dx = tensor::tensor(io_shape.x);
+    data.dy = tensor::tensor_view(io_shape.y, nullptr);
+    data.dw = tensor::tensor_like(data.w);
+    data.db = tensor::tensor_like(data.b);
     layer->init_bwd(cuda, data);
     return data;
 }
@@ -141,7 +141,7 @@ UTest(linear_layer_fwd) {
     constexpr int outputs = 3;
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto input_gpu = tensor::tensor(1, 1, inputs, 1);
 
     input_gpu.from_host(input_host);
 
@@ -165,8 +165,8 @@ UTest(linear_layer_bwd) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[inputs] = {1, 2, 3, 4},
           input_err_host[outputs] = {100, 10, 1}, output_err_host[inputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
-    auto err_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto input_gpu = tensor::tensor(1, 1, inputs, 1);
+    auto err_gpu = tensor::tensor(1, 1, inputs, 1);
 
     // init input and output gpu buffers
     input_gpu.from_host(input_host);
@@ -197,7 +197,7 @@ UTest(linear_layer_fwd_batched) {
     dims_t dims = {.inputs = inputs, .outputs = outputs};
     ftype input_host[batch_size * inputs] = {0},
                                   output_host[batch_size * outputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(batch_size, 1, inputs, 1);
+    auto input_gpu = tensor::tensor(batch_size, 1, inputs, 1);
 
     for (size_t i = 0; i < batch_size * inputs; ++i) {
         input_host[i] = i + 1;
@@ -239,8 +239,8 @@ UTest(linear_layer_bwd_batched) {
     ftype output_err_host[batch_size * inputs] = {0};
     ftype biases_gradient_host[outputs] = {0};
     ftype weights_gradient_host[inputs * outputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(batch_size, 1, inputs, 1);
-    auto input_err_gpu = tensor::tensor<ftype>(batch_size, 1, outputs, 1);
+    auto input_gpu = tensor::tensor(batch_size, 1, inputs, 1);
+    auto input_err_gpu = tensor::tensor(batch_size, 1, outputs, 1);
 
     // init input and output gpu buffers
     input_gpu.from_host(input_host);
@@ -296,7 +296,7 @@ UTest(sigmoid_activation_fwd) {
     constexpr int outputs = 3;
     constexpr int inputs = 3;
     ftype input_host[inputs] = {1, 2, 3}, output_host[outputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto input_gpu = tensor::tensor(1, 1, inputs, 1);
 
     input_gpu.from_host(input_host);
 
@@ -319,8 +319,8 @@ UTest(sigmoid_activation_bwd) {
     ftype input_host[inputs] = {1, 2, 3, 4, 5, 6},
           input_err_host[inputs] = {10, 10, 10, 10, 10, 10},
           output_host[outputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
-    auto input_err_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto input_gpu = tensor::tensor(1, 1, inputs, 1);
+    auto input_err_gpu = tensor::tensor(1, 1, inputs, 1);
 
     input_gpu.from_host(input_host);
     input_err_gpu.from_host(input_err_host);
@@ -356,10 +356,10 @@ UTest(sgd_optimizer) {
     LayerData<ftype> ld;
     SGDOptimizer optimizer_factory(learning_rate);
 
-    ld.w = tensor::tensor<ftype>(weights_dims);
-    ld.b = tensor::tensor<ftype>(biases_dims);
-    ld.dw = tensor::tensor<ftype>(weights_dims);
-    ld.db = tensor::tensor<ftype>(biases_dims);
+    ld.w = tensor::tensor(weights_dims);
+    ld.b = tensor::tensor(biases_dims);
+    ld.dw = tensor::tensor(weights_dims);
+    ld.db = tensor::tensor(biases_dims);
 
     CUDA_CHECK(ld.w.from_host(weights));
     CUDA_CHECK(ld.dw.from_host(weights_gradients));
@@ -390,10 +390,10 @@ UTest(inference) {
     constexpr size_t outputs = 3;
     constexpr size_t inputs = 3;
     ftype input_host[inputs] = {1, 1, 1}, output_host[outputs] = {0};
-    auto input_gpu = tensor::tensor<ftype>(1, 1, inputs, 1);
+    auto input_gpu = tensor::tensor(1, 1, inputs, 1);
     NetworkGraph graph;
 
-    CUDA_CHECK(memcpy_host_to_gpu(input_gpu.data(), input_host, inputs));
+    CUDA_CHECK(memcpy_host_to_gpu((ftype*)input_gpu.data(), input_host, inputs));
 
     graph.add_layer<LinearLayer>(inputs, outputs);
     graph.add_layer<SigmoidActivationLayer>();

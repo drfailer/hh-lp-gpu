@@ -4,20 +4,20 @@
 #include "../../tools/tensor/tensors.hpp"
 
 struct LossFwdIn {
-    tensor::Tensor<ftype> &x;
+    tensor::Tensor &x;
 };
 
 struct LossFwdOut {
-    tensor::Tensor<ftype> &y;
+    tensor::Tensor &y;
 };
 
 struct LossBwdIn {
-    tensor::Tensor<ftype> const &y_true;
-    tensor::Tensor<ftype> const &y_pred;
+    tensor::Tensor const &y_true;
+    tensor::Tensor const &y_pred;
 };
 
 struct LossBwdOut {
-    tensor::Tensor<ftype> &dy;
+    tensor::Tensor &dy;
 };
 
 template <typename T> struct Loss {

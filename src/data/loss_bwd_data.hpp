@@ -5,8 +5,8 @@
 
 template <typename T> struct LossBwdData {
     std::shared_ptr<NetworkData<T>> states;
-    tensor::Tensor<T> const *y_pred;
-    tensor::Tensor<T> const *y_true;
+    tensor::Tensor const *y_pred;
+    tensor::Tensor const *y_true;
 };
 
 #endif

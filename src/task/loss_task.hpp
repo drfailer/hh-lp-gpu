@@ -23,7 +23,7 @@ class LossTask : public CUDATask<LossTaskIO> {
     void
     execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
         data->network_data->loss.tensor =
-            tensor::tensor<ftype>(data->input_dims);
+            tensor::tensor(data->input_dims);
         this->addResult(data);
     }
 

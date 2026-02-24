@@ -23,17 +23,16 @@ template <typename T> class BatchGenerator {
             int gt_h = input_data.datas[0].ground_truth.dims()[2];
             int gt_w = input_data.datas[0].ground_truth.dims()[3];
 
-            batch.input = tensor::tensor<ftype>(batch_size, c, h, w);
-            batch.ground_truth =
-                tensor::tensor<ftype>(batch_size, gt_c, gt_h, gt_w);
+            batch.input = tensor::tensor(batch_size, c, h, w);
+            batch.ground_truth = tensor::tensor(batch_size, gt_c, gt_h, gt_w);
 
             for (size_t i = 0; i < batch_size; ++i) {
                 CUDA_CHECK(
-                    memcpy_gpu_to_gpu(&batch.input.data()[i * c * h * w],
-                                      batch_datas[i].input.data(), c * h * w));
+                    memcpy_gpu_to_gpu(&(((ftype*)batch.input.data())[i * c * h * w]),
+                                      (ftype*)batch_datas[i].input.data(), c * h * w));
                 CUDA_CHECK(memcpy_gpu_to_gpu(
-                    &batch.ground_truth.data()[i * gt_c * gt_h * gt_w],
-                    batch_datas[i].ground_truth.data(), gt_c * gt_h * gt_w));
+                    &(((ftype*)batch.ground_truth.data())[i * gt_c * gt_h * gt_w]),
+                    (ftype*)batch_datas[i].ground_truth.data(), gt_c * gt_h * gt_w));
             }
             result.datas.push_back(std::move(batch));
         }

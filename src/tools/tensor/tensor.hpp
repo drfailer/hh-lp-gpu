@@ -4,31 +4,31 @@
 #include "../../tools/gpu.hpp"
 #include "../../types.hpp"
 #include <cstdio>
+#include <cuda.h>
 #include <cudnn_ops.h>
 #include <memory>
 #include <cassert>
 
 namespace tensor {
 
-template <typename T>
-class Tensor : public TensorBase<T> {
+class Tensor : public TensorBase<void> {
   public:
     // constructors ////////////////////////////////////////////////////////////
 
     Tensor() = default;
 
-    Tensor(TensorShape const &shape) : TensorBase<T>(shape) {
+    Tensor(TensorShape const &shape, data_type_t data_type) : TensorBase<void>(shape, data_type) {
         if (this->size_ == 0)
             return;
-        CUDA_CHECK(alloc_gpu(&this->data_, this->size_));
+        CUDA_CHECK(cudaMalloc(&this->data_, this->size_ * this->element_size_));
     }
 
     template <typename... Types>
-    Tensor(Types... args) : Tensor(TensorShape(std::forward<Types>(args)...)) {}
+    Tensor(Types... args, data_type_t data_type) : Tensor(TensorShape(std::forward<Types>(args)...), data_type) {}
 
-    Tensor(Tensor<T> &&tensor) : TensorBase<T>(std::move(tensor)) {}
-    Tensor<T> const &operator=(Tensor<T> &&tensor) {
-        TensorBase<T>::operator=(std::move(tensor));
+    Tensor(Tensor &&tensor) : TensorBase<void>(std::move(tensor)) {}
+    Tensor const &operator=(Tensor &&tensor) {
+        TensorBase<void>::operator=(std::move(tensor));
         return *this;
     }
 
@@ -43,24 +43,41 @@ class Tensor : public TensorBase<T> {
         this->shape_ = shape;
         this->size_ = shape.size();
         CUDNN_CHECK(cudnnSetTensorNdDescriptor(
-            this->desc_, CUDNN_DATA_TYPE, shape.dims.size(), shape.dims.data(),
+            this->desc_, this->data_type_, shape.dims.size(), shape.dims.data(),
             shape.strides.data()));
         cudaFree(this->data_);
         if (this->size_ == 0) {
             this->data_ = nullptr;
             return;
         }
-        CUDA_CHECK(alloc_gpu(&this->data_, this->size_));
+        CUDA_CHECK(cudaMalloc(&this->data_, this->size_ * this->element_size_));
     }
 
     // init ////////////////////////////////////////////////////////////////////
 
-    auto random_init(T lower_bound, T higher_bound, int seed = 0) {
-        return memset_random_uniform_gpu<ftype>(
-            this->data_, this->size_, lower_bound, higher_bound, seed);
+    auto random_init(auto lower_bound, auto higher_bound, int seed = 0) {
+        switch (this->data_type_) {
+        case CUDNN_DATA_FLOAT:
+            return memset_random_uniform_gpu<float>((float*)this->data_, this->size_, lower_bound, higher_bound, seed);
+            break;
+        case CUDNN_DATA_DOUBLE:
+            return memset_random_uniform_gpu<double>((double*)this->data_, this->size_, lower_bound, higher_bound, seed);
+            break;
+        }
+        return cudaErrorInvalidValue;
     }
 
-    auto zero() { return memset_gpu<ftype>(this->data_, this->size_, 0); }
+    auto zero() {
+        switch (this->data_type_) {
+        case CUDNN_DATA_FLOAT:
+            return memset_gpu<float>((float*)this->data_, this->size_, 0);
+            break;
+        case CUDNN_DATA_DOUBLE:
+            return memset_gpu<double>((double*)this->data_, this->size_, 0);
+            break;
+        }
+        return cudaErrorInvalidValue;
+    }
 };
 
 } // end namespace tensor

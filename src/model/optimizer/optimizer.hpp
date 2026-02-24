@@ -7,13 +7,13 @@
 using OptimizerInitData = LayerData<ftype>;
 
 struct OptimizerIn {
-    tensor::Tensor<ftype> &dw;
-    tensor::Tensor<ftype> &db;
+    tensor::Tensor &dw;
+    tensor::Tensor &db;
 };
 
 struct OptimizerOut {
-    tensor::Tensor<ftype> &w;
-    tensor::Tensor<ftype> &b;
+    tensor::Tensor &w;
+    tensor::Tensor &b;
 };
 
 template <typename T> struct Optimizer {

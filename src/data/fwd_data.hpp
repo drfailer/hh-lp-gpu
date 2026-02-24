@@ -6,7 +6,7 @@
 
 template <typename T> struct FwdData {
     std::shared_ptr<NetworkData<T>> network_data;
-    tensor::Tensor<T> *input;
+    tensor::Tensor *input;
 
     // NOTE:
     // this is completely unoptimize and a lot of memory is reallocated during

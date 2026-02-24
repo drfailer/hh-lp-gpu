@@ -16,7 +16,7 @@ class FwdTask : public CUDATask<FwdTaskIO> {
     FwdTask() : CUDATask<FwdTaskIO>("FwdTask", 1) {}
 
     void execute(std::shared_ptr<FwdData<ftype>> data) override {
-        tensor::Tensor<ftype> *x = data->input;
+        tensor::Tensor *x = data->input;
         auto &nn = data->network_data;
 
         for (auto layer : layers_) {

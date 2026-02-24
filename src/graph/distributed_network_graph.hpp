@@ -180,9 +180,9 @@ class DistributedNetworkGraph : public NetworkGraph {
         this->cleanGraph();
     }
 
-    tensor::Tensor<ftype> const *predict(std::shared_ptr<NetworkData<ftype>> nn,
-                                         tensor::Tensor<ftype> &input) override {
-        tensor::Tensor<ftype> *output = nullptr;
+    tensor::Tensor const *predict(std::shared_ptr<NetworkData<ftype>> nn,
+                                         tensor::Tensor &input) override {
+        tensor::Tensor *output = nullptr;
 
         // this->service_->barrier();
         if (this->service_->rank() == 0) {

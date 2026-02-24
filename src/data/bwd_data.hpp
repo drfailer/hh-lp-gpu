@@ -6,7 +6,7 @@
 
 template <typename T> struct BwdData {
     std::shared_ptr<NetworkData<T>> network_data;
-    tensor::Tensor<T> *error;
+    tensor::Tensor *error;
 
     // NOTE:
     // this is completely unoptimize and a lot of memory is reallocated during

@@ -100,9 +100,9 @@ class LinearLayer : public Layer<ftype> {
         return output_dims;
     }
 
-    tensor::Tensor<ftype> const &
+    tensor::Tensor const &
     fwd(cuda_data_t cuda_data, LayerData<ftype> &state,
-        tensor::Tensor<ftype> const &input) override {
+        tensor::Tensor const &input) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
         if (this->dims.batch_size > 1) {
@@ -129,10 +129,10 @@ class LinearLayer : public Layer<ftype> {
         return state.y;
     }
 
-    tensor::Tensor<ftype> const &
+    tensor::Tensor const &
     bwd(cuda_data_t cuda_data, LayerData<ftype> &state,
-        tensor::Tensor<ftype> const &input,
-        tensor::Tensor<ftype> const &output_gradient) override {
+        tensor::Tensor const &input,
+        tensor::Tensor const &output_gradient) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);
         int inputs = this->dims.inputs;
         int outputs = this->dims.outputs;
@@ -193,7 +193,7 @@ class LinearLayer : public Layer<ftype> {
     ftype *avg_biases_gradients_ws = 0;
     size_t avg_biases_gradients_ws_size = 0;
 
-    tensor::Tensor<ftype> temp_weights_gradients;
+    tensor::Tensor temp_weights_gradients;
     ftype *avg_weights_gradients_ws = 0;
     size_t avg_weights_gradients_ws_size = 0;
 
