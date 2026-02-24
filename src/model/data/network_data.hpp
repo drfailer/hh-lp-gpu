@@ -3,12 +3,11 @@
 #include "layer_data.hpp"
 #include "loss_data.hpp"
 
-template <typename T>
 struct NetworkData {
     NetworkData(size_t nb_layers) : layers_datas(nb_layers) {}
 
-    std::vector<LayerData<T>> layers_datas = {};
-    LossData<T> loss;
+    std::vector<LayerData> layers_datas = {};
+    LossData loss;
 };
 
 #endif

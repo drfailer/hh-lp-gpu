@@ -7,20 +7,20 @@
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
-#define FwdTaskIn FwdData<ftype>
-#define FwdTaskOut FwdData<ftype>
+#define FwdTaskIn FwdData
+#define FwdTaskOut FwdData
 #define FwdTaskIO 1, FwdTaskIn, FwdTaskOut
 
 class FwdTask : public CUDATask<FwdTaskIO> {
   public:
     FwdTask() : CUDATask<FwdTaskIO>("FwdTask", 1) {}
 
-    void execute(std::shared_ptr<FwdData<ftype>> data) override {
+    void execute(std::shared_ptr<FwdData> data) override {
         tensor::Tensor *x = data->input;
         auto &nn = data->network_data;
 
         for (auto layer : layers_) {
-            LayerData<ftype> &ld = nn->layers_datas[layer->idx];
+            LayerData &ld = nn->layers_datas[layer->idx];
             ld.x.data(x->data());
             layer->fwd(cuda_, {ld.x, ld.w, ld.b}, {ld.y});
             x = &ld.y;
@@ -30,7 +30,7 @@ class FwdTask : public CUDATask<FwdTaskIO> {
         this->addResult(data);
     }
 
-    void add_layer(std::shared_ptr<Layer<ftype>> layer) {
+    void add_layer(std::shared_ptr<Layer> layer) {
         layers_.push_back(layer);
     }
 
@@ -38,12 +38,12 @@ class FwdTask : public CUDATask<FwdTaskIO> {
         throw std::logic_error("error: FwdTask should not be copied.");
     }
 
-    std::vector<std::shared_ptr<Layer<ftype>>> const &layers() const {
+    std::vector<std::shared_ptr<Layer>> const &layers() const {
         return layers_;
     }
 
   private:
-    std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
+    std::vector<std::shared_ptr<Layer>> layers_ = {};
 };
 
 #endif

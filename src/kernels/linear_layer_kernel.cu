@@ -300,8 +300,8 @@ _hhlpLinearBackwardData(DataType const *output_gradients,
         using type = target_type;                                              \
         kernel;                                                                \
     }
-#define SWITCH_CUDNN_TYPE(data_type, kernel)                                   \
-    switch (data_type) {                                                       \
+#define SWITCH_CUDNN_TYPE(dtype, kernel)                                   \
+    switch (dtype) {                                                       \
     case CUDNN_DATA_FLOAT:                                                     \
         LAUNCH_KERNEL(float, kernel)                                           \
         break;                                                                 \
@@ -321,7 +321,7 @@ _hhlpLinearBackwardData(DataType const *output_gradients,
 cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
                                 void const *biases, void const *input,
                                 void *output, u32 nb_inputs, u32 nb_outputs,
-                                u32 batch_size, cudnnDataType_t data_type) {
+                                u32 batch_size, cudnnDataType_t dtype) {
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
@@ -332,7 +332,7 @@ cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
                                                                                \
         static_assert(batch_block_size * reduce_block_size <= 1024);           \
         SWITCH_CUDNN_TYPE(                                                     \
-            data_type,                                                         \
+            dtype,                                                         \
             (_hhlpLinearForward<batch_block_size, reduce_block_size>           \
              <<<grid, threads, 0, stream>>>(                                   \
                  (type const *)weights, (type const *)biases,                  \
@@ -355,7 +355,7 @@ cudnnStatus_t hhlpLinearForward(cudnnHandle_t cudnn_handle, void const *weights,
 cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
                                      void const *error, void *biases_gradient,
                                      u32 nb_outputs, u32 batch_size,
-                                     cudnnDataType_t data_type) {
+                                     cudnnDataType_t dtype) {
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
@@ -366,7 +366,7 @@ cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
         dim3 grid(1, CEIL_DIV(nb_outputs, threads.y));                         \
                                                                                \
         SWITCH_CUDNN_TYPE(                                                     \
-            data_type,                                                         \
+            dtype,                                                         \
             (_hhlpLinearBackwardBias<batch_block_size, output_block_size,      \
                                      thread_block_size>                        \
              <<<grid, threads, 0, stream>>>((type const *)error,               \
@@ -378,7 +378,7 @@ cudnnStatus_t hhlpLinearBackwardBias(cudnnHandle_t cudnn_handle,
     // clang-format off
     switch (batch_size) {
     case 1:
-        SWITCH_CUDNN_TYPE(data_type, cudaMemcpy(biases_gradient, error,
+        SWITCH_CUDNN_TYPE(dtype, cudaMemcpy(biases_gradient, error,
                                                 nb_outputs * sizeof(type),
                                                 cudaMemcpyDeviceToDevice));
         break;
@@ -397,7 +397,7 @@ cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
                                         void const *input,
                                         void *weights_gradient, u32 nb_outputs,
                                         u32 nb_inputs, u32 batch_size,
-                                        cudnnDataType_t data_type) {
+                                        cudnnDataType_t dtype) {
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
@@ -412,7 +412,7 @@ cudnnStatus_t hhlpLinearBackwardWeights(cudnnHandle_t cudnn_handle,
             CEIL_DIV(nb_outputs, (threads.y * thread_output_block_size)), 1);  \
                                                                                \
         SWITCH_CUDNN_TYPE(                                                     \
-            data_type,                                                         \
+            dtype,                                                         \
             (_hhlpLinearBackwardWeights<                                       \
                 batch_block_size, input_block_size, output_block_size,         \
                 thread_input_block_size, thread_output_block_size>             \
@@ -438,7 +438,7 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
                                      void const *weights, void *input_gradient,
                                      u32 nb_outputs, u32 nb_inputs,
                                      u32 batch_size,
-                                     cudnnDataType_t data_type) {
+                                     cudnnDataType_t dtype) {
     cudaStream_t stream;
     cudnnGetStream(cudnn_handle, &stream);
 
@@ -450,7 +450,7 @@ cudnnStatus_t hhlpLinearBackwardData(cudnnHandle_t cudnn_handle,
                   CEIL_DIV(batch_size, threads.y), 1);                         \
                                                                                \
         SWITCH_CUDNN_TYPE(                                                     \
-            data_type,                                                         \
+            dtype,                                                             \
             (_hhlpLinearBackwardData<batch_block_size, reduce_block_size,      \
                                      thread_block_size>                        \
              <<<grid, threads, 0, stream>>>(                                   \

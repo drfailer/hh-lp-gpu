@@ -5,21 +5,21 @@
 #include "../types.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define OptimizerStateIn OptLayerData<ftype>
-#define OptimizerStateOut OptData<ftype>
+#define OptimizerStateIn OptLayerData
+#define OptimizerStateOut OptData
 #define OptimizerStateIO 1, OptimizerStateIn, OptimizerStateOut
 
 class OptimizerState : public hh::AbstractState<OptimizerStateIO> {
   public:
     OptimizerState() : hh::AbstractState<OptimizerStateIO>() {}
 
-    void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
+    void execute(std::shared_ptr<OptLayerData> data) override {
         ++nb_processed_layers_;
 
         if (nb_processed_layers_ == nb_layers_) {
             // all the layers have been updated and optimized
             nb_processed_layers_ = 0;
-            this->addResult(std::make_shared<OptData<ftype>>(data->state));
+            this->addResult(std::make_shared<OptData>(data->state));
         }
     }
 

@@ -27,21 +27,21 @@ int main(int argc, char **argv) {
     // urun_test(matmul_t_t);
     // urun_test(matmul_batch_n_n);
 
-    // urun_test(linear_layer_fwd);
-    // urun_test(linear_layer_bwd);
-    // urun_test(linear_layer_fwd_batched);
-    // urun_test(linear_layer_bwd_batched);
-    // urun_test(sigmoid_activation_fwd);
-    // urun_test(sigmoid_activation_bwd);
-    // urun_test(sgd_optimizer);
-    // // online inference and training
-    // urun_test(inference);
-    // urun_test(training);
-    // // mnist
-    // urun_test(mnist);
-    // urun_test(mnist_batched);
+    urun_test(linear_layer_fwd);
+    urun_test(linear_layer_bwd);
+    urun_test(linear_layer_fwd_batched);
+    urun_test(linear_layer_bwd_batched);
+    urun_test(sigmoid_activation_fwd);
+    urun_test(sigmoid_activation_bwd);
+    urun_test(sgd_optimizer);
+    // online inference and training
+    urun_test(inference);
+    urun_test(training);
+    // mnist
+    urun_test(mnist);
+    urun_test(mnist_batched);
 
-    urun_test_args(mnist_multi_node, &service);
+    // urun_test_args(mnist_multi_node, &service);
 
     utest_end();
     return UTEST_STATUS;

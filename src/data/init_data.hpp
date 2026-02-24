@@ -10,8 +10,8 @@ enum class InitTarget {
     Optimizer,
 };
 
-template <typename T, InitTarget target = InitTarget::Network> struct InitData {
-    std::shared_ptr<NetworkData<T>> network_data;
+template <InitTarget target = InitTarget::Network> struct InitData {
+    std::shared_ptr<NetworkData> network_data;
     tensor::dims_t input_dims;
 
     hh::comm::Package pack() {

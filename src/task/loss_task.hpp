@@ -10,39 +10,39 @@
 #include <hedgehog/hedgehog.h>
 
 #define LossTaskIn                                                             \
-    InitData<ftype, InitTarget::Loss>, LossFwdData<ftype>, LossBwdData<ftype>
+    InitData<InitTarget::Loss>, LossFwdData, LossBwdData
 #define LossTaskOut                                                            \
-    InitData<ftype, InitTarget::Loss>, LossFwdData<ftype>, BwdData<ftype>
+    InitData<InitTarget::Loss>, LossFwdData, BwdData
 #define LossTaskIO 3, LossTaskIn, LossTaskOut
 
 class LossTask : public CUDATask<LossTaskIO> {
   public:
-    LossTask(std::shared_ptr<Loss<ftype>> loss)
+    LossTask(std::shared_ptr<Loss> loss)
         : CUDATask<LossTaskIO>("LossTask", 1), loss_(loss) {}
 
     void
-    execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
+    execute(std::shared_ptr<InitData<InitTarget::Loss>> data) override {
         data->network_data->loss.tensor =
             tensor::tensor(data->input_dims);
         this->addResult(data);
     }
 
-    void execute(std::shared_ptr<LossFwdData<ftype>> data) override {
+    void execute(std::shared_ptr<LossFwdData> data) override {
         loss_->fwd(cuda_, {*data->input}, {data->states->loss.tensor});
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
         this->addResult(data);
     }
 
-    void execute(std::shared_ptr<LossBwdData<ftype>> data) override {
+    void execute(std::shared_ptr<LossBwdData> data) override {
         loss_->bwd(cuda_, {*data->y_true, *data->y_pred},
                    {data->states->loss.tensor});
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
-        this->addResult(std::make_shared<BwdData<ftype>>(
+        this->addResult(std::make_shared<BwdData>(
             data->states, &data->states->loss.tensor));
     }
 
   private:
-    std::shared_ptr<Loss<ftype>> loss_ = nullptr;
+    std::shared_ptr<Loss> loss_ = nullptr;
 };
 
 #endif

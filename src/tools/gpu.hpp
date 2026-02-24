@@ -40,10 +40,18 @@ auto memcpy_host_to_gpu(T *dest_gpu, T const *src_host, size_t size) {
                       cudaMemcpyHostToDevice);
 }
 
+inline auto memcpy_host_to_gpu(void *dest_gpu, void const *src_host, size_t n_bytes) {
+    return cudaMemcpy(dest_gpu, src_host, n_bytes, cudaMemcpyHostToDevice);
+}
+
 template <typename T>
 auto memcpy_gpu_to_host(T *dest_host, T const *src_gpu, size_t size) {
     return cudaMemcpy(dest_host, src_gpu, size * sizeof(T),
                       cudaMemcpyDeviceToHost);
+}
+
+inline auto memcpy_gpu_to_host(void *dest_host, void const *src_gpu, size_t n_bytes) {
+    return cudaMemcpy(dest_host, src_gpu, n_bytes, cudaMemcpyDeviceToHost);
 }
 
 template <typename T>
@@ -52,8 +60,16 @@ auto memcpy_gpu_to_gpu(T *dest_gpu, T const *src_gpu, size_t size) {
                       cudaMemcpyDeviceToDevice);
 }
 
+inline auto memcpy_gpu_to_gpu(void *dest_gpu, void const *src_gpu, size_t n_bytes) {
+    return cudaMemcpy(dest_gpu, src_gpu, n_bytes, cudaMemcpyDeviceToDevice);
+}
+
 template <typename T> auto alloc_gpu(T **dest, size_t size) {
     return cudaMalloc((void **)dest, size * sizeof(T));
+}
+
+inline auto alloc_gpu(void **dest, size_t n_bytes) {
+    return cudaMalloc((void **)dest, n_bytes);
 }
 
 template <typename T>

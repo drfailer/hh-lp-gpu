@@ -8,7 +8,7 @@
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
-class QuadraticLoss : public Loss<ftype> {
+class QuadraticLoss : public Loss {
   public:
     QuadraticLoss() {
         CUDNN_CHECK(cudnnCreateOpTensorDescriptor(&addition_));

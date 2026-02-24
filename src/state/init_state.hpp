@@ -7,15 +7,15 @@
 #include <hedgehog/hedgehog.h>
 
 #define InitStateIn                                                            \
-    InitParametersData<ftype, InitTarget::Network>,                            \
-        InitData<ftype, InitTarget::Network>,                                  \
-        InitParametersData<ftype, InitTarget::Layer>,                          \
-        InitData<ftype, InitTarget::Layer>, InitData<ftype, InitTarget::Loss>
+    InitParametersData<InitTarget::Network>,                                   \
+        InitData<InitTarget::Network>,                                         \
+        InitParametersData<InitTarget::Layer>,                                 \
+        InitData<InitTarget::Layer>, InitData<InitTarget::Loss>
 #define InitStateOut                                                           \
-    InitParametersData<ftype, InitTarget::Network>,                            \
-        InitData<ftype, InitTarget::Network>,                                  \
-        InitParametersData<ftype, InitTarget::Layer>,                          \
-        InitData<ftype, InitTarget::Layer>, InitData<ftype, InitTarget::Loss>
+    InitParametersData<InitTarget::Network>,                                   \
+        InitData<InitTarget::Network>,                                         \
+        InitParametersData<InitTarget::Layer>,                                 \
+        InitData<InitTarget::Layer>, InitData<InitTarget::Loss>
 #define InitStateIO 5, InitStateIn, InitStateOut
 
 class InitState : public hh::AbstractState<InitStateIO> {
@@ -32,47 +32,47 @@ class InitState : public hh::AbstractState<InitStateIO> {
     };
 
   public:
-    void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Network>>
+    void execute(std::shared_ptr<InitParametersData<InitTarget::Network>>
                      data) override {
         step_from_to(Step::Idle, Step::CreateParameters);
         this->addResult(
-            std::make_shared<InitParametersData<ftype, InitTarget::Layer>>(
+            std::make_shared<InitParametersData<InitTarget::Layer>>(
                 data->states));
     }
 
-    void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Layer>>
+    void execute(std::shared_ptr<InitParametersData<InitTarget::Layer>>
                      data) override {
         step_from_to(Step::CreateParameters, Step::Idle);
         this->addResult(
-            std::make_shared<InitParametersData<ftype, InitTarget::Network>>(
+            std::make_shared<InitParametersData<InitTarget::Network>>(
                 data->states));
     }
 
     void execute(
-        std::shared_ptr<InitData<ftype, InitTarget::Network>> data) override {
+        std::shared_ptr<InitData<InitTarget::Network>> data) override {
         step_from_to(Step::Idle, Step::InitLayer);
-        this->addResult(std::make_shared<InitData<ftype, InitTarget::Layer>>(
+        this->addResult(std::make_shared<InitData<InitTarget::Layer>>(
             data->network_data, data->input_dims));
     }
 
     void
-    execute(std::shared_ptr<InitData<ftype, InitTarget::Layer>> data) override {
+    execute(std::shared_ptr<InitData<InitTarget::Layer>> data) override {
         if (!has_loss) {
             step_from_to(Step::InitLayer, Step::Idle);
             this->addResult(
-                std::make_shared<InitData<ftype, InitTarget::Network>>(
+                std::make_shared<InitData<InitTarget::Network>>(
                     data->network_data, data->input_dims));
         } else {
             step_from_to(Step::InitLayer, Step::InitLoss);
-            this->addResult(std::make_shared<InitData<ftype, InitTarget::Loss>>(
+            this->addResult(std::make_shared<InitData<InitTarget::Loss>>(
                 data->network_data, data->input_dims));
         }
     }
 
     void
-    execute(std::shared_ptr<InitData<ftype, InitTarget::Loss>> data) override {
+    execute(std::shared_ptr<InitData<InitTarget::Loss>> data) override {
         step_from_to(Step::InitLoss, Step::Idle);
-        this->addResult(std::make_shared<InitData<ftype, InitTarget::Network>>(
+        this->addResult(std::make_shared<InitData<InitTarget::Network>>(
             data->network_data, data->input_dims));
     }
 

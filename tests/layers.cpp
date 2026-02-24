@@ -17,12 +17,11 @@
 #include <ostream>
 #include <unistd.h>
 
-template <typename T>
-LayerData<T> init_layer_and_get_layer_data(auto layer,
-                                           tensor::dims_t const &input_dims,
-                                           bool bwd) {
+LayerData init_layer_and_get_layer_data(auto layer,
+                                        tensor::dims_t const &input_dims,
+                                        bool bwd) {
     CUDA cuda{CUDNN_HANDLE, CUBLAS_HANDLE};
-    LayerData<ftype> data;
+    LayerData data;
 
     // create and init parameters
     auto param_shape = layer->parameters_shape();
@@ -55,7 +54,7 @@ ftype sigmoid(ftype x) { return 1.0 / (1.0 + std::exp(-x)); }
 
 ftype sigmoid_derivative(ftype x) { return sigmoid(x) * (1.0 - sigmoid(x)); }
 
-void init_test_parameters(LayerData<ftype> &data, dims_t dims, ftype value) {
+void init_test_parameters(LayerData &data, dims_t dims, ftype value) {
     int weights_size = dims.inputs * dims.outputs;
     std::vector<ftype> weights(weights_size, value);
     std::vector<ftype> biases(dims.outputs, value);
@@ -63,7 +62,7 @@ void init_test_parameters(LayerData<ftype> &data, dims_t dims, ftype value) {
     data.b.from_host(biases.data());
 }
 
-void init_test_parameters(LayerData<ftype> &data, dims_t dims) {
+void init_test_parameters(LayerData &data, dims_t dims) {
     std::vector<ftype> weights(dims.inputs * dims.outputs);
     std::vector<ftype> biases(dims.outputs);
 
@@ -92,8 +91,8 @@ int mnist_get_label(ftype *arr) {
     return imax;
 }
 
-float evaluate_mnist(NetworkGraph &graph, DataSet<ftype> &testing_set,
-                     std::shared_ptr<NetworkData<ftype>> &data,
+float evaluate_mnist(NetworkGraph &graph, DataSet &testing_set,
+                     std::shared_ptr<NetworkData> &data,
                      int batch_size = 1) {
     int success = 0;
     int errors = 0;
@@ -146,8 +145,7 @@ UTest(linear_layer_fwd) {
     input_gpu.from_host(input_host);
 
     LinearLayer layer(inputs, outputs);
-    LayerData<ftype> ld =
-        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), false);
+    LayerData ld = init_layer_and_get_layer_data(&layer, input_gpu.dims(), false);
     init_test_parameters(ld, dims, 1);
 
     ld.x.data(input_gpu.data());
@@ -173,8 +171,7 @@ UTest(linear_layer_bwd) {
     err_gpu.from_host(input_err_host);
 
     LinearLayer layer(inputs, outputs);
-    LayerData<ftype> ld =
-        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+    LayerData ld = init_layer_and_get_layer_data(&layer, input_gpu.dims(), true);
     init_test_parameters(ld, dims);
 
     ld.x.data(input_gpu.data());
@@ -206,8 +203,7 @@ UTest(linear_layer_fwd_batched) {
     input_gpu.from_host(input_host);
 
     LinearLayer layer(inputs, outputs);
-    LayerData<ftype> ld =
-        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), false);
+    LayerData ld = init_layer_and_get_layer_data(&layer, input_gpu.dims(), false);
     init_test_parameters(ld, dims, 1);
 
     ld.x.data(input_gpu.data());
@@ -247,8 +243,7 @@ UTest(linear_layer_bwd_batched) {
     input_err_gpu.from_host(input_err_host);
 
     LinearLayer layer(inputs, outputs);
-    LayerData<ftype> ld =
-        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+    LayerData ld = init_layer_and_get_layer_data(&layer, input_gpu.dims(), true);
     init_test_parameters(ld, dims);
 
     ld.x.data(input_gpu.data());
@@ -301,8 +296,7 @@ UTest(sigmoid_activation_fwd) {
     input_gpu.from_host(input_host);
 
     SigmoidActivationLayer layer;
-    LayerData<ftype> ld =
-        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+    LayerData ld = init_layer_and_get_layer_data(&layer, input_gpu.dims(), true);
 
     ld.x.data(input_gpu.data());
     layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
@@ -326,8 +320,7 @@ UTest(sigmoid_activation_bwd) {
     input_err_gpu.from_host(input_err_host);
 
     SigmoidActivationLayer layer;
-    LayerData<ftype> ld =
-        init_layer_and_get_layer_data<ftype>(&layer, input_gpu.dims(), true);
+    LayerData ld = init_layer_and_get_layer_data(&layer, input_gpu.dims(), true);
 
     ld.x.data(input_gpu.data());
     layer.fwd({CUDNN_HANDLE, CUBLAS_HANDLE}, {ld.x, ld.w, ld.b}, {ld.y});
@@ -353,7 +346,7 @@ UTest(sgd_optimizer) {
     ftype biases_gradients[outputs] = {1, 1};
     tensor::dims_t weights_dims = {1, 1, inputs, outputs},
                    biases_dims = {1, 1, outputs, 1};
-    LayerData<ftype> ld;
+    LayerData ld;
     SGDOptimizer optimizer_factory(learning_rate);
 
     ld.w = tensor::tensor(weights_dims);
@@ -407,8 +400,8 @@ UTest(inference) {
     init_test_parameters(data->layers_datas[0],
                          dims_t{.inputs = inputs, .outputs = outputs});
 
-    graph.pushData(std::make_shared<PredictionData<ftype>>(data, &input_gpu));
-    auto output_gpu = graph.get<PredictionData<ftype>>()->input;
+    graph.pushData(std::make_shared<PredictionData>(data, &input_gpu));
+    auto output_gpu = graph.get<PredictionData>()->input;
     graph.terminate();
 
     output_gpu->to_host(output_host);
@@ -429,7 +422,7 @@ UTest(training) {
     NetworkGraph graph;
     MNISTLoader loader;
 
-    DataSet<ftype> data_set =
+    DataSet data_set =
         loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
                        "../data/mnist/train-images-idx3-ubyte");
 
@@ -453,8 +446,8 @@ UTest(training) {
 
     timer_start(training);
     graph.pushData(
-        std::make_shared<TrainingData<ftype>>(data, data_set, epochs));
-    (void)graph.get<TrainingData<ftype>>();
+        std::make_shared<TrainingData>(data, data_set, epochs));
+    (void)graph.get<TrainingData>();
     timer_end(training);
     graph.terminate();
 
@@ -469,10 +462,10 @@ UTest(mnist) {
     constexpr size_t epochs = 2;
     MNISTLoader loader;
 
-    DataSet<ftype> training_set =
+    DataSet training_set =
         loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
                        "../data/mnist/train-images-idx3-ubyte");
-    DataSet<ftype> testing_set =
+    DataSet testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
                        "../data/mnist/t10k-images-idx3-ubyte");
 
@@ -501,8 +494,8 @@ UTest(mnist) {
                                             << ", epochs = " << epochs << ")");
     timer_start(online_training);
     graph.pushData(
-        std::make_shared<TrainingData<ftype>>(data, training_set, epochs));
-    (void)graph.get<TrainingData<ftype>>();
+        std::make_shared<TrainingData>(data, training_set, epochs));
+    (void)graph.get<TrainingData>();
     timer_end(online_training);
     graph.cleanGraph();
 
@@ -525,14 +518,13 @@ UTest(mnist_batched) {
     constexpr size_t batch_size = 64;
     constexpr size_t test_batch_size = 1'000;
     MNISTLoader loader;
-    BatchGenerator<ftype> batch_generator(0);
+    BatchGenerator batch_generator(0);
 
-    DataSet<ftype> training_data =
+    DataSet training_data =
         loader.load_ds("../data/mnist/train-labels-idx1-ubyte",
                        "../data/mnist/train-images-idx3-ubyte");
-    DataSet<ftype> training_set =
-        batch_generator.generate(std::move(training_data), batch_size);
-    DataSet<ftype> testing_set =
+    DataSet training_set = batch_generator.generate(std::move(training_data), batch_size);
+    DataSet testing_set =
         loader.load_ds("../data/mnist/t10k-labels-idx1-ubyte",
                        "../data/mnist/t10k-images-idx3-ubyte", test_batch_size);
 
@@ -587,8 +579,8 @@ UTestArgs(mnist_multi_node, CommService *service) {
     constexpr size_t batch_size = 64;
     constexpr size_t test_batch_size = 1'000;
     MNISTLoader loader;
-    BatchGenerator<ftype> batch_generator(0);
-    DataSet<ftype> training_data, training_set, testing_set;
+    BatchGenerator batch_generator(0);
+    DataSet training_data, training_set, testing_set;
 
     if (service->rank() == 0) {
         training_data = loader.load_ds("../data/mnist/train-labels-idx1-ubyte",

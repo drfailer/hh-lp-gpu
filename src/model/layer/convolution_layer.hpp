@@ -9,7 +9,7 @@
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
-struct ConvolutionLayer : Layer<ftype> {
+struct ConvolutionLayer : Layer {
     bool use_biases = false;
     cudnnConvolutionFwdAlgo_t fwd_algo;
     cudnnConvolutionBwdDataAlgo_t bwd_data_algo;
@@ -23,13 +23,13 @@ struct ConvolutionLayer : Layer<ftype> {
     int kernel_width = 0;
     int kernel_height = 0;
 
-    ftype *convolution_fw_ws = nullptr;
+    void *convolution_fw_ws = nullptr;
     size_t convolution_fw_ws_size = 0;
 
-    ftype *convolution_bw_data_ws = nullptr;
+    void *convolution_bw_data_ws = nullptr;
     size_t convolution_bw_data_ws_size = 0;
 
-    ftype *convolution_bw_filter_ws = nullptr;
+    void *convolution_bw_filter_ws = nullptr;
     size_t convolution_bw_filter_ws_size = 0;
 
     // We need to define the input of the layer in case the output of the
@@ -53,11 +53,12 @@ struct ConvolutionLayer : Layer<ftype> {
         cudnnConvolutionBwdDataAlgo_t bwd_data_algo =
             CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING,
         cudnnConvolutionBwdFilterAlgo_t bwd_filter_algo =
-            CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0)
+            CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0,
+        tensor::dtype_t dtype = CUDNN_DATA_TYPE)
         : Layer({.inputs = inputs,
                  .outputs = outputs,
                  .kernel_width = kernel_width,
-                 .kernel_height = kernel_height}),
+                 .kernel_height = kernel_height}, dtype),
           use_biases(use_biases), fwd_algo(fwd_algo),
           bwd_data_algo(bwd_data_algo), bwd_filter_algo(bwd_filter_algo),
           input_height(input_width), input_width(input_width),
@@ -137,22 +138,20 @@ struct ConvolutionLayer : Layer<ftype> {
         CUDA_CHECK(alloc_gpu(&convolution_fw_ws, convolution_fw_ws_size));
     }
 
-    void init_bwd(CUDA cuda, LayerData<ftype> const &data) override {
+    void init_bwd(CUDA cuda, LayerData const &data) override {
         CUDNN_CHECK(cudnnGetConvolutionBackwardDataWorkspaceSize(
             cuda.cudnn_handle, filter_descriptor, data.y.desc(),
             convolution_descriptor, input_descriptor, bwd_data_algo,
             &convolution_bw_data_ws_size));
         cudaFree(convolution_bw_data_ws);
-        CUDA_CHECK(
-            alloc_gpu(&convolution_bw_data_ws, convolution_bw_data_ws_size));
+        CUDA_CHECK(alloc_gpu(&convolution_bw_data_ws, convolution_bw_data_ws_size));
 
         CUDNN_CHECK(cudnnGetConvolutionBackwardFilterWorkspaceSize(
             cuda.cudnn_handle, input_descriptor, data.y.desc(),
             convolution_descriptor, filter_descriptor, bwd_filter_algo,
             &convolution_bw_filter_ws_size));
         cudaFree(convolution_bw_filter_ws);
-        CUDA_CHECK(alloc_gpu(&convolution_bw_filter_ws,
-                             convolution_bw_filter_ws_size));
+        CUDA_CHECK(alloc_gpu(&convolution_bw_filter_ws, convolution_bw_filter_ws_size));
     }
 
     void fwd(CUDA cuda, LayerFwdIn const &in, LayerFwdOut const &out) override {

@@ -4,9 +4,9 @@
 #include "init_data.hpp"
 #include <memory>
 
-template <typename T, InitTarget target = InitTarget::Network>
+template <InitTarget target = InitTarget::Network>
 struct InitParametersData {
-    std::shared_ptr<NetworkData<T>> states;
+    std::shared_ptr<NetworkData> states;
 
     // the communicator needs these functions (it was not design for
     // transfering no data, maybe this is a featcure that should be added

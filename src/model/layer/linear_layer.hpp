@@ -9,13 +9,13 @@
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
-class LinearLayer : public Layer<ftype> {
+class LinearLayer : public Layer {
   public:
     int nb_inputs;
     int nb_outputs;
 
-    LinearLayer(int nb_inputs, int nb_outputs)
-        : Layer(dims_t{.inputs = nb_inputs, .outputs = nb_outputs}),
+    LinearLayer(int nb_inputs, int nb_outputs, tensor::dtype_t dtype = CUDNN_DATA_TYPE)
+        : Layer(dims_t{.inputs = nb_inputs, .outputs = nb_outputs}, dtype),
           nb_inputs(nb_inputs), nb_outputs(nb_outputs) {
         CUDNN_CHECK(cudnnCreateReduceTensorDescriptor(&average_tensor));
         CUDNN_CHECK(cudnnSetReduceTensorDescriptor(
@@ -25,7 +25,6 @@ class LinearLayer : public Layer<ftype> {
     }
 
     ~LinearLayer() override {
-        CUDA_CHECK(cudaFree(avg_biases_gradients_ws));
         CUDNN_CHECK(cudnnDestroyReduceTensorDescriptor(average_tensor));
     }
 
@@ -83,7 +82,6 @@ class LinearLayer : public Layer<ftype> {
 
   private:
     cudnnReduceTensorDescriptor_t average_tensor = nullptr;
-    ftype *avg_biases_gradients_ws = 0;
 };
 
 #endif

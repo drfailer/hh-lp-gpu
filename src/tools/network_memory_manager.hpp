@@ -17,14 +17,14 @@
 
 class InitParameterDataMemoryManager
     : public hh::comm::tool::SingleTypeMemoryManager<
-          InitParametersData<ftype, InitTarget::Layer>> {
+          InitParametersData<InitTarget::Layer>> {
     using AllocMode = hh::comm::tool::MemoryManagerAllocateMode;
-    using ManagedType = InitParametersData<ftype, InitTarget::Layer>;
+    using ManagedType = InitParametersData<InitTarget::Layer>;
 
   public:
     InitParameterDataMemoryManager() = default;
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn) {
+    void init(std::shared_ptr<NetworkData> nn) {
         this->init_parameters_ = std::make_shared<ManagedType>(nn);
     }
 
@@ -36,7 +36,7 @@ class InitParameterDataMemoryManager
     void release(std::shared_ptr<ManagedType>&&, LOC) override {}
 
     std::string extraPrintingInformation() const override {
-        return  "InitParametersData<ftype, InitTarget::Layer>";
+        return  "InitParametersData<InitTarget::Layer>";
     }
 
   private:
@@ -45,14 +45,14 @@ class InitParameterDataMemoryManager
 
 class InitDataMemoryManager
     : public hh::comm::tool::SingleTypeMemoryManager<
-          InitData<ftype, InitTarget::Layer>> {
+          InitData<InitTarget::Layer>> {
     using AllocMode = hh::comm::tool::MemoryManagerAllocateMode;
-    using ManagedType = InitData<ftype, InitTarget::Layer>;
+    using ManagedType = InitData<InitTarget::Layer>;
 
   public:
     InitDataMemoryManager() = default;
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn) {
+    void init(std::shared_ptr<NetworkData> nn) {
         this->init_ = std::make_shared<ManagedType>();
         this->init_->network_data = nn;
     }
@@ -64,7 +64,7 @@ class InitDataMemoryManager
     void release(std::shared_ptr<ManagedType> &&, LOC) override {}
 
     std::string extraPrintingInformation() const override {
-        return  "InitData<ftype, InitTarget::Layer>";
+        return  "InitData<InitTarget::Layer>";
     }
 
   private:
@@ -77,7 +77,7 @@ class InitMemoryManager
   public:
     InitMemoryManager() = default;
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn) {
+    void init(std::shared_ptr<NetworkData> nn) {
         static_cast<InitParameterDataMemoryManager*>(this)->init(nn);
         static_cast<InitDataMemoryManager*>(this)->init(nn);
     }
@@ -88,14 +88,14 @@ class InitMemoryManager
 /******************************************************************************/
 
 class FwdDataMemoryManager
-    : public hh::comm::tool::SingleTypeMemoryManager<FwdData<ftype>> {
+    : public hh::comm::tool::SingleTypeMemoryManager<FwdData> {
     using AllocMode = hh::comm::tool::MemoryManagerAllocateMode;
-    using ManagedType = FwdData<ftype>;
+    using ManagedType = FwdData;
 
   public:
     FwdDataMemoryManager() = default;
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn,
+    void init(std::shared_ptr<NetworkData> nn,
          tensor::TensorShape const          &input_shape) {
         this->input_tensor_ = tensor::tensor(input_shape);
         this->fwd_ = std::make_shared<ManagedType>(nn, &this->input_tensor_);
@@ -121,14 +121,14 @@ class FwdDataMemoryManager
 /******************************************************************************/
 
 class BwdDataMemoryManager
-    : public hh::comm::tool::SingleTypeMemoryManager<BwdData<ftype>> {
+    : public hh::comm::tool::SingleTypeMemoryManager<BwdData> {
     using AllocMode = hh::comm::tool::MemoryManagerAllocateMode;
-    using ManagedType = BwdData<ftype>;
+    using ManagedType = BwdData;
 
   public:
     BwdDataMemoryManager() = default;
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn,
+    void init(std::shared_ptr<NetworkData> nn,
          tensor::TensorShape const          &error_shape) {
         this->error_tensor_ = tensor::tensor(error_shape);
         this->bwd_ = std::make_shared<ManagedType>(nn, &this->error_tensor_);
@@ -154,14 +154,14 @@ class BwdDataMemoryManager
 /******************************************************************************/
 
 class OptLayerDataMemoryManager
-    : public hh::comm::tool::SingleTypeMemoryManager<OptLayerData<ftype>> {
+    : public hh::comm::tool::SingleTypeMemoryManager<OptLayerData> {
     using AllocMode = hh::comm::tool::MemoryManagerAllocateMode;
-    using ManagedType = OptLayerData<ftype>;
+    using ManagedType = OptLayerData;
 
   public:
     OptLayerDataMemoryManager() = default;
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn) {
+    void init(std::shared_ptr<NetworkData> nn) {
         this->opt_ = std::make_shared<ManagedType>(nn, 0);
     }
 

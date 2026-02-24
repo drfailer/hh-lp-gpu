@@ -11,10 +11,10 @@
 #include "../tools/log.h"
 
 #define PipelineStateIn                                                        \
-    TrainingData<ftype>, PredictionData<ftype>, FwdData<ftype>, OptData<ftype>
+    TrainingData, PredictionData, FwdData, OptData
 #define PipelineStateOut                                                       \
-    TrainingData<ftype>, PredictionData<ftype>, FwdData<ftype>,                \
-        LossBwdData<ftype>, OptData<ftype>
+    TrainingData, PredictionData, FwdData,                                     \
+        LossBwdData, OptData
 #define PipelineStateIO 4, PipelineStateIn, PipelineStateOut
 
 class PipelineState : public hh::AbstractState<PipelineStateIO> {
@@ -32,13 +32,13 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     };
 
   public:
-    void execute(std::shared_ptr<PredictionData<ftype>> data) override {
+    void execute(std::shared_ptr<PredictionData> data) override {
         step_from_to(Step_::Idle, Step_::Inference);
         this->addResult(
-            std::make_shared<FwdData<ftype>>(data->states, data->input));
+            std::make_shared<FwdData>(data->states, data->input));
     }
 
-    void execute(std::shared_ptr<TrainingData<ftype>> data) override {
+    void execute(std::shared_ptr<TrainingData> data) override {
         step_from_to(Step_::Idle, Step_::Fwd);
         // init
         train_data_.data_set = &data->data_set;
@@ -46,27 +46,27 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
         // start computation
         if (data_set_idx_ < train_data_.data_set->datas.size()) {
-            this->addResult(std::make_shared<FwdData<ftype>>(
+            this->addResult(std::make_shared<FwdData>(
                 data->states,
                 &train_data_.data_set->datas[data_set_idx_].input));
         }
     }
 
-    void execute(std::shared_ptr<FwdData<ftype>> data) override {
+    void execute(std::shared_ptr<FwdData> data) override {
         if (step_ == Step_::Fwd) {
             // we might remove this
             step_from_to(Step_::Fwd, Step_::Bwd);
-            this->addResult(std::make_shared<LossBwdData<ftype>>(
+            this->addResult(std::make_shared<LossBwdData>(
                 data->network_data, data->input,
                 &train_data_.data_set->datas[data_set_idx_].ground_truth));
         } else {
             step_from_to(Step_::Inference, Step_::Idle);
-            this->addResult(std::make_shared<PredictionData<ftype>>(
+            this->addResult(std::make_shared<PredictionData>(
                 data->network_data, data->input));
         }
     }
 
-    void execute(std::shared_ptr<OptData<ftype>> data) override {
+    void execute(std::shared_ptr<OptData> data) override {
         ++data_set_idx_;
         // TODO: add a log rate and compute the loss
         // if (state.data_set_idx % 1'000 == 0) std::cout << state.data_set_idx
@@ -81,12 +81,12 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
 
         if (epoch_ < train_data_.epochs) {
             step_from_to(Step_::Bwd, Step_::Fwd);
-            this->addResult(std::make_shared<FwdData<ftype>>(
+            this->addResult(std::make_shared<FwdData>(
                 data->states,
                 &train_data_.data_set->datas[data_set_idx_].input));
         } else {
             step_from_to(Step_::Bwd, Step_::Idle);
-            this->addResult(std::make_shared<TrainingData<ftype>>(
+            this->addResult(std::make_shared<TrainingData>(
                 data->states, *train_data_.data_set, train_data_.epochs));
         }
     }
@@ -109,7 +109,7 @@ class PipelineState : public hh::AbstractState<PipelineStateIO> {
     Step_ step_ = Step_::Idle;
     struct {
         size_t epochs = 0;
-        DataSet<ftype> *data_set;
+        DataSet *data_set;
     } train_data_;
 };
 

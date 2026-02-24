@@ -8,8 +8,9 @@
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
-struct SGDOptimizer : Optimizer<ftype> {
+struct SGDOptimizer : Optimizer {
     ftype learning_rate;
+    // todo: learning rate decay
 
     SGDOptimizer(ftype learning_rate) : learning_rate(learning_rate) {}
 
@@ -33,7 +34,7 @@ struct SGDOptimizer : Optimizer<ftype> {
         }
     }
 
-    std::shared_ptr<Optimizer<ftype>> copy() const override {
+    std::shared_ptr<Optimizer> copy() const override {
         return std::make_shared<SGDOptimizer>(learning_rate);
     }
 };

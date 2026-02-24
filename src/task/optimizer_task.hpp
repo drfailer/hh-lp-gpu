@@ -6,21 +6,21 @@
 #include "cuda_task.hpp"
 #include <hedgehog/hedgehog.h>
 
-#define OptimizerTaskIn OptLayerData<ftype>
-#define OptimizerTaskOut OptLayerData<ftype>
+#define OptimizerTaskIn OptLayerData
+#define OptimizerTaskOut OptLayerData
 #define OptimizerTaskIO 1, OptimizerTaskIn, OptimizerTaskOut
 
 class OptimizerTask : public CUDATask<OptimizerTaskIO> {
   public:
-    using OptimizerList = std::vector<std::shared_ptr<Optimizer<ftype>>>;
+    using OptimizerList = std::vector<std::shared_ptr<Optimizer>>;
 
   public:
-    OptimizerTask(std::shared_ptr<Optimizer<ftype>> optimizer,
+    OptimizerTask(std::shared_ptr<Optimizer> optimizer,
                   size_t nb_threads)
         : CUDATask<OptimizerTaskIO>("Optimizer", nb_threads),
           optimizer_(optimizer) {}
 
-    void execute(std::shared_ptr<OptLayerData<ftype>> data) override {
+    void execute(std::shared_ptr<OptLayerData> data) override {
         auto &ld = data->state->layers_datas[data->idx];
         optimizer_->optimize(cuda_, {ld.dw, ld.db}, {ld.w, ld.b});
         CUDA_CHECK(cudaStreamSynchronize(this->stream()));
@@ -33,7 +33,7 @@ class OptimizerTask : public CUDATask<OptimizerTaskIO> {
     }
 
   private:
-    std::shared_ptr<Optimizer<ftype>> optimizer_ = nullptr;
+    std::shared_ptr<Optimizer> optimizer_ = nullptr;
 };
 
 #endif

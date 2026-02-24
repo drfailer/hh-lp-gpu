@@ -12,7 +12,7 @@ class TensorView : public TensorBase<const void> {
 
     TensorView() = default;
 
-    TensorView(TensorShape const &shape, void const *data, data_type_t data_type) : TensorBase<const void>(shape, data_type) {
+    TensorView(TensorShape const &shape, void const *data, tensor::dtype_t dtype) : TensorBase<const void>(shape, dtype) {
         this->data_ = data;
     }
 

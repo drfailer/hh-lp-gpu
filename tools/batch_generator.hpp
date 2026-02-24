@@ -4,17 +4,17 @@
 #include <cassert>
 #include <random>
 
-template <typename T> class BatchGenerator {
+class BatchGenerator {
   public:
     BatchGenerator(int seed) : rand(seed) {}
 
-    DataSet<T> generate(DataSet<T> &&input_data, int batch_size) {
+    DataSet generate(DataSet &&input_data, int batch_size) {
         assert(batch_size > 1);
-        DataSet<T> result;
+        DataSet result;
         std::shuffle(input_data.datas.begin(), input_data.datas.end(), rand);
 
         for (size_t b = 0; b < input_data.datas.size() / batch_size; ++b) {
-            Data<T> batch;
+            Data batch;
             auto batch_datas = &input_data.datas[b * batch_size];
             int c = input_data.datas[0].input.dims()[1];
             int h = input_data.datas[0].input.dims()[2];

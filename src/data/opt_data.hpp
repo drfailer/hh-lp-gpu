@@ -3,8 +3,8 @@
 #include "../model/data/network_data.hpp"
 #include <memory>
 
-template <typename T> struct OptData {
-    std::shared_ptr<NetworkData<T>> states;
+struct OptData {
+    std::shared_ptr<NetworkData> states;
 };
 
 #endif

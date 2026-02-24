@@ -8,15 +8,15 @@
 #include <hedgehog/hedgehog.h>
 #include <stdexcept>
 
-#define BwdTaskIn BwdData<ftype>
-#define BwdTaskOut BwdData<ftype>, OptLayerData<ftype>
+#define BwdTaskIn BwdData
+#define BwdTaskOut BwdData, OptLayerData
 #define BwdTaskIO 1, BwdTaskIn, BwdTaskOut
 
 class BwdTask : public CUDATask<BwdTaskIO> {
   public:
     BwdTask() : CUDATask<BwdTaskIO>("BwdTask", 1) {}
 
-    void execute(std::shared_ptr<BwdData<ftype>> data) override {
+    void execute(std::shared_ptr<BwdData> data) override {
         auto *dy = data->error;
         auto &nn = data->network_data;
 
@@ -27,14 +27,14 @@ class BwdTask : public CUDATask<BwdTaskIO> {
                             {ld.dx, ld.dw, ld.db});
             dy = &ld.dx;
             CUDA_CHECK(cudaStreamSynchronize(this->stream()));
-            this->addResult(std::make_shared<OptLayerData<ftype>>(
+            this->addResult(std::make_shared<OptLayerData>(
                 data->network_data, layers_[i]->idx));
         }
         data->error = dy;
         this->addResult(data);
     }
 
-    void add_layer(std::shared_ptr<Layer<ftype>> layer) {
+    void add_layer(std::shared_ptr<Layer> layer) {
         layers_.push_back(layer);
     }
 
@@ -43,7 +43,7 @@ class BwdTask : public CUDATask<BwdTaskIO> {
     }
 
   private:
-    std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
+    std::vector<std::shared_ptr<Layer>> layers_ = {};
 };
 
 #endif

@@ -9,8 +9,8 @@ struct Parameters {
     tensor::Tensor &b;
 };
 
-using InitFwdData = LayerData<ftype>;
-using InitBwdData = LayerData<ftype>;
+using InitFwdData = LayerData;
+using InitBwdData = LayerData;
 
 struct LayerFwdIn {
     tensor::TensorView &x;
@@ -36,11 +36,12 @@ struct LayerBwdOut {
     tensor::Tensor &db;
 };
 
-template <typename T> struct Layer {
+struct Layer {
     size_t idx = 0;
     dims_t dims;
+    tensor::dtype_t dtype;
 
-    Layer(dims_t dims) : dims(dims) {}
+    Layer(dims_t dims, tensor::dtype_t dtype) : dims(dims), dtype(dtype) {}
     virtual ~Layer() {}
 
     // get shapes

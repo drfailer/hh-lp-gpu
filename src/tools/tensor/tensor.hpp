@@ -17,14 +17,14 @@ class Tensor : public TensorBase<void> {
 
     Tensor() = default;
 
-    Tensor(TensorShape const &shape, data_type_t data_type) : TensorBase<void>(shape, data_type) {
+    Tensor(TensorShape const &shape, dtype_t dtype) : TensorBase<void>(shape, dtype) {
         if (this->size_ == 0)
             return;
-        CUDA_CHECK(cudaMalloc(&this->data_, this->size_ * this->element_size_));
+        CUDA_CHECK(alloc_gpu(&this->data_, this->size_ * this->element_size_));
     }
 
     template <typename... Types>
-    Tensor(Types... args, data_type_t data_type) : Tensor(TensorShape(std::forward<Types>(args)...), data_type) {}
+    Tensor(Types... args, dtype_t dtype) : Tensor(TensorShape(std::forward<Types>(args)...), dtype) {}
 
     Tensor(Tensor &&tensor) : TensorBase<void>(std::move(tensor)) {}
     Tensor const &operator=(Tensor &&tensor) {
@@ -43,20 +43,20 @@ class Tensor : public TensorBase<void> {
         this->shape_ = shape;
         this->size_ = shape.size();
         CUDNN_CHECK(cudnnSetTensorNdDescriptor(
-            this->desc_, this->data_type_, shape.dims.size(), shape.dims.data(),
+            this->desc_, this->dtype_, shape.dims.size(), shape.dims.data(),
             shape.strides.data()));
         cudaFree(this->data_);
         if (this->size_ == 0) {
             this->data_ = nullptr;
             return;
         }
-        CUDA_CHECK(cudaMalloc(&this->data_, this->size_ * this->element_size_));
+        CUDA_CHECK(alloc_gpu(&this->data_, this->size_ * this->element_size_));
     }
 
     // init ////////////////////////////////////////////////////////////////////
 
     auto random_init(auto lower_bound, auto higher_bound, int seed = 0) {
-        switch (this->data_type_) {
+        switch (this->dtype_) {
         case CUDNN_DATA_FLOAT:
             return memset_random_uniform_gpu<float>((float*)this->data_, this->size_, lower_bound, higher_bound, seed);
             break;
@@ -68,7 +68,7 @@ class Tensor : public TensorBase<void> {
     }
 
     auto zero() {
-        switch (this->data_type_) {
+        switch (this->dtype_) {
         case CUDNN_DATA_FLOAT:
             return memset_gpu<float>((float*)this->data_, this->size_, 0);
             break;

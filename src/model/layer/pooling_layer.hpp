@@ -4,13 +4,14 @@
 #include "layer.hpp"
 #include <cudnn_ops.h>
 
-struct PoolingLayer : Layer<ftype> {
+struct PoolingLayer : Layer {
     cudnnPoolingDescriptor_t pooling_descriptor;
     cudnnTensorDescriptor_t input_descriptor;
 
     PoolingLayer(cudnnPoolingMode_t mode, int width, int height,
-                 int horizontal_padding = 0, int vertical_padding = 0)
-        : Layer<ftype>({.kernel_width = width, .kernel_height = height}) {
+                 int horizontal_padding = 0, int vertical_padding = 0,
+                 tensor::dtype_t dtype = CUDNN_DATA_TYPE)
+        : Layer({.kernel_width = width, .kernel_height = height}, dtype) {
         int horizontal_stride = width;
         int vertical_stride = height;
 

@@ -9,10 +9,10 @@
 #define SEND_TO(...) hh::comm::strategy::SendTo(__VA_ARGS__)
 
 class DistributedNetworkGraph : public NetworkGraph {
-  using InitParametersCommData = InitParametersData<ftype, InitTarget::Layer>;
-  using InitCommData = InitData<ftype, InitTarget::Layer>;
-  using FwdCommData = FwdData<ftype>;
-  using BwdCommData = BwdData<ftype>;
+  using InitParametersCommData = InitParametersData<InitTarget::Layer>;
+  using InitCommData = InitData<InitTarget::Layer>;
+  using FwdCommData = FwdData;
+  using BwdCommData = BwdData;
   using InitComm = hh::CommunicatorTask<InitParametersCommData, InitCommData>;
   using FwdComm = hh::CommunicatorTask<FwdCommData>;
   using BwdComm = hh::CommunicatorTask<BwdCommData>;
@@ -23,7 +23,7 @@ class DistributedNetworkGraph : public NetworkGraph {
           init_comms_({std::make_shared<InitComm>(service)}),
           fwd_comms_({std::make_shared<FwdComm>(service)}),
           bwd_comms_({std::make_shared<BwdComm>(service)}),
-          optimizer_comm_(std::make_shared<hh::CommunicatorTask<OptLayerData<ftype>>>(service)) {
+          optimizer_comm_(std::make_shared<hh::CommunicatorTask<OptLayerData>>(service)) {
         // set the memory managers
         this->init_comms_.back()->setMemoryManager(&this->init_mm_);
         this->optimizer_comm_->setMemoryManager(&this->opt_mm_);
@@ -37,7 +37,7 @@ class DistributedNetworkGraph : public NetworkGraph {
 
         dest = 0;
         this->bwd_comms_.back()->strategy<BwdCommData>(SEND_TO(dest));
-        this->optimizer_comm_->strategy<OptLayerData<ftype>>(SEND_TO(dest));
+        this->optimizer_comm_->strategy<OptLayerData>(SEND_TO(dest));
     }
 
   public:
@@ -138,27 +138,27 @@ class DistributedNetworkGraph : public NetworkGraph {
     }
 
   public:
-    std::shared_ptr<NetworkData<ftype>> init_parameters() override {
-        auto nn = std::make_shared<NetworkData<ftype>>(this->layer_tasks_.layer_count);
+    std::shared_ptr<NetworkData> init_parameters() override {
+        auto nn = std::make_shared<NetworkData>(this->layer_tasks_.layer_count);
 
         this->init_mm_.init(nn);
         this->service_->barrier();
         if (this->service_->rank() == 0) {
-            this->pushData(std::make_shared<InitParametersData<ftype>>(nn));
-            (void)this->get<InitParametersData<ftype>>();
+            this->pushData(std::make_shared<InitParametersData<InitTarget::Network>>(nn));
+            (void)this->get<InitParametersData<InitTarget::Network>>();
         }
         this->service_->barrier();
         this->cleanGraph();
         return nn;
     }
 
-    void init(std::shared_ptr<NetworkData<ftype>> nn, tensor::dims_t input_dims) override {
-        std::shared_ptr<InitData<ftype>> init_data = nullptr;
+    void init(std::shared_ptr<NetworkData> nn, tensor::dims_t input_dims) override {
+        std::shared_ptr<InitData<InitTarget::Network>> init_data = nullptr;
         this->init_mm_.init(nn);
         this->service_->barrier();
         if (this->service_->rank() == 0) {
-            this->pushData(std::make_shared<InitData<ftype>>(nn, input_dims));
-            init_data = this->get<InitData<ftype>>();
+            this->pushData(std::make_shared<InitData<InitTarget::Network>>(nn, input_dims));
+            init_data = this->get<InitData<InitTarget::Network>>();
         }
         this->service_->barrier();
 
@@ -180,26 +180,26 @@ class DistributedNetworkGraph : public NetworkGraph {
         this->cleanGraph();
     }
 
-    tensor::Tensor const *predict(std::shared_ptr<NetworkData<ftype>> nn,
+    tensor::Tensor const *predict(std::shared_ptr<NetworkData> nn,
                                          tensor::Tensor &input) override {
         tensor::Tensor *output = nullptr;
 
         // this->service_->barrier();
         if (this->service_->rank() == 0) {
-            this->pushData(std::make_shared<PredictionData<ftype>>(nn, &input));
-            output = this->get<PredictionData<ftype>>()->input;
+            this->pushData(std::make_shared<PredictionData>(nn, &input));
+            output = this->get<PredictionData>()->input;
         }
         // this->service_->barrier();
         // this->cleanGraph();
         return output;
     }
 
-    std::shared_ptr<NetworkData<ftype>>
-    train(std::shared_ptr<NetworkData<ftype>> nn, DataSet<ftype> &ds, size_t epochs) override {
+    std::shared_ptr<NetworkData>
+    train(std::shared_ptr<NetworkData> nn, DataSet &ds, size_t epochs) override {
         this->service_->barrier();
         if (this->service_->rank() == 0) {
-            this->pushData(std::make_shared<TrainingData<ftype>>(nn, ds, epochs));
-            (void)this->get<TrainingData<ftype>>();
+            this->pushData(std::make_shared<TrainingData>(nn, ds, epochs));
+            (void)this->get<TrainingData>();
         }
         this->service_->barrier();
         this->cleanGraph();
@@ -210,9 +210,9 @@ class DistributedNetworkGraph : public NetworkGraph {
   private:
     hh::comm::CommService *service_;
     std::vector<std::shared_ptr<hh::CommunicatorTask<InitTaskIn>>> init_comms_;
-    std::vector<std::shared_ptr<hh::CommunicatorTask<FwdData<ftype>>>> fwd_comms_;
-    std::vector<std::shared_ptr<hh::CommunicatorTask<BwdData<ftype>>>> bwd_comms_;
-    std::shared_ptr<hh::CommunicatorTask<OptLayerData<ftype>>> optimizer_comm_;
+    std::vector<std::shared_ptr<hh::CommunicatorTask<FwdData>>> fwd_comms_;
+    std::vector<std::shared_ptr<hh::CommunicatorTask<BwdData>>> bwd_comms_;
+    std::shared_ptr<hh::CommunicatorTask<OptLayerData>> optimizer_comm_;
     size_t cut_layer_idx_ = 0;
     // memory managers
     InitMemoryManager init_mm_;

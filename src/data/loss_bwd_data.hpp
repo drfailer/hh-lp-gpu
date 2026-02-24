@@ -3,8 +3,8 @@
 #include "../model/data/network_data.hpp"
 #include <memory>
 
-template <typename T> struct LossBwdData {
-    std::shared_ptr<NetworkData<T>> states;
+struct LossBwdData {
+    std::shared_ptr<NetworkData> states;
     tensor::Tensor const *y_pred;
     tensor::Tensor const *y_true;
 };

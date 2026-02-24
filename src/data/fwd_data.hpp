@@ -4,28 +4,29 @@
 #include <memory>
 #include <vector>
 
-template <typename T> struct FwdData {
-    std::shared_ptr<NetworkData<T>> network_data;
+struct FwdData {
+    std::shared_ptr<NetworkData> network_data;
     tensor::Tensor *input;
 
     // NOTE:
     // this is completely unoptimize and a lot of memory is reallocated during
     // the training, however, this is only requried because the current MPI
     // version installed on the test machine was not compiled with cuda.
-    static inline std::vector<T> transfer_buffer = std::vector<T>(1000000);
+    static inline std::vector<char> transfer_buffer = std::vector<char>(1000000);
 
     hh::comm::Package pack() {
         assert(this->input != nullptr);
         assert(this->input->size() > 0 && this->input->data() != nullptr);
-        if (this->transfer_buffer.size() != this->input->size()) {
-            this->transfer_buffer.resize(this->input->size());
+        size_t buffer_size = this->input->size() * this->input->element_size();
+        if (this->transfer_buffer.size() != buffer_size) {
+            this->transfer_buffer.resize(buffer_size);
         }
         this->input->to_host(this->transfer_buffer.data());
         // printf("FwdData::pack(%ld)\n", this->input->size());
         return hh::comm::Package{
             .data = {
                 hh::comm::Buffer{
-                    (char*)this->transfer_buffer.data(), this->input->size() * sizeof(T),
+                    this->transfer_buffer.data(), buffer_size,
                 },
             },
         };
@@ -40,14 +41,15 @@ template <typename T> struct FwdData {
     hh::comm::Package package() {
         assert(this->input != nullptr);
         assert(this->input->size() > 0 && this->input->data() != nullptr);
-        if (this->transfer_buffer.size() != this->input->size()) {
-            this->transfer_buffer.resize(this->input->size());
+        size_t buffer_size = this->input->size() * this->input->element_size();
+        if (this->transfer_buffer.size() != buffer_size) {
+            this->transfer_buffer.resize(buffer_size);
         }
         // printf("FwdData::package(%ld)\n", this->input->size());
         return hh::comm::Package{
             .data = {
                 hh::comm::Buffer{
-                    (char*)this->transfer_buffer.data(), this->input->size() * sizeof(T),
+                    this->transfer_buffer.data(), buffer_size,
                 }
             },
         };

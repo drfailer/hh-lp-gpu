@@ -3,9 +3,8 @@
 #include "../model/data/network_data.hpp"
 #include <memory>
 
-template <typename T>
 struct PredictionData {
-    std::shared_ptr<NetworkData<T>> states;
+    std::shared_ptr<NetworkData> states;
     tensor::Tensor *input;
 };
 

@@ -8,7 +8,9 @@
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
-class LinearLayer : public Layer<ftype> {
+// This is not used
+
+class LinearLayer : public Layer {
   public:
     LinearLayer(int input_dim, int output_dim)
         : Layer(dims_t{.inputs = input_dim, .outputs = output_dim}) {
@@ -30,12 +32,11 @@ class LinearLayer : public Layer<ftype> {
      * Allocates memory for a layer state (output memory for the fwd pass, bwd
      * pass, parameters and gradients).
      */
-    Parameters<ftype> create_parameters() const override {
+    Parameters create_parameters() const override {
         INFO_GRP("LinearLayer INIT", INFO_GRP_LAYER_TASK);
         int inputs = this->dims.inputs;
         int outputs = this->dims.outputs;
-        Parameters<ftype> parameters({1, 1, outputs, inputs},
-                                     {1, 1, outputs, 1});
+        Parameters parameters({1, 1, outputs, inputs}, {1, 1, outputs, 1});
 
         CUDA_CHECK(memset_random_uniform_gpu<ftype>(
             parameters.weights.data(), outputs * inputs, -0.05, 0.05));
@@ -44,7 +45,7 @@ class LinearLayer : public Layer<ftype> {
         return parameters;
     }
 
-    tensor::dims_t init(cuda_data_t cuda_data, LayerData<ftype> &state,
+    tensor::dims_t init(cuda_data_t cuda_data, LayerData &state,
                         tensor::dims_t input_dims) override {
         int inputs = input_dims[1] * input_dims[2] * input_dims[3];
         int outputs = this->dims.outputs;
@@ -101,7 +102,7 @@ class LinearLayer : public Layer<ftype> {
     }
 
     tensor::Tensor const &
-    fwd(cuda_data_t cuda_data, LayerData<ftype> &state,
+    fwd(cuda_data_t cuda_data, LayerData &state,
         tensor::Tensor const &input) override {
         INFO_GRP("LinearLayer FWD", INFO_GRP_LAYER_TASK);
 
@@ -130,7 +131,7 @@ class LinearLayer : public Layer<ftype> {
     }
 
     tensor::Tensor const &
-    bwd(cuda_data_t cuda_data, LayerData<ftype> &state,
+    bwd(cuda_data_t cuda_data, LayerData &state,
         tensor::Tensor const &input,
         tensor::Tensor const &output_gradient) override {
         INFO_GRP("LinearLayer BWD", INFO_GRP_LAYER_TASK);

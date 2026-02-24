@@ -2,7 +2,7 @@
 #define MODEL_DATA_LAYER_DATA
 #include "../../tools/tensor/tensors.hpp"
 
-template <typename T> struct LayerData {
+struct LayerData {
     tensor::TensorView x;
     tensor::Tensor y;
     tensor::TensorView dy;

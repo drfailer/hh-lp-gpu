@@ -9,21 +9,19 @@
 #include <memory>
 
 #define InitTaskIn                                                             \
-    InitParametersData<ftype, InitTarget::Layer>,                              \
-        InitData<ftype, InitTarget::Layer>
+    InitParametersData<InitTarget::Layer>, InitData<InitTarget::Layer>
 #define InitTaskOut                                                            \
-    InitParametersData<ftype, InitTarget::Layer>,                              \
-        InitData<ftype, InitTarget::Layer>
+    InitParametersData<InitTarget::Layer>, InitData<InitTarget::Layer>
 #define InitTaskIO 2, InitTaskIn, InitTaskOut
 
 class InitTask : public CUDATask<InitTaskIO> {
   public:
     InitTask() : CUDATask<InitTaskIO>("InitTask") {}
 
-    void execute(std::shared_ptr<InitParametersData<ftype, InitTarget::Layer>>
+    void execute(std::shared_ptr<InitParametersData<InitTarget::Layer>>
                      data) override {
         for (auto &layer : layers_) {
-            LayerData<ftype> ld;
+            LayerData ld;
             auto param_shape = layer->parameters_shape();
             ld.w = tensor::tensor(param_shape.w);
             ld.b = tensor::tensor(param_shape.b);
@@ -34,7 +32,7 @@ class InitTask : public CUDATask<InitTaskIO> {
     }
 
     void
-    execute(std::shared_ptr<InitData<ftype, InitTarget::Layer>> data) override {
+    execute(std::shared_ptr<InitData<InitTarget::Layer>> data) override {
         auto dims = data->input_dims;
         auto &nn = data->network_data;
 
@@ -63,7 +61,7 @@ class InitTask : public CUDATask<InitTaskIO> {
         this->addResult(data);
     }
 
-    void add_layer(std::shared_ptr<Layer<ftype>> layer) {
+    void add_layer(std::shared_ptr<Layer> layer) {
         layers_.push_back(layer);
     }
 
@@ -71,13 +69,13 @@ class InitTask : public CUDATask<InitTaskIO> {
         throw std::logic_error("error: InitTask should not be copied.");
     }
 
-    tensor::TensorShape input_shape(std::shared_ptr<NetworkData<ftype>> nn) const {
+    tensor::TensorShape input_shape(std::shared_ptr<NetworkData> nn) const {
         assert(layers_.front()->idx < nn->layers_datas.size());
         assert(nn->layers_datas[layers_.front()->idx].x.size() > 0 && "this tensor should not be used on this rank");
         return nn->layers_datas[layers_.front()->idx].x.shape();
     }
 
-    tensor::TensorShape output_shape(std::shared_ptr<NetworkData<ftype>> nn) const {
+    tensor::TensorShape output_shape(std::shared_ptr<NetworkData> nn) const {
         assert(layers_.back()->idx < nn->layers_datas.size());
         assert(nn->layers_datas[layers_.back()->idx].dy.size() > 0 && "this tensor should not be used on this rank");
         return nn->layers_datas[layers_.back()->idx].dy.shape();
@@ -85,7 +83,7 @@ class InitTask : public CUDATask<InitTaskIO> {
 
 
   private:
-    std::vector<std::shared_ptr<Layer<ftype>>> layers_ = {};
+    std::vector<std::shared_ptr<Layer>> layers_ = {};
 };
 
 #endif

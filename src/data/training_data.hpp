@@ -4,8 +4,8 @@
 #include "data_set.hpp"
 #include <memory>
 
-template <typename T> struct TrainingData {
-    std::shared_ptr<NetworkData<T>> states;
+struct TrainingData {
+    std::shared_ptr<NetworkData> states;
     // TODO:
     // the data set should be const, and its data should be
     // allocated on the CPU (which is not the case for now).
@@ -13,7 +13,7 @@ template <typename T> struct TrainingData {
     // from the data set to the tensor of the fwd data (which
     // will be allcoated on the GPU and not const to allow
     // deserialization when using shards).
-    DataSet<T> &data_set;
+    DataSet &data_set;
     size_t epochs;
 };
 

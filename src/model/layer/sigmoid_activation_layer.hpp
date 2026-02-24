@@ -7,8 +7,9 @@
 #include <cudnn_graph.h>
 #include <cudnn_ops.h>
 
-struct SigmoidActivationLayer : Layer<ftype> {
-    SigmoidActivationLayer() : Layer({}) {
+struct SigmoidActivationLayer : Layer {
+    SigmoidActivationLayer(tensor::dtype_t dtype = CUDNN_DATA_TYPE)
+        : Layer({}, dtype) {
         // sigmoid activation tensor
         CUDNN_CHECK(cudnnCreateActivationDescriptor(&sigmoid_));
         CUDNN_CHECK(cudnnSetActivationDescriptor(

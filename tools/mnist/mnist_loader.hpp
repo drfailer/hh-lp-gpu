@@ -108,13 +108,13 @@ class MNISTLoader {
         return batch_gpu;
     }
 
-    DataSet<ftype> load_ds(std::string const labels_path,
+    DataSet load_ds(std::string const labels_path,
                            std::string const images_path,
                            int batch_size = 1) {
         auto labels = load_labels(labels_path);
         auto images = load_imgages(images_path, batch_size);
 
-        DataSet<ftype> ds;
+        DataSet ds;
 
         for (size_t i = 0; i < images.size(); ++i) {
             ds.datas.emplace_back(

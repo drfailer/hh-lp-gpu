@@ -3,8 +3,8 @@
 #include "../model/data/network_data.hpp"
 #include <memory>
 
-template <typename T> struct OptLayerData {
-    std::shared_ptr<NetworkData<T>> state;
+struct OptLayerData {
+    std::shared_ptr<NetworkData> state;
     size_t idx;
 
     hh::comm::Package pack() {

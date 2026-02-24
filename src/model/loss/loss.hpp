@@ -20,7 +20,7 @@ struct LossBwdOut {
     tensor::Tensor &dy;
 };
 
-template <typename T> struct Loss {
+struct Loss {
     virtual void fwd(CUDA cuda, LossFwdIn const &in, LossFwdOut const &out) = 0;
     virtual void bwd(CUDA cuda, LossBwdIn const &in, LossBwdOut const &out) = 0;
 };

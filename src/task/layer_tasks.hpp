@@ -16,7 +16,7 @@ struct LayerTasks {
           bwds({std::make_shared<BwdTask>()}),
           inits({std::make_shared<InitTask>()}) {}
 
-    void add_layer(std::shared_ptr<Layer<ftype>> layer) {
+    void add_layer(std::shared_ptr<Layer> layer) {
         layer->idx = layer_count++;
         fwds.back()->add_layer(layer);
         bwds.back()->add_layer(layer);
